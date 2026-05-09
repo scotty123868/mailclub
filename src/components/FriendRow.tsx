@@ -1,13 +1,12 @@
 import { StyleSheet, Text, View } from "react-native";
+import { PortraitAvatar } from "@/src/components/PostalIllustrations";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 import { Friend } from "@/src/types/mail";
 
 export function Avatar({ initials, size = 42 }: { initials: string; size?: number }) {
   return (
-    <View style={[styles.avatar, { height: size, width: size, borderRadius: size / 2 }]}>
-      <Text style={[styles.initials, { fontSize: size * 0.34 }]}>{initials}</Text>
-    </View>
+    <PortraitAvatar initials={initials} size={size} />
   );
 }
 
@@ -31,8 +30,6 @@ export function FriendRow({ friend }: { friend: Friend }) {
 
 const styles = StyleSheet.create({
   row: { alignItems: "center", flexDirection: "row", gap: 10, paddingVertical: 12 },
-  avatar: { alignItems: "center", backgroundColor: colors.paperDark, borderColor: colors.white, borderWidth: 2, justifyContent: "center" },
-  initials: { color: colors.ink, fontFamily: fonts.serif, fontWeight: "700" },
   copy: { flex: 1 },
   name: { color: colors.ink, fontFamily: fonts.serif, fontSize: 19 },
   meta: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 13 },

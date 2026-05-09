@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import { Camera, ChevronDown, Edit3, Gift, Heart, Image as ImageIcon, Leaf, Send, User } from "lucide-react-native";
+import { Camera, ChevronDown, Edit3, Gift, Heart, Leaf, Send, User } from "lucide-react-native";
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
@@ -7,6 +7,7 @@ import { PrimaryButton } from "@/src/components/Buttons";
 import { FormatSelector } from "@/src/components/FormatSelector";
 import { Header } from "@/src/components/Header";
 import { PostalCard } from "@/src/components/PostalCard";
+import { CafePostcardArt, PortraitAvatar } from "@/src/components/PostalIllustrations";
 import { SuccessModal } from "@/src/components/SuccessModal";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
@@ -77,9 +78,11 @@ export default function SendScreen() {
             <Image source={{ uri: imageUri }} style={styles.image} />
           ) : (
             <View style={styles.placeholder}>
-              <ImageIcon color={colors.postalBlue} size={42} strokeWidth={1.4} />
-              <Text style={styles.placeholderTitle}>Tonight’s photo</Text>
-              <Text style={styles.placeholderBody}>Choose a real-world moment worth following up on.</Text>
+              <CafePostcardArt />
+              <View style={styles.photoCaption}>
+                <Text style={styles.placeholderTitle}>Tonight’s photo</Text>
+                <Text style={styles.placeholderBody}>Tap to choose one.</Text>
+              </View>
             </View>
           )}
         </Pressable>
@@ -107,7 +110,7 @@ export default function SendScreen() {
       <Text style={styles.toHeading}>To</Text>
       <Pressable onPress={() => setRecipientIndex((recipientIndex + 1) % friends.length)}>
         <PostalCard style={styles.recipient}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{recipient.avatarInitials}</Text></View>
+          <PortraitAvatar initials={recipient.avatarInitials} size={62} />
           <View style={{ flex: 1 }}>
             <Text style={styles.recipientName}>{recipient.name}</Text>
             <Text style={styles.recipientMeta}>{stampBalance} stamps available</Text>
@@ -164,9 +167,10 @@ const styles = StyleSheet.create({
   composer: { flexDirection: "row", minHeight: 300, overflow: "hidden", padding: 12 },
   photo: { backgroundColor: colors.paperDark, borderRadius: 7, flex: 0.9, overflow: "hidden" },
   image: { height: "100%", width: "100%" },
-  placeholder: { alignItems: "center", flex: 1, justifyContent: "center", padding: 28 },
-  placeholderTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 20, marginTop: 12, textAlign: "center" },
-  placeholderBody: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, marginTop: 6, textAlign: "center" },
+  placeholder: { flex: 1 },
+  photoCaption: { backgroundColor: "rgba(248,241,227,0.86)", borderRadius: 8, bottom: 12, left: 12, padding: 10, position: "absolute", right: 12 },
+  placeholderTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 20 },
+  placeholderBody: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 12, lineHeight: 16, marginTop: 2 },
   postage: { alignItems: "center", backgroundColor: colors.postalRed, borderRadius: 4, height: 48, justifyContent: "center", position: "absolute", right: 10, top: 12, transform: [{ rotate: "8deg" }], width: 40 },
   postageText: { color: colors.paper, fontFamily: fonts.serif, fontSize: 13 },
   noteArea: { flex: 1, paddingHorizontal: 16, paddingTop: 80 },
@@ -176,8 +180,6 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 22, marginBottom: 10 },
   toHeading: { color: colors.ink, fontFamily: fonts.serif, fontSize: 21, marginBottom: -8 },
   recipient: { alignItems: "center", flexDirection: "row", gap: 12, padding: 14 },
-  avatar: { alignItems: "center", backgroundColor: colors.paperDark, borderRadius: 22, height: 44, justifyContent: "center", width: 44 },
-  avatarText: { color: colors.ink, fontFamily: fonts.serif, fontSize: 15, fontWeight: "700" },
   recipientName: { color: colors.ink, fontFamily: fonts.serif, fontSize: 26 },
   recipientMeta: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 15, marginTop: 3 },
   templateTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 20, marginBottom: 10 },

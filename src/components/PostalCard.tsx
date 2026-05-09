@@ -3,12 +3,17 @@ import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { colors } from "@/src/theme/colors";
 
 export function PostalCard({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  return (
+    <View style={[styles.card, style]}>
+      <View pointerEvents="none" style={styles.innerStroke} />
+      {children}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "rgba(255, 253, 247, 0.74)",
+    backgroundColor: "rgba(255, 253, 247, 0.84)",
     borderColor: colors.line,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
@@ -17,5 +22,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 3,
+  },
+  innerStroke: {
+    borderColor: "rgba(255,255,255,0.52)",
+    borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    bottom: 3,
+    left: 3,
+    position: "absolute",
+    right: 3,
+    top: 3,
   },
 });

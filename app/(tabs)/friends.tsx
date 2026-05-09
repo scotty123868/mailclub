@@ -6,7 +6,7 @@ import { PrimaryButton } from "@/src/components/Buttons";
 import { FriendRow } from "@/src/components/FriendRow";
 import { Header } from "@/src/components/Header";
 import { PostalCard } from "@/src/components/PostalCard";
-import { PhoneConnectArt, StampArt } from "@/src/components/PostalIllustrations";
+import { PhoneConnectArt, PortraitAvatar, StampArt } from "@/src/components/PostalIllustrations";
 import { PostmarkDecoration } from "@/src/components/PostmarkDecoration";
 import { PrivacyCard } from "@/src/components/PrivacyCard";
 import { SuccessModal } from "@/src/components/SuccessModal";
@@ -58,7 +58,7 @@ export default function FriendsScreen() {
           <Heart color={colors.gold} size={32} strokeWidth={1.3} />
         </View>
         <View style={styles.mailCardPreview}>
-          <View style={styles.previewAvatar}><Text style={styles.previewInitials}>SL</Text></View>
+          <PortraitAvatar initials="SL" size={72} />
           <View style={{ flex: 1 }}>
             <Text style={styles.previewName}>Scotty</Text>
             <Text style={styles.previewMeta}>⌖ Denver, CO</Text>
@@ -106,8 +106,6 @@ const styles = StyleSheet.create({
   shareCopy: { flex: 0.72, justifyContent: "space-between" },
   mailCardPreview: { backgroundColor: "rgba(255,253,247,0.72)", borderColor: colors.line, borderRadius: 8, borderWidth: 1, flex: 1.15, gap: 10, padding: 14 },
   previewStamp: { position: "absolute", right: 14, top: 42, transform: [{ scale: 0.78 }] },
-  previewAvatar: { alignItems: "center", backgroundColor: colors.paperDark, borderRadius: 34, height: 68, justifyContent: "center", width: 68 },
-  previewInitials: { color: colors.ink, fontFamily: fonts.serif, fontSize: 20, fontWeight: "800" },
   previewName: { color: colors.ink, fontFamily: fonts.serif, fontSize: 25 },
   previewMeta: { color: colors.postalBlue, fontFamily: fonts.sans, fontSize: 12, fontWeight: "700" },
   previewSince: { color: colors.postalRed, fontFamily: fonts.sans, fontSize: 9, fontWeight: "800", marginTop: 4 },
