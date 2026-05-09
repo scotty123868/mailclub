@@ -6,6 +6,7 @@ import { AirmailDivider } from "@/src/components/Decorations";
 import { Header } from "@/src/components/Header";
 import { MapPanel } from "@/src/components/MapPanel";
 import { PostalCard } from "@/src/components/PostalCard";
+import { MiniPostcardArt } from "@/src/components/PostalIllustrations";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -49,13 +50,14 @@ export default function MapScreen() {
       </PostalCard>
 
       <PostalCard style={styles.routes}>
+        <View style={styles.airmailEdge} />
         <View style={styles.routesHeader}>
           <Text style={styles.sectionTitle}>Recent Routes</Text>
           <Text style={styles.routeBadge}>REAL-WORLD ROUTES</Text>
         </View>
         {routes.map((route, index) => (
           <View key={route.id} style={[styles.route, index > 0 && styles.borderTop]}>
-            <View style={styles.routeStamp}><Send color={colors.postalBlue} size={20} strokeWidth={1.4} /></View>
+            <MiniPostcardArt variant={index === 1 ? "city" : index === 2 ? "coast" : "mountain"} />
             <View style={styles.routeCopy}>
               <Text style={styles.routeTitle}>{route.from} → {route.to}</Text>
               <Text style={styles.routeDate}>{route.date}</Text>
@@ -98,14 +100,14 @@ const styles = StyleSheet.create({
   dividerLine: { backgroundColor: colors.line, height: StyleSheet.hairlineWidth },
   summaryValue: { color: colors.ink, fontFamily: fonts.serif, fontSize: 32, marginTop: 4 },
   summaryLabel: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 14, textAlign: "center" },
-  routes: { paddingHorizontal: 15, paddingVertical: 12 },
+  routes: { overflow: "hidden", paddingHorizontal: 15, paddingLeft: 20, paddingVertical: 12 },
+  airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 8 },
   routesHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingBottom: 6 },
   sectionTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 22 },
   link: { color: colors.postalBlue, fontFamily: fonts.serif, fontSize: 15 },
   routeBadge: { color: colors.postalRed, fontFamily: fonts.sans, fontSize: 10, fontWeight: "800" },
   route: { alignItems: "center", flexDirection: "row", gap: 12, paddingVertical: 13 },
   borderTop: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth },
-  routeStamp: { alignItems: "center", backgroundColor: colors.paperDark, borderColor: colors.line, borderRadius: 4, borderWidth: 1, height: 48, justifyContent: "center", width: 48 },
   routeCopy: { flex: 1 },
   routeTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 19 },
   routeDate: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 13, marginTop: 2 },

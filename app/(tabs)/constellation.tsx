@@ -5,6 +5,7 @@ import { AppShell } from "@/src/components/AppShell";
 import { ConstellationPanel } from "@/src/components/ConstellationPanel";
 import { Header } from "@/src/components/Header";
 import { PostalCard } from "@/src/components/PostalCard";
+import { MiniPostcardArt, StampArt } from "@/src/components/PostalIllustrations";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
@@ -33,23 +34,26 @@ export default function ConstellationScreen() {
       </PostalCard>
       <ConstellationPanel />
       <View style={styles.insights}>
-        <Insight icon={Heart} title="Warmest Thread" value="Tatiana · 12 cards" body="The most beautiful back-and-forth." accent={colors.postalRed} />
-        <Insight icon={Star} title="New Spark" value="Nora" body="You met recently. Early ties grow into lasting connections." accent={colors.postalBlue} />
-        <Insight icon={Moon} title="Sleeping Stars" value="3 friends to write back" body="A little note could rekindle something wonderful." accent="#76733B" />
+        <Insight icon={Heart} title="Warmest Thread" value="Tatiana · 12 cards" body="The most beautiful back-and-forth." accent={colors.postalRed} art="mountain" cents="20¢" />
+        <Insight icon={Star} title="New Spark" value="Nora" body="You met recently. Early ties grow into lasting connections." accent={colors.postalBlue} art="coast" cents="10¢" />
+        <Insight icon={Moon} title="Sleeping Stars" value="3 friends to write back" body="A little note could rekindle something wonderful." accent="#76733B" art="night" cents="5¢" />
       </View>
     </AppShell>
   );
 }
 
-function Insight({ icon: Icon, title, value, body, accent }: { icon: typeof Heart; title: string; value: string; body: string; accent: string }) {
+function Insight({ icon: Icon, title, value, body, accent, art, cents }: { icon: typeof Heart; title: string; value: string; body: string; accent: string; art: "mountain" | "coast" | "night"; cents: string }) {
   return (
     <PostalCard style={styles.insight}>
+      <View style={styles.airmailEdge} />
+      <MiniPostcardArt variant={art} />
       <Icon color={accent} size={29} strokeWidth={1.5} />
       <View style={styles.insightCopy}>
         <Text style={styles.insightTitle}>{title}</Text>
         <Text style={[styles.insightValue, { color: accent }]}>{value}</Text>
         <Text style={styles.insightBody}>{body}</Text>
       </View>
+      <View style={styles.insightStamp}><StampArt cents={cents} color={art === "night" ? colors.postalBlue : art === "coast" ? colors.sage : colors.postalRed} /></View>
     </PostalCard>
   );
 }
@@ -61,9 +65,11 @@ const styles = StyleSheet.create({
   chipText: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 15 },
   activeChipText: { color: colors.white },
   insights: { gap: 12 },
-  insight: { alignItems: "center", flexDirection: "row", gap: 16, minHeight: 120, padding: 16 },
+  insight: { alignItems: "center", flexDirection: "row", gap: 14, minHeight: 132, overflow: "hidden", padding: 16, paddingRight: 74 },
+  airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 8 },
   insightCopy: { flex: 1 },
   insightTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 19 },
   insightValue: { fontFamily: fonts.serif, fontSize: 27, marginTop: 4 },
   insightBody: { color: colors.mutedInk, flex: 1, fontFamily: fonts.serif, fontSize: 14, lineHeight: 20, marginTop: 3 },
+  insightStamp: { position: "absolute", right: 18, top: 24 },
 });

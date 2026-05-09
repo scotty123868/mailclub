@@ -1,4 +1,4 @@
-import { Heart, QrCode, Radio, Smartphone, Users } from "lucide-react-native";
+import { Heart, QrCode, Radio, Users } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
@@ -6,6 +6,7 @@ import { PrimaryButton } from "@/src/components/Buttons";
 import { FriendRow } from "@/src/components/FriendRow";
 import { Header } from "@/src/components/Header";
 import { PostalCard } from "@/src/components/PostalCard";
+import { PhoneConnectArt, StampArt } from "@/src/components/PostalIllustrations";
 import { PostmarkDecoration } from "@/src/components/PostmarkDecoration";
 import { PrivacyCard } from "@/src/components/PrivacyCard";
 import { SuccessModal } from "@/src/components/SuccessModal";
@@ -42,11 +43,10 @@ export default function FriendsScreen() {
           <Text style={styles.heroTitle}>Tap phones to become postcard friends.</Text>
           <Text style={styles.body}>When you meet someone you want to remember, connect in person and send a first card.</Text>
         </View>
-        <View style={styles.phones}>
-          <Smartphone color={colors.ink} size={70} strokeWidth={1.2} />
-          <Radio color={colors.postalRed} size={28} strokeWidth={1.5} />
-          <Smartphone color={colors.ink} size={70} strokeWidth={1.2} />
+        <View style={styles.postmarkBadge}>
+          <Text style={styles.postmarkBadgeText}>CONNECT{"\n"}IN PERSON{"\n"}SEND A CARD</Text>
         </View>
+        <PhoneConnectArt />
         <PrimaryButton title={connecting ? "Connecting..." : "Tap to Connect"} icon={Radio} onPress={connect} />
       </PostalCard>
 
@@ -66,6 +66,7 @@ export default function FriendsScreen() {
             <Text style={styles.previewLine}>For the friends you love and the ones you just met.</Text>
           </View>
           <PostmarkDecoration compact />
+          <View style={styles.previewStamp}><StampArt cents="5¢" /></View>
           <Pressable onPress={showCode} style={styles.codeButton}>
             <QrCode color={colors.ink} size={24} strokeWidth={1.6} />
             <Text style={styles.codeButtonText}>Show My Code</Text>
@@ -93,16 +94,18 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
-  hero: { gap: 18, padding: 18 },
+  hero: { gap: 14, minHeight: 268, overflow: "hidden", padding: 18 },
   heroCopy: { maxWidth: "70%" },
   heroTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 31, lineHeight: 38 },
   body: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 16, lineHeight: 23, marginTop: 8 },
-  phones: { alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "flex-end", marginTop: -78 },
+  postmarkBadge: { alignItems: "center", borderColor: colors.line, borderRadius: 54, borderWidth: 1, height: 90, justifyContent: "center", position: "absolute", right: 30, top: 22, width: 112 },
+  postmarkBadgeText: { color: "#9A8D76", fontFamily: fonts.sans, fontSize: 10, fontWeight: "800", lineHeight: 14, textAlign: "center" },
   sectionTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 22 },
   shareCard: { flexDirection: "row", gap: 16, minHeight: 210, overflow: "hidden", padding: 18 },
   airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 8 },
   shareCopy: { flex: 0.72, justifyContent: "space-between" },
   mailCardPreview: { backgroundColor: "rgba(255,253,247,0.72)", borderColor: colors.line, borderRadius: 8, borderWidth: 1, flex: 1.15, gap: 10, padding: 14 },
+  previewStamp: { position: "absolute", right: 14, top: 42, transform: [{ scale: 0.78 }] },
   previewAvatar: { alignItems: "center", backgroundColor: colors.paperDark, borderRadius: 34, height: 68, justifyContent: "center", width: 68 },
   previewInitials: { color: colors.ink, fontFamily: fonts.serif, fontSize: 20, fontWeight: "800" },
   previewName: { color: colors.ink, fontFamily: fonts.serif, fontSize: 25 },

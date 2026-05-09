@@ -7,8 +7,9 @@ import { ConstellationPanel } from "@/src/components/ConstellationPanel";
 import { Avatar } from "@/src/components/FriendRow";
 import { Header } from "@/src/components/Header";
 import { MapPanel } from "@/src/components/MapPanel";
+import { MetricStrip } from "@/src/components/MetricStrip";
 import { PostalCard } from "@/src/components/PostalCard";
-import { StatCard } from "@/src/components/StatCard";
+import { StampArt } from "@/src/components/PostalIllustrations";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -35,20 +36,19 @@ export default function MyMailCardScreen() {
           <Text style={styles.since}>POSTCARD FRIENDS SINCE {currentUser.since}</Text>
           <Text style={styles.tagline}>{currentUser.tagline}</Text>
         </View>
-        <View style={styles.stamp}>
-          <Text style={styles.stampText}>5¢</Text>
-        </View>
+        <View style={styles.stamp}><StampArt cents="5¢" /></View>
       </View>
 
-      <View style={styles.statsStrip}>
-        <StatCard icon={Users} value={42} label="Postcard Friends" />
-        <StatCard icon={Send} value={128 + postcards.length} label="Sent" />
-        <StatCard icon={Mail} value={97} label="Received" />
-        <StatCard icon={Globe2} value={23} label="Cities Connected" />
-      </View>
+      <MetricStrip metrics={[
+        { icon: Users, value: 42, label: "Postcard Friends" },
+        { icon: Send, value: 128 + postcards.length, label: "Sent", accent: "#607A55" },
+        { icon: Mail, value: 97, label: "Received", accent: colors.postalBlue },
+        { icon: Globe2, value: 23, label: "Cities Connected", accent: colors.postalRed },
+      ]} />
 
       <PostalCard style={styles.about}>
         <View style={styles.airmailEdge} />
+        <View style={styles.aboutStamp}><StampArt cents="15¢" color={colors.sage} /></View>
         <View style={styles.aboutCopy}>
           <Text style={styles.sectionTitle}>About Me</Text>
           <InfoLine icon={Star} label="Interests:" value={currentUser.interests} />
@@ -123,12 +123,11 @@ const styles = StyleSheet.create({
   city: { color: colors.postalBlue, fontFamily: fonts.serif, fontSize: 20, marginTop: -2 },
   since: { color: colors.postalRed, fontFamily: fonts.sans, fontSize: 12, fontWeight: "800", letterSpacing: 0.6, marginTop: 8 },
   tagline: { color: colors.ink, fontFamily: fonts.serif, fontSize: 17, fontStyle: "italic", lineHeight: 23, marginTop: 8 },
-  stamp: { alignItems: "center", backgroundColor: colors.postalRed, borderRadius: 4, height: 58, justifyContent: "center", position: "absolute", right: 4, top: 4, transform: [{ rotate: "8deg" }], width: 48 },
-  stampText: { color: colors.paper, fontFamily: fonts.serif, fontSize: 14 },
-  statsStrip: { flexDirection: "row", gap: 0 },
+  stamp: { position: "absolute", right: 4, top: 4 },
   about: { minHeight: 250, overflow: "hidden", padding: 22 },
+  aboutStamp: { position: "absolute", right: 24, top: 24 },
   airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 8 },
-  aboutCopy: { gap: 12 },
+  aboutCopy: { gap: 12, paddingRight: 86 },
   sectionTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 28 },
   infoLine: { alignItems: "flex-start", borderBottomColor: colors.line, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: "row", gap: 12, paddingBottom: 11 },
   infoText: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 16, lineHeight: 22 },

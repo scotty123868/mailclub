@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { PrimaryButton } from "@/src/components/Buttons";
-import { FormatSelector, stampCostFor } from "@/src/components/FormatSelector";
+import { FormatSelector } from "@/src/components/FormatSelector";
 import { Header } from "@/src/components/Header";
 import { PostalCard } from "@/src/components/PostalCard";
 import { SuccessModal } from "@/src/components/SuccessModal";
@@ -140,7 +140,7 @@ export default function SendScreen() {
         </View>
       </View>
 
-      <PrimaryButton title={`Send Postcard · ${stampCostFor(format)} ${stampCostFor(format) === 1 ? "stamp" : "stamps"}`} icon={Send} onPress={onSend} />
+      <PrimaryButton title="Send Postcard" icon={Send} onPress={onSend} />
 
       <SuccessModal
         visible={modal}
@@ -181,9 +181,9 @@ const styles = StyleSheet.create({
   recipientName: { color: colors.ink, fontFamily: fonts.serif, fontSize: 26 },
   recipientMeta: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 15, marginTop: 3 },
   templateTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 20, marginBottom: 10 },
-  templates: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  templateChip: { alignItems: "center", backgroundColor: "rgba(255,253,247,0.72)", borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 8, minHeight: 58, paddingHorizontal: 13, width: "48%" },
+  templates: { flexDirection: "row", gap: 8 },
+  templateChip: { alignItems: "center", backgroundColor: "rgba(255,253,247,0.72)", borderColor: colors.line, borderRadius: 8, borderWidth: 1, flex: 1, gap: 6, minHeight: 74, paddingHorizontal: 8, paddingVertical: 8 },
   templateChipActive: { borderColor: colors.postalRed, backgroundColor: "rgba(184,74,58,0.06)" },
-  templateText: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 15, lineHeight: 18 },
+  templateText: { color: colors.ink, fontFamily: fonts.serif, fontSize: 13, lineHeight: 16, textAlign: "center" },
   templateTextActive: { color: colors.postalRed },
 });
