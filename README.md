@@ -30,6 +30,39 @@ Mail Club is a private postcard club prototype built with Expo React Native, Typ
 - "Buy credits" sheet with packs of 5/10/25/50.
 - IAP is stubbed for v0.3 — purchase grants demo credits with a clear Apple-IAP-coming-soon notice.
 
+## Backend (Supabase)
+
+v0.5 ships a real backend. Project ref `nlwnmgwylmmnaemdnzlq`, region `us-east-1`.
+
+**What's there:**
+
+| Table | Purpose | RLS |
+|---|---|---|
+| `profiles` | One row per user — identity, credits, prefs | Read/update own row |
+| `friends` | Rolodex | Full CRUD on own rows |
+| `postcards` | Every send | Read own; writes via RPC only |
+| `void_replies` | Inbox for stranger replies | Read own; server writes |
+| `credit_transactions` | Audit ledger | Read own; writes via RPC only |
+
+**RPCs (server-authoritative):**
+- `complete_signup(name, city, state)` — populates the profile, derives initials, marks intro seen
+- `send_postcard(to_kind, to_friend_id, category, message, photo_uri, place_name, custom_description, custom_tone, reference_photo_uris)` — looks up server-side cost map, deducts credits atomically, inserts postcard, bumps friend stats, logs the transaction
+- `purchase_credits(pack_id)` — placeholder until Apple IAP receipt validation lands
+
+**Storage:** bucket `postcard-photos`, folder-scoped per user (`{userId}/{filename}`). RLS policies prevent users from reading each other's photos.
+
+**Auth:** email + password with autoconfirm enabled (no email-link click required for MVP). 7-day JWT expiry. Sessions persist via AsyncStorage on the client.
+
+**Migrations:** SQL is in `supabase/migrations/*.sql` (commit history is the source of truth). To re-apply on a fresh project:
+
+```bash
+# Set your access token first
+export SUPABASE_ACCESS_TOKEN=sbp_...
+# Or use the dashboard SQL editor; the files run in alphabetical order
+```
+
+The anon URL + key are baked into `app.json` under `expo.extra`. They're **public** by design — RLS is what protects user data. Treat the personal access token (`sbp_...`) and the `service_role` JWT as secrets — those don't go in the repo.
+
 ## TestFlight — what you have to do yourself
 
 The app builds clean for Release and adhoc-signs for the iOS Simulator. **TestFlight upload requires your Apple credentials**, which I don't have access to. Run these steps from your machine:

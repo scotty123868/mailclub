@@ -2,6 +2,39 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
+// Mock Supabase client + API so tests stay offline. The context detects this
+// (SUPABASE_CONFIGURED=false) and falls through to the local-only paths that
+// the tests already exercise.
+jest.mock("@/src/services/supabase", () => ({
+  supabase: {
+    auth: {
+      getUser: jest.fn().mockResolvedValue({ data: { user: null } }),
+      onAuthStateChange: jest.fn().mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } }),
+      signUp: jest.fn().mockResolvedValue({ data: { user: null, session: null }, error: null }),
+      signInWithPassword: jest.fn().mockResolvedValue({ data: { user: null, session: null }, error: null }),
+      signOut: jest.fn().mockResolvedValue({ error: null }),
+    },
+    from: jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      insert: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
+      delete: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      order: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+    }),
+    rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
+    storage: {
+      from: jest.fn().mockReturnValue({
+        upload: jest.fn().mockResolvedValue({ data: null, error: null }),
+        createSignedUrl: jest.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+    },
+  },
+  SUPABASE_CONFIGURED: false,
+}));
+
 jest.mock("expo-haptics", () => ({
   selectionAsync: jest.fn().mockResolvedValue(undefined),
   notificationAsync: jest.fn().mockResolvedValue(undefined),

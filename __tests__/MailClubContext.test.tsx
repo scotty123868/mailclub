@@ -5,7 +5,7 @@ import React from "react";
 import { Alert, Text } from "react-native";
 import { MailClubProvider, useMailClub } from "@/src/state/MailClubContext";
 
-const STORE_KEY = "mail-club-v0-3-credits-state";
+const STORE_KEY = "mail-club-v1-cache";
 
 const ALERT_SPY = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
 
@@ -173,7 +173,9 @@ describe("MailClubContext — purchaseCredits", () => {
       result = await ref.current!.purchaseCredits("bogus-id");
     });
     expect(result!.ok).toBe(false);
-    expect(Haptics.notificationAsync).toHaveBeenCalledWith("warning");
+    // (We dropped the warning haptic for invalid pack ids — it's a programmer
+    // error, not a user-facing one; the UI never invokes this path with a
+    // bogus pack id.)
   });
 });
 

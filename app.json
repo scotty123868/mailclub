@@ -35,6 +35,10 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "supabaseUrl": "https://nlwnmgwylmmnaemdnzlq.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sd25tZ3d5bG1tbmFlbWRuemxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDI1NjksImV4cCI6MjA5NDA3ODU2OX0.rZlWORqFLfFCBQQ4RPUOBtrqAX_Tc0Gf_sI5hPPENxM"
+    }
   }
 }
