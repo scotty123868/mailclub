@@ -54,15 +54,41 @@ describe("SettingsSheet", () => {
     expect(onOpenEditAboutMe).toHaveBeenCalled();
   });
 
-  it("stub rows trigger Alert.alert", () => {
+  it("fires onClose + onOpenAddressBook when Address book row is tapped", () => {
+    const onClose = jest.fn();
+    const onOpenAddressBook = jest.fn();
+    const { getByTestId } = render(
+      <AllProviders>
+        <SettingsSheet visible={true} onClose={onClose} onOpenCredits={() => {}} onOpenEditAboutMe={() => {}} onOpenAddressBook={onOpenAddressBook} />
+      </AllProviders>
+    );
+    fireEvent.press(getByTestId("settings-row-addresses"));
+    expect(onClose).toHaveBeenCalled();
+    expect(onOpenAddressBook).toHaveBeenCalled();
+  });
+
+  it("fires onClose + onOpenNotifications when Notifications row is tapped", () => {
+    const onClose = jest.fn();
+    const onOpenNotifications = jest.fn();
+    const { getByTestId } = render(
+      <AllProviders>
+        <SettingsSheet visible={true} onClose={onClose} onOpenCredits={() => {}} onOpenEditAboutMe={() => {}} onOpenNotifications={onOpenNotifications} />
+      </AllProviders>
+    );
+    fireEvent.press(getByTestId("settings-row-notifications"));
+    expect(onClose).toHaveBeenCalled();
+    expect(onOpenNotifications).toHaveBeenCalled();
+  });
+
+  it("Sign out shows a confirm alert (does not sign out without confirmation)", () => {
     const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const { getByTestId } = render(
       <AllProviders>
         <SettingsSheet visible={true} onClose={() => {}} onOpenCredits={() => {}} onOpenEditAboutMe={() => {}} />
       </AllProviders>
     );
-    fireEvent.press(getByTestId("settings-row-addresses"));
-    expect(alertSpy).toHaveBeenCalledWith("Address book", expect.any(String));
+    fireEvent.press(getByTestId("settings-row-signout"));
+    expect(alertSpy).toHaveBeenCalledWith("Sign out?", expect.any(String), expect.any(Array));
     alertSpy.mockRestore();
   });
 });

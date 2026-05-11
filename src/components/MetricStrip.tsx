@@ -1,5 +1,5 @@
 import { LucideIcon } from "lucide-react-native";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 import { PostalCard } from "./PostalCard";
@@ -9,6 +9,8 @@ type Metric = {
   value: string | number;
   label: string;
   accent?: string;
+  onPress?: () => void;
+  testID?: string;
 };
 
 export function MetricStrip({ metrics }: { metrics: Metric[] }) {
@@ -17,14 +19,22 @@ export function MetricStrip({ metrics }: { metrics: Metric[] }) {
       {metrics.map((metric, index) => {
         const Icon = metric.icon;
         const accent = metric.accent ?? colors.ink;
+        const Wrapper: any = metric.onPress ? Pressable : View;
         return (
-          <View key={metric.label} style={[styles.metric, index > 0 && styles.borderLeft]}>
+          <Wrapper
+            key={metric.label}
+            onPress={metric.onPress}
+            style={[styles.metric, index > 0 && styles.borderLeft]}
+            testID={metric.testID}
+            accessibilityRole={metric.onPress ? "button" : undefined}
+            accessibilityLabel={metric.onPress ? `${metric.value} ${metric.label}. Tap for details.` : undefined}
+          >
             <Text style={[styles.value, { color: accent }]}>{metric.value}</Text>
             <View style={styles.labelRow}>
               <Icon color={accent} size={14} strokeWidth={1.6} />
               <Text style={[styles.label, { color: accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{metric.label}</Text>
             </View>
-          </View>
+          </Wrapper>
         );
       })}
     </PostalCard>

@@ -30,6 +30,19 @@ Mail Club is a private postcard club prototype built with Expo React Native, Typ
 - "Buy credits" sheet with packs of 5/10/25/50.
 - IAP is stubbed for v0.3 — purchase grants demo credits with a clear Apple-IAP-coming-soon notice.
 
+## What changed in v0.3.1
+
+A thorough functional pass on top of the v0.3 MVP. Every settings row now leads somewhere real, every empty state is intentional, every metric is honest. Bugs caught in the pre-QA audit are fixed.
+
+- **First-launch sign-up.** `WelcomeSheet` captures name + city + state on first open, saves to your Mail Card, and dismisses for good. Skippable if you just want to look around.
+- **Sign out works.** Settings → Sign out clears your local state and returns you to the welcome screen.
+- **Mail history.** A `MailHistorySheet` shows everything you've sent and every reply from the void — tap the **Sent** or **Replies** metric on My Card. Previously, void replies were stored but never surfaced.
+- **Real metrics.** Friends / Sent / Replies / Cities are now derived from your actual state. No more hardcoded "42 friends" demo numbers.
+- **Send won't crash empty.** If you remove all friends, Send shows a polite empty state with an "Add" button instead of crashing.
+- **Settings is now a real settings screen.** Notifications (3 toggles), Privacy (3 audience options), About/Terms/Help, Address book (jumps to /friends), Sign out. No more stub alerts.
+- **Send screen seed**. Tapping "Send a postcard" from a friend's detail sheet now pre-selects that friend on Send.
+- **About Me empty fallback.** Cleared fields now show "Not set yet — tap to add." instead of a blank space.
+
 ## Run locally
 
 ```bash

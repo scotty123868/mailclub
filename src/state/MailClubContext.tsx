@@ -26,6 +26,26 @@ export type CreditsPurchaseResult = { ok: boolean; creditsAdded?: number };
 export type SendResult = { ok: boolean; friendName: string; creditsRemaining?: number };
 export type AddFriendResult = { ok: boolean; friend?: Friend };
 
+export type NotificationPrefs = {
+  cardDelivered: boolean;
+  replyReceived: boolean;
+  birthdays: boolean;
+};
+
+export type PrivacyPrefs = {
+  whoCanSendToMe: "anyone" | "friends" | "no-one";
+};
+
+export const DEFAULT_NOTIFICATIONS: NotificationPrefs = {
+  cardDelivered: true,
+  replyReceived: true,
+  birthdays: true,
+};
+
+export const DEFAULT_PRIVACY: PrivacyPrefs = {
+  whoCanSendToMe: "anyone",
+};
+
 type MailClubState = {
   currentUser: CurrentUser;
   friends: Friend[];
@@ -36,6 +56,8 @@ type MailClubState = {
   freeCreditsRemaining: number;
   hasSeenFreeCreditsIntro: boolean;
   voidReplies: VoidReply[];
+  notifications: NotificationPrefs;
+  privacy: PrivacyPrefs;
   sendPostcard: (input: SendInput) => Promise<SendResult>;
   sendIntoVoid: (message: string) => Promise<{ ok: boolean; replyPreview?: VoidReply }>;
   purchaseCredits: (packId: string) => Promise<CreditsPurchaseResult>;
@@ -45,6 +67,9 @@ type MailClubState = {
   addFriendByAddress: (input: { name: string; city: string; state: string }) => Promise<AddFriendResult>;
   queueInvitation: (name: string, street: string, cityLine: string) => Promise<boolean>;
   addMayaConnection: () => Promise<void>;
+  updateNotifications: (patch: Partial<NotificationPrefs>) => Promise<void>;
+  updatePrivacy: (patch: Partial<PrivacyPrefs>) => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 const MailClubContext = createContext<MailClubState | null>(null);
@@ -61,6 +86,8 @@ export function MailClubProvider({ children }: PropsWithChildren) {
   const [hasSeenFreeCreditsIntro, setHasSeenFreeCreditsIntro] = useState(false);
   const [voidReplies, setVoidReplies] = useState<VoidReply[]>([]);
   const [userInfo, setUserInfo] = useState<CurrentUser>(defaultCurrentUser);
+  const [notifications, setNotifications] = useState<NotificationPrefs>(DEFAULT_NOTIFICATIONS);
+  const [privacy, setPrivacy] = useState<PrivacyPrefs>(DEFAULT_PRIVACY);
 
   useEffect(() => {
     AsyncStorage.getItem(STORE_KEY).then((raw) => {
@@ -75,6 +102,8 @@ export function MailClubProvider({ children }: PropsWithChildren) {
           if (typeof stored.hasSeenFreeCreditsIntro === "boolean") setHasSeenFreeCreditsIntro(stored.hasSeenFreeCreditsIntro);
           if (Array.isArray(stored.voidReplies)) setVoidReplies(stored.voidReplies);
           if (stored.currentUser && typeof stored.currentUser === "object") setUserInfo({ ...defaultCurrentUser, ...stored.currentUser });
+          if (stored.notifications && typeof stored.notifications === "object") setNotifications({ ...DEFAULT_NOTIFICATIONS, ...stored.notifications });
+          if (stored.privacy && typeof stored.privacy === "object") setPrivacy({ ...DEFAULT_PRIVACY, ...stored.privacy });
         }
       } catch {
         // Drop bad data — defaults already loaded
@@ -85,9 +114,9 @@ export function MailClubProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     AsyncStorage.setItem(
       STORE_KEY,
-      JSON.stringify({ friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, voidReplies, currentUser: userInfo })
+      JSON.stringify({ friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, voidReplies, currentUser: userInfo, notifications, privacy })
     ).catch(() => undefined);
-  }, [friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, voidReplies, userInfo]);
+  }, [friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, voidReplies, userInfo, notifications, privacy]);
 
   const value = useMemo<MailClubState>(() => ({
     currentUser: userInfo,
@@ -99,6 +128,8 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     freeCreditsRemaining,
     hasSeenFreeCreditsIntro,
     voidReplies,
+    notifications,
+    privacy,
     async sendIntoVoid(message) {
       if (credits < 1) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -237,7 +268,29 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         item.id === "maya" ? { ...item, cardsSent: Math.max(item.cardsSent, 0), lastInteractionAt: new Date().toISOString() } : item
       )));
     },
-  }), [friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, voidReplies, userInfo]);
+    async updateNotifications(patch) {
+      await Haptics.selectionAsync();
+      setNotifications((n) => ({ ...n, ...patch }));
+    },
+    async updatePrivacy(patch) {
+      await Haptics.selectionAsync();
+      setPrivacy((p) => ({ ...p, ...patch }));
+    },
+    async signOut() {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Reset to defaults so the WelcomeSheet shows again on next render
+      setFriends(initialFriends);
+      setPostcards(initialPostcards);
+      setCredits(FREE_CREDITS);
+      setFreeCreditsRemaining(FREE_CREDITS);
+      setHasSeenFreeCreditsIntro(false);
+      setVoidReplies([]);
+      setUserInfo(defaultCurrentUser);
+      setNotifications(DEFAULT_NOTIFICATIONS);
+      setPrivacy(DEFAULT_PRIVACY);
+      await AsyncStorage.removeItem(STORE_KEY);
+    },
+  }), [friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, voidReplies, userInfo, notifications, privacy]);
 
   return <MailClubContext.Provider value={value}>{children}</MailClubContext.Provider>;
 }

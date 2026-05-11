@@ -12,6 +12,7 @@ import {
   CormorantGaramond_700Bold,
 } from "@expo-google-fonts/cormorant-garamond";
 import { Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from "@expo-google-fonts/inter";
+import { WelcomeGate } from "@/src/components/WelcomeGate";
 import { MailClubProvider } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 
@@ -38,6 +39,7 @@ export default function RootLayout() {
       <MailClubProvider>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false }} />
+        <WelcomeGate />
       </MailClubProvider>
     </SafeAreaProvider>
   );

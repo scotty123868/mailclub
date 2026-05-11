@@ -33,7 +33,7 @@ export default function FriendsScreen() {
   }
   function sendToFriend(id: string) {
     closeFriend();
-    router.push("/send");
+    router.push({ pathname: "/send", params: { friendId: id } });
   }
 
   return (

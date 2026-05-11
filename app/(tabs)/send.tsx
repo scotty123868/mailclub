@@ -1,5 +1,5 @@
-import { useLocalSearchParams } from "expo-router";
-import { Camera, ChevronDown, Edit3, Send, Sparkles, User } from "lucide-react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Camera, ChevronDown, Edit3, Send, Sparkles, UserPlus, User } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
@@ -39,7 +39,8 @@ const INITIAL_STATE: ComposeState = {
 };
 
 export default function SendScreen() {
-  const params = useLocalSearchParams<{ occasion?: string }>();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ occasion?: string; friendId?: string }>();
   const { friends, credits, sendPostcard, sendIntoVoid } = useMailClub();
   const [state, setState] = useState<ComposeState>(INITIAL_STATE);
   const [recipientIndex, setRecipientIndex] = useState(() => Math.max(0, friends.findIndex((friend) => friend.id === "nora")));
@@ -48,6 +49,7 @@ export default function SendScreen() {
   const [modal, setModal] = useState({ visible: false, title: "", subtitle: "" });
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [seededOccasion, setSeededOccasion] = useState<string | undefined>(undefined);
+  const [seededFriend, setSeededFriend] = useState<string | undefined>(undefined);
   const [sending, setSending] = useState(false);
 
   // Seed from ?occasion=... when nav'd from My Card / Constellation / Map
@@ -61,7 +63,18 @@ export default function SendScreen() {
     setVoidMode(occ.special === "random-recipient");
     setSeededOccasion(occasionParam);
   }, [params?.occasion, seededOccasion]);
-  const recipient = friends[recipientIndex] ?? friends[0];
+
+  // Seed recipient from ?friendId=... when nav'd from a FriendDetailSheet
+  useEffect(() => {
+    const friendParam = params?.friendId as string | undefined;
+    if (!friendParam || seededFriend === friendParam) return;
+    const idx = friends.findIndex((f) => f.id === friendParam);
+    if (idx >= 0) setRecipientIndex(idx);
+    setSeededFriend(friendParam);
+  }, [params?.friendId, friends, seededFriend]);
+
+  const hasFriends = friends.length > 0;
+  const recipient = hasFriends ? (friends[recipientIndex] ?? friends[0]) : null;
   const costForChoice = CARD_COSTS[state.category];
   const cantAfford = credits < costForChoice;
 
@@ -81,16 +94,17 @@ export default function SendScreen() {
   }
 
   function buildSendInput(): SendInput {
+    const friendId = recipient?.id ?? "";
     if (state.category === "photo") {
-      return { kind: "photo", friendId: recipient.id, photoUri: state.imageUri ?? "", message: state.message };
+      return { kind: "photo", friendId, photoUri: state.imageUri ?? "", message: state.message };
     }
     if (state.category === "place") {
-      return { kind: "place", friendId: recipient.id, photoUri: state.imageUri ?? "", placeName: state.placeName || "Wherever you are", message: state.message };
+      return { kind: "place", friendId, photoUri: state.imageUri ?? "", placeName: state.placeName || "Wherever you are", message: state.message };
     }
     if (state.category === "custom") {
-      return { kind: "custom", friendId: recipient.id, description: state.message, tone: state.customTone, referencePhotoUris: state.customPhotos };
+      return { kind: "custom", friendId, description: state.message, tone: state.customTone, referencePhotoUris: state.customPhotos };
     }
-    return { kind: "handwritten", friendId: recipient.id, message: state.message };
+    return { kind: "handwritten", friendId, message: state.message };
   }
 
   async function onSend() {
@@ -176,17 +190,36 @@ export default function SendScreen() {
             <Text style={styles.voidExitText}>Cancel</Text>
           </Pressable>
         </PostalCard>
+      ) : !hasFriends ? (
+        <PostalCard style={styles.emptyRecipient} testID="recipient-empty">
+          <View style={styles.emptyIconWrap}>
+            <UserPlus color={colors.postalRed} size={24} strokeWidth={1.6} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.emptyTitle}>No friends to send to yet.</Text>
+            <Text style={styles.emptyBody}>Add a friend or send into the void.</Text>
+          </View>
+          <Pressable
+            onPress={() => router.push("/friends")}
+            style={styles.emptyAddBtn}
+            testID="recipient-empty-add"
+            accessibilityRole="button"
+            accessibilityLabel="Add a friend"
+          >
+            <Text style={styles.emptyAddText}>Add</Text>
+          </Pressable>
+        </PostalCard>
       ) : (
         <Pressable
           onPress={() => setRecipientIndex((recipientIndex + 1) % friends.length)}
           testID="recipient-cycler"
           accessibilityRole="button"
-          accessibilityLabel={`Recipient: ${recipient.name}. Tap to cycle.`}
+          accessibilityLabel={`Recipient: ${recipient!.name}. Tap to cycle.`}
         >
           <PostalCard style={styles.recipient}>
-            <IllustratedAvatar look={recipient.id as AvatarLook} size={56} />
+            <IllustratedAvatar look={recipient!.id as AvatarLook} size={56} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.recipientName}>{recipient.name}</Text>
+              <Text style={styles.recipientName}>{recipient!.name}</Text>
               <Text style={[styles.recipientMeta, cantAfford && styles.recipientMetaWarn]}>
                 {credits} credits · this card costs {costForChoice}
                 {cantAfford ? " · need more" : ""}
@@ -205,7 +238,9 @@ export default function SendScreen() {
         </Pressable>
       )}
 
-      <PrimaryButton title={sendLabel} icon={voidMode ? Sparkles : Send} onPress={onSend} />
+      {(!hasFriends && !voidMode) ? null : (
+        <PrimaryButton title={sendLabel} icon={voidMode ? Sparkles : Send} onPress={onSend} />
+      )}
 
       <SuccessModal
         visible={modal.visible}
@@ -235,6 +270,12 @@ const styles = StyleSheet.create({
   recipientMetaWarn: { color: colors.postalRed },
   buyInline: { alignSelf: "flex-start", backgroundColor: colors.postalRed, borderRadius: 6, marginTop: 8, paddingHorizontal: 10, paddingVertical: 5 },
   buyInlineText: { color: colors.white, fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.5 },
+  emptyRecipient: { alignItems: "center", backgroundColor: "rgba(184,74,58,0.05)", borderColor: "rgba(184,74,58,0.3)", borderWidth: 1, flexDirection: "row", gap: 12, padding: 14 },
+  emptyIconWrap: { alignItems: "center", backgroundColor: "rgba(184,74,58,0.12)", borderRadius: 22, height: 44, justifyContent: "center", width: 44 },
+  emptyTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 17 },
+  emptyBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 2 },
+  emptyAddBtn: { backgroundColor: colors.ink, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 },
+  emptyAddText: { color: colors.white, fontFamily: fonts.serifSemi, fontSize: 14 },
   recipientPostmark: { opacity: 0.55 },
   voidRecipient: { alignItems: "center", backgroundColor: "rgba(17, 26, 51, 0.92)", borderColor: "#D9B46E", borderWidth: 1, flexDirection: "row", gap: 14, padding: 14 },
   voidIconWrap: { alignItems: "center", backgroundColor: "rgba(217, 180, 110, 0.18)", borderRadius: 24, height: 48, justifyContent: "center", width: 48 },

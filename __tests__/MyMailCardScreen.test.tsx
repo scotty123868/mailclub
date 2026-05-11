@@ -43,13 +43,14 @@ describe("MyMailCardScreen", () => {
     expect(getByText(/For the friends you love/)).toBeTruthy();
   });
 
-  it("displays the metric strip with all 4 values", () => {
-    const { getByText } = renderMyCard();
-    expect(getByText("42")).toBeTruthy();
-    // 128 + 3 starter postcards
-    expect(getByText("131")).toBeTruthy();
-    expect(getByText("97")).toBeTruthy();
-    expect(getByText("23")).toBeTruthy();
+  it("displays real metric values derived from state", () => {
+    const { getByTestId, getAllByText } = renderMyCard();
+    // 6 mock friends + 6 distinct cities — both render "6" in the strip
+    expect(getAllByText("6").length).toBeGreaterThanOrEqual(2);
+    expect(getByTestId("metric-friends")).toBeTruthy();
+    expect(getByTestId("metric-sent")).toBeTruthy();
+    expect(getByTestId("metric-replies")).toBeTruthy();
+    expect(getByTestId("metric-cities")).toBeTruthy();
   });
 
   it("displays About Me section with all info lines", () => {

@@ -10,10 +10,14 @@ import { ConstellationPanel } from "@/src/components/ConstellationPanel";
 import { CreditsBalance } from "@/src/components/CreditsBalance";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { EditAboutMeSheet } from "@/src/components/EditAboutMeSheet";
+import { AboutAppSheet } from "@/src/components/AboutAppSheet";
 import { Header } from "@/src/components/Header";
+import { MailHistorySheet } from "@/src/components/MailHistorySheet";
 import { MapPanel } from "@/src/components/MapPanel";
 import { MetricStrip } from "@/src/components/MetricStrip";
+import { NotificationsSheet } from "@/src/components/NotificationsSheet";
 import { OnboardingFreeCreditsBanner } from "@/src/components/OnboardingFreeCreditsBanner";
+import { PrivacySheet } from "@/src/components/PrivacySheet";
 import { PostalCard } from "@/src/components/PostalCard";
 import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { SettingsSheet } from "@/src/components/SettingsSheet";
@@ -33,10 +37,19 @@ const cardIdeas: { title: string; icon: LucideIcon; tone: string; occasion: Idea
 
 export default function MyMailCardScreen() {
   const router = useRouter();
-  const { currentUser, postcards, credits } = useMailClub();
+  const { currentUser, friends, postcards, voidReplies, credits } = useMailClub();
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editAboutOpen, setEditAboutOpen] = useState(false);
+  const [mailOpen, setMailOpen] = useState<null | "sent" | "replies">(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+
+  // Real metrics derived from state — no fake inflation
+  const sentCount = postcards.filter((p) => p.status === "sent").length;
+  const receivedCount = voidReplies.length;
+  const citiesCount = new Set(friends.map((f) => f.city)).size;
 
   function seedSend(occasion: IdeaOccasion) {
     router.push({ pathname: "/send", params: { occasion } });
@@ -62,10 +75,10 @@ export default function MyMailCardScreen() {
       <CreditsBalance count={credits} onPressBuy={() => setCreditsOpen(true)} />
 
       <MetricStrip metrics={[
-        { icon: Users, value: 42, label: "Friends" },
-        { icon: Send, value: 128 + postcards.length, label: "Sent", accent: "#607A55" },
-        { icon: Mail, value: 97, label: "Received", accent: colors.postalBlue },
-        { icon: Globe2, value: 23, label: "Cities", accent: colors.postalRed },
+        { icon: Users, value: friends.length, label: "Friends", onPress: () => router.push("/friends"), testID: "metric-friends" },
+        { icon: Send, value: sentCount, label: "Sent", accent: "#607A55", onPress: () => setMailOpen("sent"), testID: "metric-sent" },
+        { icon: Mail, value: receivedCount, label: "Replies", accent: colors.postalBlue, onPress: () => setMailOpen("replies"), testID: "metric-replies" },
+        { icon: Globe2, value: citiesCount, label: "Cities", accent: colors.postalRed, onPress: () => router.push("/map"), testID: "metric-cities" },
       ]} />
 
       <Pressable
@@ -90,10 +103,10 @@ export default function MyMailCardScreen() {
             <View style={styles.divider}>
               <Svg18 />
             </View>
-            <InfoLine icon={Star} label="Interests:" value={currentUser.interests} />
-            <InfoLine icon={ImageIcon} label="Send me:" value={currentUser.sendMe} />
-            <InfoLine icon={Cake} label="Birthday:" value={currentUser.birthday} />
-            <InfoLine icon={Tag} label="Currently into:" value={currentUser.currentlyInto} italic />
+            <InfoLine icon={Star} label="Interests:" value={currentUser.interests || "Not set yet — tap to add."} />
+            <InfoLine icon={ImageIcon} label="Send me:" value={currentUser.sendMe || "Not set yet — tap to add."} />
+            <InfoLine icon={Cake} label="Birthday:" value={currentUser.birthday || "Not set yet — tap to add."} />
+            <InfoLine icon={Tag} label="Currently into:" value={currentUser.currentlyInto || "Not set yet — tap to add."} italic />
           </View>
         </PostalCard>
       </Pressable>
@@ -147,8 +160,20 @@ export default function MyMailCardScreen() {
         onClose={() => setSettingsOpen(false)}
         onOpenCredits={() => setCreditsOpen(true)}
         onOpenEditAboutMe={() => setEditAboutOpen(true)}
+        onOpenAddressBook={() => router.push("/friends")}
+        onOpenNotifications={() => setNotificationsOpen(true)}
+        onOpenPrivacy={() => setPrivacyOpen(true)}
+        onOpenAbout={() => setAboutOpen(true)}
       />
       <EditAboutMeSheet visible={editAboutOpen} onClose={() => setEditAboutOpen(false)} />
+      <MailHistorySheet
+        visible={mailOpen !== null}
+        initialTab={mailOpen ?? "sent"}
+        onClose={() => setMailOpen(null)}
+      />
+      <NotificationsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+      <PrivacySheet visible={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+      <AboutAppSheet visible={aboutOpen} onClose={() => setAboutOpen(false)} />
     </AppShell>
   );
 }

@@ -102,7 +102,7 @@ export default function ConstellationScreen() {
         onClose={() => setActiveFriendId(null)}
         onSend={(id) => {
           setActiveFriendId(null);
-          router.push("/send");
+          router.push({ pathname: "/send", params: { friendId: id } });
         }}
       />
     </AppShell>

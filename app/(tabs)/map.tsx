@@ -26,8 +26,10 @@ export default function MapScreen() {
   const router = useRouter();
   const [selected, setSelected] = useState("Friends");
   const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
-  const { routes } = useMailClub();
+  const { routes, friends } = useMailClub();
   const activeRoute = routes.find((r) => r.id === activeRouteId) ?? null;
+  const totalMiles = routes.reduce((sum, r) => sum + r.miles, 0);
+  const citiesCount = new Set(friends.map((f) => f.city)).size;
 
   return (
     <AppShell>
@@ -49,9 +51,9 @@ export default function MapScreen() {
 
       <PostalCard style={styles.summary}>
         <View style={styles.summaryRow}>
-          <SummaryItem icon={Globe2} value="23" label="Cities" tint={colors.postalRed} />
-          <SummaryItem icon={Users} value="42" label="Friends" tint={colors.ink} />
-          <SummaryItem icon={Send} value="1,284" label="Miles" tint="#607A55" />
+          <SummaryItem icon={Globe2} value={String(citiesCount)} label="Cities" tint={colors.postalRed} />
+          <SummaryItem icon={Users} value={String(friends.length)} label="Friends" tint={colors.ink} />
+          <SummaryItem icon={Send} value={totalMiles.toLocaleString()} label="Miles" tint="#607A55" />
         </View>
       </PostalCard>
 

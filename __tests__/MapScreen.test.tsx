@@ -42,13 +42,14 @@ describe("MapScreen", () => {
     expect(getByText(/real connection/i)).toBeTruthy();
   });
 
-  it("displays summary stats", () => {
-    const { getByText } = renderMap();
-    expect(getByText("23")).toBeTruthy();
-    expect(getByText("42")).toBeTruthy();
-    expect(getByText("1,284")).toBeTruthy();
+  it("displays real summary stats derived from state", () => {
+    const { getByText, getAllByText } = renderMap();
     expect(getByText("Cities")).toBeTruthy();
     expect(getByText("Miles")).toBeTruthy();
+    // 6 mock friends with 6 distinct cities
+    expect(getAllByText("6").length).toBeGreaterThanOrEqual(1);
+    // Total miles from mock routes: 612 + 1512 + 1049 = 3,173
+    expect(getByText("3,173")).toBeTruthy();
   });
 
   it("renders 3 recent routes from mock data", () => {

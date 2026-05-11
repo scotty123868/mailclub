@@ -1,4 +1,4 @@
-import { Bell, ChevronRight, CreditCard, FileText, HelpCircle, Lock, LogOut, Mail, Stamp, X } from "lucide-react-native";
+import { Bell, ChevronRight, CreditCard, FileText, Lock, LogOut, Mail, Stamp, X } from "lucide-react-native";
 import { ComponentType } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useMailClub } from "@/src/state/MailClubContext";
@@ -10,16 +10,45 @@ export function SettingsSheet({
   onClose,
   onOpenCredits,
   onOpenEditAboutMe,
+  onOpenAddressBook,
+  onOpenNotifications,
+  onOpenPrivacy,
+  onOpenAbout,
 }: {
   visible: boolean;
   onClose: () => void;
   onOpenCredits: () => void;
   onOpenEditAboutMe: () => void;
+  onOpenAddressBook?: () => void;
+  onOpenNotifications?: () => void;
+  onOpenPrivacy?: () => void;
+  onOpenAbout?: () => void;
 }) {
-  const { credits, currentUser } = useMailClub();
+  const { credits, currentUser, notifications, privacy, signOut } = useMailClub();
 
-  function stub(label: string) {
-    Alert.alert(label, "Coming soon in v0.2. Tap OK to continue.");
+  const notifOnCount = Object.values(notifications).filter(Boolean).length;
+  const privacyLabel = privacy.whoCanSendToMe === "anyone"
+    ? "Anyone with QR"
+    : privacy.whoCanSendToMe === "friends"
+      ? "Only friends"
+      : "Paused";
+
+  function confirmSignOut() {
+    Alert.alert(
+      "Sign out?",
+      "This clears your local Mail Club data and returns you to the welcome screen. Your in-flight cards remain queued.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign out",
+          style: "destructive",
+          onPress: async () => {
+            await signOut();
+            onClose();
+          },
+        },
+      ]
+    );
   }
 
   return (
@@ -54,18 +83,41 @@ export function SettingsSheet({
           </Section>
 
           <Section title="Mail">
-            <Row icon={Stamp} label="Address book" detail="Manage friends" onPress={() => stub("Address book")} testID="settings-row-addresses" />
-            <Row icon={Bell} label="Notifications" detail="Delivery, replies, birthdays" onPress={() => stub("Notifications")} testID="settings-row-notifications" />
+            <Row
+              icon={Stamp}
+              label="Address book"
+              detail="Manage friends"
+              onPress={() => { onClose(); onOpenAddressBook?.(); }}
+              testID="settings-row-addresses"
+            />
+            <Row
+              icon={Bell}
+              label="Notifications"
+              detail={`${notifOnCount} of 3 on`}
+              onPress={() => { onClose(); onOpenNotifications?.(); }}
+              testID="settings-row-notifications"
+            />
           </Section>
 
           <Section title="Privacy & support">
-            <Row icon={Lock} label="Privacy" detail="Address vault, data export" onPress={() => stub("Privacy")} testID="settings-row-privacy" />
-            <Row icon={FileText} label="Terms & policies" onPress={() => stub("Terms & policies")} testID="settings-row-terms" />
-            <Row icon={HelpCircle} label="Help & feedback" onPress={() => stub("Help & feedback")} testID="settings-row-help" />
+            <Row
+              icon={Lock}
+              label="Privacy"
+              detail={`Who can write to me: ${privacyLabel}`}
+              onPress={() => { onClose(); onOpenPrivacy?.(); }}
+              testID="settings-row-privacy"
+            />
+            <Row
+              icon={FileText}
+              label="About, terms, & feedback"
+              detail="What this is, how it works, how to reach us"
+              onPress={() => { onClose(); onOpenAbout?.(); }}
+              testID="settings-row-about"
+            />
           </Section>
 
           <Section title="">
-            <Row icon={LogOut} label="Sign out" tone="red" onPress={() => stub("Sign out")} testID="settings-row-signout" />
+            <Row icon={LogOut} label="Sign out" tone="red" onPress={confirmSignOut} testID="settings-row-signout" />
           </Section>
 
           <Text style={styles.version}>Mail Club v0.3.0 (MVP)</Text>
