@@ -1,6 +1,5 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import React from "react";
-import { Alert } from "react-native";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { AllProviders } from "./test-utils";
 
@@ -14,7 +13,7 @@ describe("CreditsSheet", () => {
     expect(queryByText("Buy credits")).toBeNull();
   });
 
-  it("renders the title, balance line, and all 4 credit packs", () => {
+  it("renders the title, balance line, all 4 packs, and the 'coming soon' banner", () => {
     const { getByText, getByTestId } = render(
       <AllProviders>
         <CreditsSheet visible={true} onClose={() => {}} />
@@ -22,10 +21,11 @@ describe("CreditsSheet", () => {
     );
     expect(getByText("Buy credits")).toBeTruthy();
     expect(getByText(/1 credit = \$1/)).toBeTruthy();
-    expect(getByTestId("credits-buy-p5")).toBeTruthy();
-    expect(getByTestId("credits-buy-p10")).toBeTruthy();
-    expect(getByTestId("credits-buy-p25")).toBeTruthy();
-    expect(getByTestId("credits-buy-p50")).toBeTruthy();
+    expect(getByTestId("credits-coming-soon")).toBeTruthy();
+    expect(getByTestId("credits-pack-p5")).toBeTruthy();
+    expect(getByTestId("credits-pack-p10")).toBeTruthy();
+    expect(getByTestId("credits-pack-p25")).toBeTruthy();
+    expect(getByTestId("credits-pack-p50")).toBeTruthy();
   });
 
   it("renders the explainer rows for all 4 card categories", () => {
@@ -51,19 +51,16 @@ describe("CreditsSheet", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("tapping Buy on a pack opens the IAP-stub alert", async () => {
-    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
-    const { getByTestId } = render(
+  it("packs are read-only (no purchase action) — store is gated until IAP wires", () => {
+    const { queryByTestId } = render(
       <AllProviders>
         <CreditsSheet visible={true} onClose={() => {}} />
       </AllProviders>
     );
-    await act(async () => {
-      fireEvent.press(getByTestId("credits-buy-p10"));
-    });
-    await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith("Apple IAP not connected", expect.any(String), expect.any(Array));
-    });
-    alertSpy.mockRestore();
+    // The old credits-buy-* testIDs no longer exist — purchase flow is gated.
+    expect(queryByTestId("credits-buy-p5")).toBeNull();
+    expect(queryByTestId("credits-buy-p10")).toBeNull();
+    expect(queryByTestId("credits-buy-p25")).toBeNull();
+    expect(queryByTestId("credits-buy-p50")).toBeNull();
   });
 });

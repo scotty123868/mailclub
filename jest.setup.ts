@@ -14,6 +14,10 @@ jest.mock("expo-image-picker", () => ({
     canceled: false,
     assets: [{ uri: "file:///fake/photo.jpg" }],
   }),
+  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({
+    granted: true,
+    status: "granted",
+  }),
   MediaTypeOptions: { Images: "Images" },
 }));
 

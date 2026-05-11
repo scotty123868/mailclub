@@ -120,7 +120,7 @@ export function SettingsSheet({
             <Row icon={LogOut} label="Sign out" tone="red" onPress={confirmSignOut} testID="settings-row-signout" />
           </Section>
 
-          <Text style={styles.version}>Mail Club v0.3.0 (MVP)</Text>
+          <Text style={styles.version}>Mail Club · beta</Text>
         </ScrollView>
       </View>
     </Modal>

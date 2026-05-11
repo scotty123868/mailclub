@@ -42,7 +42,7 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
               Every card you send is a small act of attention in an attention-starved world.
             </Para>
             <Para>
-              Mail Club v0.3 is the MVP. Send queueing is local, fulfillment is being wired with a real printer
+              Mail Club is in beta. Send queueing is local, fulfillment is being wired with a real printer
               partner, and Apple In-App Purchase replaces the demo credit grants in the next release.
             </Para>
           </Section>
@@ -50,7 +50,7 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
           <Section icon={FileText} title="Privacy">
             <Para>
               We store your name, city, and any About-Me details on your device. Nothing is sent to a server in
-              v0.3. When fulfillment ships, we'll add a privacy manifest and walk you through what changes.
+              beta. When fulfillment ships, we'll add a privacy manifest and walk you through what changes.
             </Para>
             <Para>
               We never ask for your friends' street addresses — recipients claim their card via QR.
@@ -84,7 +84,7 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
             </Pressable>
           </Section>
 
-          <Text style={styles.version}>Mail Club v0.3.0 · made with paper, ink, and code.</Text>
+          <Text style={styles.version}>Mail Club · beta · made with paper, ink, and code.</Text>
         </ScrollView>
       </View>
     </Modal>

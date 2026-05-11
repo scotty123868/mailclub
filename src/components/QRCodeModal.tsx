@@ -1,7 +1,7 @@
 import { Share2, X } from "lucide-react-native";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Rect } from "react-native-svg";
-import { IllustratedAvatar } from "@/src/components/Avatar";
+import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
@@ -84,7 +84,7 @@ export function QRCodeModal({
           </View>
 
           <View style={styles.identity}>
-            <IllustratedAvatar look={avatarLook} size={56} />
+            <IdentityAvatar user={{ name, avatarInitials: "" }} size={56} />
             <View style={{ flex: 1 }}>
               <Text style={styles.identityName}>{name}</Text>
               <Text style={styles.identityCity}>{city}, {state}</Text>

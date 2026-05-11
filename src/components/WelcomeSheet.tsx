@@ -1,6 +1,6 @@
 import { Sparkles } from "lucide-react-native";
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { Stamp } from "@/src/components/Stamp";
@@ -17,7 +17,7 @@ import { fonts } from "@/src/theme/typography";
  * also re-introduce them.
  */
 export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComplete: () => void }) {
-  const { updateAboutMe, markFreeCreditsIntroSeen } = useMailClub();
+  const { completeSignup } = useMailClub();
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -28,24 +28,22 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
   async function submit() {
     if (!canContinue) return;
     setSaving(true);
-    await updateAboutMe({
-      name: name.trim(),
-      city: city.trim() || "Somewhere",
-      state: state.trim() || "",
-    });
-    await markFreeCreditsIntroSeen();
+    await completeSignup({ name, city, state });
     setSaving(false);
     onComplete();
   }
 
   async function skip() {
-    await markFreeCreditsIntroSeen();
+    // Skip still wipes the mock friends/routes so the app feels fresh.
+    // Identity gets a placeholder; the user can fill it in later via Edit Mail Card.
+    await completeSignup({ name: "", city: "", state: "" });
     onComplete();
   }
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
-      <View style={styles.root}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.paper }}>
+      <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
         <View style={styles.brandRow}>
           <Text style={styles.brand}>Mail Club</Text>
           <View style={styles.stamp}>
@@ -120,13 +118,14 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
             <Text style={styles.skipText}>Skip for now</Text>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { backgroundColor: colors.paper, flex: 1, gap: 16, paddingHorizontal: 22, paddingTop: 64 },
+  root: { flexGrow: 1, gap: 16, paddingHorizontal: 22, paddingTop: 64, paddingBottom: 30 },
   brandRow: { alignItems: "center", flexDirection: "row", gap: 12 },
   brand: { color: colors.ink, flex: 1, fontFamily: fonts.script, fontSize: 38, lineHeight: 40 },
   stamp: {},
@@ -141,7 +140,7 @@ const styles = StyleSheet.create({
   cityRow: { flexDirection: "row", gap: 10 },
   gift: { alignItems: "center", backgroundColor: "rgba(217,180,110,0.18)", borderColor: "rgba(217,180,110,0.6)", borderRadius: 10, borderWidth: 1, flexDirection: "row", gap: 10, padding: 12 },
   giftText: { color: colors.ink, flex: 1, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 17 },
-  footer: { gap: 8, marginTop: "auto", paddingBottom: 30, paddingTop: 16 },
+  footer: { gap: 8, marginTop: 20, paddingTop: 16 },
   skipBtn: { alignItems: "center", paddingVertical: 10 },
   skipText: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 14, textDecorationLine: "underline" },
 });

@@ -116,10 +116,8 @@ export default function SendScreen() {
         if (!result.ok) return;
         setModal({
           visible: true,
-          title: "Sent into the void.",
-          subtitle: result.replyPreview
-            ? `${result.replyPreview.from}: "${result.replyPreview.message}"`
-            : "Someone, somewhere, will receive it.",
+          title: "Queued for a stranger.",
+          subtitle: "When delivery is wired up, this will reach someone in Mail Club. If they write back, you'll see it in your mail history.",
         });
         return;
       }
@@ -132,8 +130,8 @@ export default function SendScreen() {
           ? `Your custom card is in the designer queue for ${result.friendName}.`
           : `Your postcard is on its way to ${result.friendName}.`,
         subtitle: state.category === "custom"
-          ? "Our designer + AI will draft 2 versions within 48h. (v0.1: manual queue.)"
-          : "Demo send queued locally. Real fulfillment is not connected in v0.1.",
+          ? "Our designer + AI will draft 2 versions and email you within 48 hours."
+          : "Queued for delivery. Real postcard fulfillment ships in the next release.",
       });
     } finally {
       setSending(false);

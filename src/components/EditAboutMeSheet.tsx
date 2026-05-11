@@ -1,6 +1,6 @@
 import { Check, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { useMailClub } from "@/src/state/MailClubContext";
 import type { CurrentUser } from "@/src/types/mail";
@@ -39,6 +39,7 @@ export function EditAboutMeSheet({ visible, onClose }: { visible: boolean; onClo
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.paper }}>
       <View style={styles.root}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
@@ -74,12 +75,13 @@ export function EditAboutMeSheet({ visible, onClose }: { visible: boolean; onClo
           <PrimaryButton title={saving ? "Saving..." : "Save changes"} icon={Check} onPress={save} />
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { backgroundColor: colors.paper, flex: 1, paddingHorizontal: 20, paddingTop: 18 },
+  root: { flex: 1, paddingHorizontal: 20, paddingTop: 18 },
   header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
   title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
   subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 4 },

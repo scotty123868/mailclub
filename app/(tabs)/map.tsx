@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { Globe2, Heart, Mail, Send, Users } from "lucide-react-native";
+import { Globe2, Heart, Mail, MapPin, Send, Users } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
@@ -12,9 +12,9 @@ import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { RouteDetailSheet } from "@/src/components/RouteDetailSheet";
 import { Stamp } from "@/src/components/Stamp";
 import { useMailClub } from "@/src/state/MailClubContext";
+import type { MailRoute } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
-import { formatMiles } from "@/src/utils/format";
 
 const segments = [
   { id: "Friends", icon: Users },
@@ -26,10 +26,53 @@ export default function MapScreen() {
   const router = useRouter();
   const [selected, setSelected] = useState("Friends");
   const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
-  const { routes, friends } = useMailClub();
+  const { postcards, friends, currentUser } = useMailClub();
+
+  // Derive routes from real postcards. Each unique (fromCity → toCity) pair
+  // becomes a route; the date is the most recent send, people are the friend
+  // names involved, miles is a placeholder until we wire real geo.
+  const routes: MailRoute[] = (() => {
+    const groups = new Map<string, { from: string; to: string; sentAt: string; people: Set<string> }>();
+    for (const p of postcards) {
+      const key = `${p.fromCity || "Home"}→${p.toCity}`;
+      const existing = groups.get(key);
+      const friendName = friends.find((f) => f.id === p.toFriendId)?.name ?? p.toCity;
+      if (existing) {
+        if (p.sentAt > existing.sentAt) existing.sentAt = p.sentAt;
+        existing.people.add(friendName);
+      } else {
+        groups.set(key, { from: p.fromCity || "Home", to: p.toCity, sentAt: p.sentAt, people: new Set([friendName]) });
+      }
+    }
+    return Array.from(groups.entries()).map(([key, g], idx) => ({
+      id: `route-${idx}-${key.replace(/\s+/g, "-").toLowerCase()}`,
+      from: g.from,
+      to: g.to,
+      date: formatRouteDate(g.sentAt),
+      miles: estimateMiles(g.from, g.to),
+      people: Array.from(g.people).join(", "),
+    }));
+  })();
   const activeRoute = routes.find((r) => r.id === activeRouteId) ?? null;
+  const citiesCount = new Set([...friends.map((f) => f.city), ...postcards.map((p) => p.toCity)]).size;
   const totalMiles = routes.reduce((sum, r) => sum + r.miles, 0);
-  const citiesCount = new Set(friends.map((f) => f.city)).size;
+
+  function formatRouteDate(iso: string): string {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    } catch {
+      return iso;
+    }
+  }
+
+  // Rough city-pair miles estimate. Real geo distance ships with the backend.
+  function estimateMiles(from: string, to: string): number {
+    if (from === to) return 0;
+    // Stable pseudo-distance from string hash, in a plausible 100-3000 mile range.
+    const seed = (from + to).split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 0);
+    return 100 + (seed % 2900);
+  }
 
   return (
     <AppShell>
@@ -65,32 +108,40 @@ export default function MapScreen() {
             <CircularPostmark size={62} topText="REAL-WORLD ROUTES" bottomText="REAL FRIENDSHIPS" centerYear="" />
           </View>
         </View>
-        {routes.map((route, index) => (
-          <Pressable
-            key={route.id}
-            onPress={() => setActiveRouteId(route.id)}
-            style={[styles.route, index > 0 && styles.borderTop]}
-            testID={`route-row-${route.id}`}
-            accessibilityRole="button"
-            accessibilityLabel={`Route from ${route.from} to ${route.to}`}
-          >
-            <View style={styles.routeArt}>
-              <MiniPostcardArt variant={index === 1 ? "city" : index === 2 ? "coast" : "mountain"} />
-              <View style={styles.routeStamp}>
-                <Stamp motif={index === 0 ? "mountain" : index === 1 ? "lighthouse" : "compass"} tone={index === 1 ? "sage" : "red"} cents={`${5 + index * 5}¢`} rotate={index % 2 === 0 ? -6 : 5} size="sm" />
+        {routes.length === 0 ? (
+          <View style={styles.routesEmpty} testID="routes-empty">
+            <MapPin color={colors.postalBlue} size={26} strokeWidth={1.5} />
+            <Text style={styles.routesEmptyTitle}>No routes yet.</Text>
+            <Text style={styles.routesEmptyBody}>Send your first card and the line will trace itself across the map.</Text>
+          </View>
+        ) : (
+          routes.map((route, index) => (
+            <Pressable
+              key={route.id}
+              onPress={() => setActiveRouteId(route.id)}
+              style={[styles.route, index > 0 && styles.borderTop]}
+              testID={`route-row-${route.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Route from ${route.from} to ${route.to}`}
+            >
+              <View style={styles.routeArt}>
+                <MiniPostcardArt variant={index === 1 ? "city" : index === 2 ? "coast" : "mountain"} />
+                <View style={styles.routeStamp}>
+                  <Stamp motif={index === 0 ? "mountain" : index === 1 ? "lighthouse" : "compass"} tone={index === 1 ? "sage" : "red"} cents={`${5 + index * 5}¢`} rotate={index % 2 === 0 ? -6 : 5} size="sm" />
+                </View>
               </View>
-            </View>
-            <View style={styles.routeCopy}>
-              <Text style={styles.routeTitle}>{route.from} → {route.to}</Text>
-              <Text style={styles.routeDate}>{route.date}</Text>
-              <View style={styles.peopleRow}>
-                <Users color={colors.ink} size={12} strokeWidth={1.5} />
-                <Text style={styles.people}>{route.people}</Text>
+              <View style={styles.routeCopy}>
+                <Text style={styles.routeTitle}>{route.from} → {route.to}</Text>
+                <Text style={styles.routeDate}>{route.date}</Text>
+                <View style={styles.peopleRow}>
+                  <Users color={colors.ink} size={12} strokeWidth={1.5} />
+                  <Text style={styles.people}>{route.people}</Text>
+                </View>
               </View>
-            </View>
-            <Text style={styles.miles}>{formatMiles(route.miles)} mi</Text>
-          </Pressable>
-        ))}
+              <Text style={styles.miles}>~{route.miles.toLocaleString()} mi</Text>
+            </Pressable>
+          ))
+        )}
       </PostalCard>
 
       <PostalCard style={styles.truth}>
@@ -142,6 +193,9 @@ const styles = StyleSheet.create({
   postmark: { opacity: 0.65 },
   route: { alignItems: "center", flexDirection: "row", gap: 12, paddingVertical: 14 },
   borderTop: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth },
+  routesEmpty: { alignItems: "center", gap: 8, paddingVertical: 24 },
+  routesEmptyTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 17, marginTop: 6 },
+  routesEmptyBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 17, textAlign: "center" },
   routeArt: { position: "relative" },
   routeStamp: { position: "absolute", right: -8, top: -10 },
   routeCopy: { flex: 1 },

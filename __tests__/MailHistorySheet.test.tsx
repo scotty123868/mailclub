@@ -50,7 +50,7 @@ describe("MailHistorySheet", () => {
     expect(getByTestId("mail-history-replies-empty")).toBeTruthy();
   });
 
-  it("sending into the void adds a reply to context (surfaced on the replies tab)", async () => {
+  it("sending into the void appends to the sent log (no fake reply is generated)", async () => {
     const ref: { current: ReturnType<typeof useMailClub> | null } = { current: null };
     render(
       <AllProviders>
@@ -59,11 +59,15 @@ describe("MailHistorySheet", () => {
       </AllProviders>
     );
     await waitFor(() => expect(ref.current).not.toBeNull());
+    const before = ref.current!.postcards.length;
     await act(async () => {
       await ref.current!.sendIntoVoid("Hi stranger");
     });
     await waitFor(() => {
-      expect(ref.current!.voidReplies.length).toBeGreaterThan(0);
+      // Postcard was sent
+      expect(ref.current!.postcards.length).toBe(before + 1);
+      // We do NOT auto-fabricate a reply — Apple 4.0 / 5.6.1 misleading content.
+      expect(ref.current!.voidReplies.length).toBe(0);
     });
   });
 

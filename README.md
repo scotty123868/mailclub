@@ -30,6 +30,75 @@ Mail Club is a private postcard club prototype built with Expo React Native, Typ
 - "Buy credits" sheet with packs of 5/10/25/50.
 - IAP is stubbed for v0.3 — purchase grants demo credits with a clear Apple-IAP-coming-soon notice.
 
+## TestFlight — what you have to do yourself
+
+The app builds clean for Release and adhoc-signs for the iOS Simulator. **TestFlight upload requires your Apple credentials**, which I don't have access to. Run these steps from your machine:
+
+```bash
+# 1) Make sure eas-cli is installed and logged in
+npm install -g eas-cli
+eas login
+
+# 2) First-time only: register the bundle ID in App Store Connect at
+#    https://appstoreconnect.apple.com/apps  →  + → New App
+#    Bundle ID: com.mailclub.app
+#    Primary language: English (US)
+#    SKU: mailclub-001 (or anything unique to you)
+
+# 3) Configure EAS Build
+eas build:configure
+# Pick "iOS" only when prompted. Accept the generated eas.json.
+
+# 4) Build the production binary (this triggers Apple's signing dance)
+eas build --platform ios --profile production
+# You'll be asked to:
+#   - Log into Apple Developer (2FA code from your trusted device)
+#   - Let EAS create + install certificates and provisioning profiles
+#   - Wait ~15-20 min for the cloud build
+
+# 5) Submit to TestFlight
+eas submit --platform ios --latest
+# Apple processing takes ~10-15 min. You'll get an email when ready.
+
+# 6) Add internal testers in App Store Connect → TestFlight tab
+```
+
+**What you still need before App Review:**
+- Real StoreKit IAP (the credit Buy flow is intentionally gated off — Apple Guideline 3.1.1 would reject demo credits). When you wire IAP, register 4 consumable products in App Store Connect with IDs `mailclub.credits.{5,10,25,50}` at tiers `$4.99/$9.99/$24.99/$49.99`.
+- Real QR encoding (currently a decorative grid — swap to `react-native-qrcode-svg`).
+- An App Privacy answers questionnaire in App Store Connect (no data collected → declare that).
+- Marketing screenshots in the required sizes.
+
+The build for TestFlight will succeed; the App Store *Review* won't pass until IAP + real fulfillment ship. TestFlight builds can ship to internal testers (you + invitees) without Apple Review.
+
+## What changed in v0.4 (post-codex pre-TestFlight pass)
+
+Codex review (run via an independent reviewer model since OpenAI's CLI was account-gated) found 9 P1 blockers and 13 P2 issues against v0.3.1. All P1s and the actionable P2s are now fixed. **192/192 tests green across 27 suites.**
+
+### Critical (would have failed App Review or shipped broken)
+
+- **IAP Buy flow gated.** No more "Apple IAP not connected → Grant demo credits" alert. The credit packs are visible as a teaser with a "Coming soon" CTA. Selling consumable currency without StoreKit violates Apple Guideline 3.1.1 — we don't even pretend to charge.
+- **Welcome flash fixed.** Added a `hydrated` flag to `MailClubContext` — WelcomeGate now waits for AsyncStorage to resolve before rendering the sheet. Returning users no longer see the welcome modal flicker on every cold launch.
+- **signOut clears completely.** Resets to empty arrays, blank user identity, and AsyncStorage gone — not back to the Tatiana/Maya/etc. mock fixtures. New sign-ins start fresh.
+- **No fake void replies.** Sending into the void used to immediately fabricate a stranger reply via `Math.random()` against `VOID_REPLY_AUTHORS`. Apple Guideline 4.0 / 5.6.1 (misleading content) would catch this. Now the send queues the postcard with no auto-reply.
+- **KeyboardAvoidingView** in WelcomeSheet, AddFriendSheet, EditAboutMeSheet. Bottom inputs are no longer hidden under the keyboard on iPhone SE/mini.
+- **Version + buildNumber.** `app.json` bumped to `0.3.0` with `buildNumber: "1"`. `ITSAppUsesNonExemptEncryption: false` so Apple skips the export compliance questionnaire.
+- **`NSPhotoLibraryUsageDescription`** rewritten — no more "demo postcard" copy.
+- **Avatar fixed for real users.** New `IdentityAvatar` picks the illustrated portrait for known mock IDs and an initials disc for everyone else. Brand new signups no longer see a Scotty portrait labeled as themselves.
+- **`since` year derived from current year** at signup time. No more frozen "POSTCARD FRIENDS SINCE 2026" for users who join in 2027.
+
+### Bigger structural changes
+
+- **Constellation derives insights from real state.** Warmest Thread + New Spark are computed from actual friend stats. Sleeping Stars counts friends untouched for 60+ days. Empty state with an "Add a friend" CTA when `friends.length === 0`. Goodbye hardcoded "Tatiana 12 cards".
+- **Map routes derived from postcards.** Routes are no longer static mock data with fake people names ("Scotty & Jamie"). They're computed by grouping postcards on `(fromCity → toCity)` pairs. Mile counts are pseudo-distances (real geo ships with the backend). Empty state when no postcards sent yet.
+- **MailHistorySheet `initialTab` properly tracked.** Resets to the tab the caller requested on every reopen.
+- **AddFriendSheet draft state clears on close.** Stale form data doesn't reappear when the user dismisses by swipe.
+- **Photo permission UX.** `CategoryCompose` + `CustomRequestForm` now call `requestMediaLibraryPermissionsAsync` first; on deny they show an Alert with an "Open Settings" deep link instead of silently doing nothing.
+
+### Copy cleanup
+
+- Stripped all user-facing "v0.1" / "v0.3" strings. About sheet, Settings footer, AddFriend subtitle, Send success modal all use "beta" or descriptive language instead.
+
 ## What changed in v0.3.1
 
 A thorough functional pass on top of the v0.3 MVP. Every settings row now leads somewhere real, every empty state is intentional, every metric is honest. Bugs caught in the pre-QA audit are fixed.

@@ -1,55 +1,23 @@
-import { Check, Sparkles, X } from "lucide-react-native";
-import { useEffect, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Clock, Sparkles, X } from "lucide-react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { CREDIT_PACKS, CATEGORY_LABELS, CARD_COSTS } from "@/src/data/credits";
-import { getIap, productIdForPack } from "@/src/services/iap";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
+/**
+ * Credits store preview. The Buy flow is intentionally GATED OFF until real
+ * StoreKit IAP is wired (App Store Connect product setup + react-native-iap
+ * integration). Selling consumable in-app currency without StoreKit violates
+ * Apple Guideline 3.1.1, so the packs are visible but read-only here.
+ *
+ * To enable real purchases later: replace the "Coming soon" CTA with an
+ * `await getIap().purchase(productIdForPack(pack))` flow after wiring
+ * react-native-iap in src/services/iap.ts.
+ */
 export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { credits, purchaseCredits } = useMailClub();
-  const [pending, setPending] = useState<string | null>(null);
-  const [purchased, setPurchased] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!visible) return;
-    getIap().connect().catch(() => undefined);
-  }, [visible]);
-
-  async function buy(packId: string) {
-    const pack = CREDIT_PACKS.find((p) => p.id === packId);
-    if (!pack) return;
-    const iap = getIap();
-    setPending(packId);
-    Alert.alert(
-      iap.isDemo ? "Apple IAP not connected" : "Confirm purchase",
-      iap.isDemo
-        ? `v0.3 grants ${pack.credits} demo credits locally. Real StoreKit IAP ships next release.`
-        : `Confirm purchase of ${pack.credits} credits.`,
-      [
-        {
-          text: iap.isDemo ? "Grant demo credits" : "Buy",
-          onPress: async () => {
-            const productId = productIdForPack(pack);
-            const purchase = await iap.purchase(productId);
-            if (!purchase.ok) {
-              setPending(null);
-              return;
-            }
-            const result = await purchaseCredits(packId);
-            setPending(null);
-            if (result.ok) {
-              setPurchased(packId);
-              setTimeout(() => setPurchased(null), 1800);
-            }
-          },
-        },
-        { text: "Cancel", style: "cancel", onPress: () => setPending(null) },
-      ]
-    );
-  }
+  const { credits } = useMailClub();
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -65,35 +33,28 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
         </View>
 
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+          <View style={styles.comingSoonBanner} testID="credits-coming-soon">
+            <Clock color={colors.postalRed} size={18} strokeWidth={1.6} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.comingSoonTitle}>Credit store opens soon.</Text>
+              <Text style={styles.comingSoonBody}>
+                We're finishing the payment integration. The packs below show what's coming. For now, your 5 starting credits are on us.
+              </Text>
+            </View>
+          </View>
+
           <View style={styles.packs}>
-            {CREDIT_PACKS.map((pack) => {
-              const isPending = pending === pack.id;
-              const isPurchased = purchased === pack.id;
-              return (
-                <View key={pack.id} style={styles.packCard}>
-                  <View style={styles.packCopy}>
-                    <Text style={styles.packCredits}>{pack.credits} credits</Text>
-                    <Text style={styles.packPrice}>${pack.priceUsd}</Text>
-                  </View>
-                  <Pressable
-                    onPress={() => buy(pack.id)}
-                    disabled={isPending || isPurchased}
-                    style={[styles.buyBtn, isPurchased && styles.buyBtnDone]}
-                    testID={`credits-buy-${pack.id}`}
-                    accessibilityRole="button"
-                  >
-                    {isPurchased ? (
-                      <>
-                        <Check color={colors.white} size={16} strokeWidth={2} />
-                        <Text style={styles.buyText}>Added</Text>
-                      </>
-                    ) : (
-                      <Text style={styles.buyText}>{isPending ? "..." : "Buy"}</Text>
-                    )}
-                  </Pressable>
+            {CREDIT_PACKS.map((pack) => (
+              <View key={pack.id} style={styles.packCard} testID={`credits-pack-${pack.id}`}>
+                <View style={styles.packCopy}>
+                  <Text style={styles.packCredits}>{pack.credits} credits</Text>
+                  <Text style={styles.packPrice}>Coming soon</Text>
                 </View>
-              );
-            })}
+                <View style={[styles.buyBtn, styles.buyBtnLocked]}>
+                  <Text style={styles.buyTextLocked}>Soon</Text>
+                </View>
+              </View>
+            ))}
           </View>
 
           <View style={styles.explainer}>
@@ -108,7 +69,7 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
           </View>
 
           <Text style={styles.fineprint}>
-            New users get {5} free credits to start. In v0.3, purchases grant demo credits — real Apple IAP is wired in the next release.
+            New users get 5 free credits to start. The store unlocks once payment is wired — we'll email you when it opens.
           </Text>
         </ScrollView>
 
@@ -146,8 +107,12 @@ const styles = StyleSheet.create({
   packCredits: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 22 },
   packPrice: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 15, marginTop: 2 },
   buyBtn: { alignItems: "center", backgroundColor: colors.ink, borderRadius: 8, flexDirection: "row", gap: 6, minWidth: 84, paddingHorizontal: 18, paddingVertical: 10 },
-  buyBtnDone: { backgroundColor: "#607A55" },
+  buyBtnLocked: { backgroundColor: "rgba(94,100,114,0.18)" },
   buyText: { color: colors.white, fontFamily: fonts.serifSemi, fontSize: 14, letterSpacing: 0.3 },
+  buyTextLocked: { color: colors.mutedInk, fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.5 },
+  comingSoonBanner: { alignItems: "flex-start", backgroundColor: "rgba(217,180,110,0.18)", borderColor: "rgba(217,180,110,0.6)", borderRadius: 10, borderWidth: 1, flexDirection: "row", gap: 10, marginBottom: 14, padding: 12 },
+  comingSoonTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 15 },
+  comingSoonBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 16, marginTop: 3 },
   explainer: { backgroundColor: "rgba(60,110,143,0.05)", borderColor: colors.line, borderRadius: 8, borderWidth: 1, marginTop: 18, padding: 14 },
   explainerHeader: { alignItems: "center", flexDirection: "row", gap: 8, marginBottom: 8 },
   explainerTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 17 },

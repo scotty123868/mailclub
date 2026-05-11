@@ -4,13 +4,13 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { AppShell } from "@/src/components/AppShell";
-import { IllustratedAvatar } from "@/src/components/Avatar";
 import { PrimaryButton, SecondaryButton } from "@/src/components/Buttons";
 import { ConstellationPanel } from "@/src/components/ConstellationPanel";
 import { CreditsBalance } from "@/src/components/CreditsBalance";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { EditAboutMeSheet } from "@/src/components/EditAboutMeSheet";
 import { AboutAppSheet } from "@/src/components/AboutAppSheet";
+import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { Header } from "@/src/components/Header";
 import { MailHistorySheet } from "@/src/components/MailHistorySheet";
 import { MapPanel } from "@/src/components/MapPanel";
@@ -62,7 +62,7 @@ export default function MyMailCardScreen() {
       <OnboardingFreeCreditsBanner />
 
       <View style={styles.hero}>
-        <IllustratedAvatar look="scotty" size={118} />
+        <IdentityAvatar user={currentUser} size={118} />
         <View style={styles.heroCopy}>
           <Text style={styles.name}>{currentUser.name}</Text>
           <Text style={styles.city}>⌖ {currentUser.city}, {currentUser.state}</Text>

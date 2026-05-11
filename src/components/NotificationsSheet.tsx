@@ -60,7 +60,7 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
           <View style={styles.notice}>
             <Bell color={colors.mutedInk} size={14} strokeWidth={1.6} />
             <Text style={styles.noticeText}>
-              v0.3 stores your preferences locally. Real push notifications will ship when fulfillment is wired up.
+              We store your preferences on your device. Real push notifications ship once fulfillment is live.
             </Text>
           </View>
         </ScrollView>

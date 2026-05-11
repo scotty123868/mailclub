@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AddFriendSheet } from "@/src/components/AddFriendSheet";
 import { AppShell } from "@/src/components/AppShell";
-import { IllustratedAvatar } from "@/src/components/Avatar";
 import { FriendDetailSheet } from "@/src/components/FriendDetailSheet";
+import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { Header } from "@/src/components/Header";
 import { PostalCard } from "@/src/components/PostalCard";
 import { CircularPostmark } from "@/src/components/PostmarkDecoration";
@@ -42,7 +42,7 @@ export default function FriendsScreen() {
 
       <PostalCard style={styles.mailCard}>
         <View style={styles.mailCardRow}>
-          <IllustratedAvatar look="scotty" size={62} />
+          <IdentityAvatar user={currentUser} size={62} />
           <View style={{ flex: 1 }}>
             <Text style={styles.mailCardName}>{currentUser.name}</Text>
             <Text style={styles.mailCardCity}>⌖ {currentUser.city}, {currentUser.state}</Text>

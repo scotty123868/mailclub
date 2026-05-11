@@ -2,7 +2,7 @@
   "expo": {
     "name": "Mail Club",
     "slug": "mail-club",
-    "version": "0.1.0",
+    "version": "0.3.0",
     "scheme": "mailclub",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,8 +16,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mailclub.app",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Mail Club lets you choose a photo to preview on a demo postcard."
+        "NSPhotoLibraryUsageDescription": "Mail Club uses your photos so you can pick one for the postcard you're sending.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

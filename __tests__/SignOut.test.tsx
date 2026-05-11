@@ -41,8 +41,10 @@ describe("signOut", () => {
 
     await waitFor(() => {
       expect(ref.current!.hasSeenFreeCreditsIntro).toBe(false);
-      // Identity resets to defaults (Scotty in mock data)
-      expect(ref.current!.currentUser.name).toBe("Scotty");
+      // signOut clears to a clean slate — no mock fixtures repopulated.
+      expect(ref.current!.currentUser.name).toBe("");
+      expect(ref.current!.friends).toEqual([]);
+      expect(ref.current!.postcards).toEqual([]);
     });
   });
 });

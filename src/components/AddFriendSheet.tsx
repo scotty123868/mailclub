@@ -1,6 +1,6 @@
 import { UserPlus, X } from "lucide-react-native";
-import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
@@ -30,6 +30,11 @@ export function AddFriendSheet({
     setSubmitting(false);
   }
 
+  // Reset on close so stale drafts don't reappear when the user reopens.
+  useEffect(() => {
+    if (!visible) reset();
+  }, [visible]);
+
   async function submit() {
     setError(null);
     setSubmitting(true);
@@ -52,11 +57,12 @@ export function AddFriendSheet({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.paper }}>
       <View style={styles.root}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Add a friend</Text>
-            <Text style={styles.subtitle}>v0.1: addresses live on your device. We're not collecting them yet.</Text>
+            <Text style={styles.subtitle}>Addresses live on your device. We're not collecting them yet.</Text>
           </View>
           <Pressable onPress={close} style={styles.closeBtn} testID="add-friend-close" accessibilityRole="button" accessibilityLabel="Close add friend">
             <X color={colors.ink} size={22} strokeWidth={1.5} />
@@ -113,12 +119,13 @@ export function AddFriendSheet({
           <PrimaryButton title={submitting ? "Saving..." : "Add to rolodex"} icon={UserPlus} onPress={submit} />
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { backgroundColor: colors.paper, flex: 1, paddingHorizontal: 20, paddingTop: 18 },
+  root: { flex: 1, paddingHorizontal: 20, paddingTop: 18 },
   header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
   title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
   subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 17, marginTop: 4 },

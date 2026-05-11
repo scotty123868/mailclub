@@ -1,7 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import { Feather, Image as ImageIcon } from "lucide-react-native";
 import { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { PostalCard } from "@/src/components/PostalCard";
 import { PlacePicker, PlacePickerSummary } from "@/src/components/PlacePicker";
@@ -40,6 +40,20 @@ export function CategoryCompose({
   const { category, message, imageUri, placeName, customTone, customPhotos } = state;
 
   async function choosePhoto() {
+    // Ask for permission first so a denied state shows a useful Alert rather
+    // than silently swallowing the picker action.
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        "Photos access denied",
+        "Mail Club needs Photos access to pick the image for your postcard. You can grant it in Settings.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings().catch(() => undefined) },
+        ]
+      );
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,

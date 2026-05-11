@@ -4,7 +4,6 @@ import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useSt
 import { Alert } from "react-native";
 import { CARD_COSTS, CREDIT_PACKS, FREE_CREDITS } from "@/src/data/credits";
 import { currentUser as defaultCurrentUser, friends as initialFriends, milestones, postcards as initialPostcards, routes } from "@/src/data/mock";
-import { VOID_REPLY_AUTHORS } from "@/src/data/occasions";
 import type { CardCategory, CurrentUser, CustomTone, Friend, Postcard } from "@/src/types/mail";
 
 const STORE_KEY = "mail-club-v0-3-credits-state";
@@ -55,11 +54,12 @@ type MailClubState = {
   credits: number;
   freeCreditsRemaining: number;
   hasSeenFreeCreditsIntro: boolean;
+  hydrated: boolean;
   voidReplies: VoidReply[];
   notifications: NotificationPrefs;
   privacy: PrivacyPrefs;
   sendPostcard: (input: SendInput) => Promise<SendResult>;
-  sendIntoVoid: (message: string) => Promise<{ ok: boolean; replyPreview?: VoidReply }>;
+  sendIntoVoid: (message: string) => Promise<{ ok: boolean }>;
   purchaseCredits: (packId: string) => Promise<CreditsPurchaseResult>;
   markFreeCreditsIntroSeen: () => Promise<void>;
   updateAboutMe: (patch: Partial<CurrentUser>) => Promise<void>;
@@ -70,6 +70,7 @@ type MailClubState = {
   updateNotifications: (patch: Partial<NotificationPrefs>) => Promise<void>;
   updatePrivacy: (patch: Partial<PrivacyPrefs>) => Promise<void>;
   signOut: () => Promise<void>;
+  completeSignup: (input: { name: string; city: string; state: string }) => Promise<void>;
 };
 
 const MailClubContext = createContext<MailClubState | null>(null);
@@ -88,10 +89,14 @@ export function MailClubProvider({ children }: PropsWithChildren) {
   const [userInfo, setUserInfo] = useState<CurrentUser>(defaultCurrentUser);
   const [notifications, setNotifications] = useState<NotificationPrefs>(DEFAULT_NOTIFICATIONS);
   const [privacy, setPrivacy] = useState<PrivacyPrefs>(DEFAULT_PRIVACY);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORE_KEY).then((raw) => {
-      if (!raw) return;
+      if (!raw) {
+        setHydrated(true);
+        return;
+      }
       try {
         const stored = JSON.parse(raw);
         if (stored && typeof stored === "object") {
@@ -107,8 +112,10 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         }
       } catch {
         // Drop bad data — defaults already loaded
+      } finally {
+        setHydrated(true);
       }
-    }).catch(() => undefined);
+    }).catch(() => setHydrated(true));
   }, []);
 
   useEffect(() => {
@@ -127,6 +134,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     credits,
     freeCreditsRemaining,
     hasSeenFreeCreditsIntro,
+    hydrated,
     voidReplies,
     notifications,
     privacy,
@@ -139,19 +147,15 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setCredits((b) => b - 1);
       setFreeCreditsRemaining((b) => Math.max(0, b - 1));
-      const reply = VOID_REPLY_AUTHORS[Math.floor(Math.random() * VOID_REPLY_AUTHORS.length)];
-      const voidReply: VoidReply = {
-        id: `void-${Date.now()}`,
-        from: reply.from,
-        message: reply.message,
-        receivedAt: new Date().toISOString(),
-      };
-      setVoidReplies((replies) => [voidReply, ...replies]);
+      // NOTE: We do NOT auto-fabricate a "stranger reply" here. Real replies
+      // arrive (if ever) via the fulfillment backend, which v0.3 does not have.
+      // Inventing replies locally would mislead the user about what's real —
+      // Apple Guideline 4.0/5.6.1 prohibits this.
       setPostcards((items) => [
         {
           id: `void-out-${Date.now()}`,
           toFriendId: "void",
-          fromCity: userInfo.city,
+          fromCity: userInfo.city || "Somewhere",
           toCity: "Anywhere",
           category: "handwritten",
           creditCost: 1,
@@ -161,7 +165,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         },
         ...items,
       ]);
-      return { ok: true, replyPreview: voidReply };
+      return { ok: true };
     },
     async sendPostcard(input) {
       const category: CardCategory = input.kind;
@@ -276,21 +280,58 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       await Haptics.selectionAsync();
       setPrivacy((p) => ({ ...p, ...patch }));
     },
+    async completeSignup(input) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const name = input.name.trim() || "Mail Club member";
+      const city = input.city.trim() || "Somewhere";
+      const state = input.state.trim() || "";
+      // Initials from name (e.g., "Jamie River" → "JR", "Pat" → "PA")
+      const initials = name.split(/\s+/).map((p) => p[0] ?? "").join("").slice(0, 2).toUpperCase() || name.slice(0, 2).toUpperCase();
+      setUserInfo({
+        name,
+        city,
+        state,
+        since: String(new Date().getFullYear()),
+        avatarInitials: initials,
+        tagline: "",
+        interests: "",
+        sendMe: "",
+        birthday: "",
+        currentlyInto: "",
+      });
+      // Fresh signup starts with no friends, no history. Mock fixtures don't belong here.
+      setFriends([]);
+      setPostcards([]);
+      setVoidReplies([]);
+      setHasSeenFreeCreditsIntro(true);
+    },
     async signOut() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Reset to defaults so the WelcomeSheet shows again on next render
-      setFriends(initialFriends);
-      setPostcards(initialPostcards);
+      // Reset to a clean slate. Do NOT repopulate with mock fixtures — the
+      // new user shouldn't see Tatiana/Maya/etc as their "friends".
+      setFriends([]);
+      setPostcards([]);
       setCredits(FREE_CREDITS);
       setFreeCreditsRemaining(FREE_CREDITS);
       setHasSeenFreeCreditsIntro(false);
       setVoidReplies([]);
-      setUserInfo(defaultCurrentUser);
+      setUserInfo({
+        name: "",
+        city: "",
+        state: "",
+        since: String(new Date().getFullYear()),
+        avatarInitials: "",
+        tagline: "",
+        interests: "",
+        sendMe: "",
+        birthday: "",
+        currentlyInto: "",
+      });
       setNotifications(DEFAULT_NOTIFICATIONS);
       setPrivacy(DEFAULT_PRIVACY);
       await AsyncStorage.removeItem(STORE_KEY);
     },
-  }), [friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, voidReplies, userInfo, notifications, privacy]);
+  }), [friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hydrated, voidReplies, userInfo, notifications, privacy]);
 
   return <MailClubContext.Provider value={value}>{children}</MailClubContext.Provider>;
 }

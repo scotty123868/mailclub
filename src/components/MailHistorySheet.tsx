@@ -1,5 +1,5 @@
 import { Inbox, Mail, Send as SendIcon, Sparkles, X } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CATEGORY_LABELS } from "@/src/data/credits";
 import { useMailClub } from "@/src/state/MailClubContext";
@@ -20,6 +20,12 @@ export function MailHistorySheet({
 }) {
   const { postcards, voidReplies, friends } = useMailClub();
   const [tab, setTab] = useState<Tab>(initialTab);
+
+  // Reset to the requested tab whenever the sheet opens. Otherwise a previous
+  // visit's tab state persists across re-opens.
+  useEffect(() => {
+    if (visible) setTab(initialTab);
+  }, [visible, initialTab]);
 
   function friendName(id: string) {
     if (id === "void") return "Someone, somewhere";

@@ -63,7 +63,7 @@ describe("WelcomeSheet", () => {
     });
   });
 
-  it("Skip for now marks intro seen + completes without changing user", async () => {
+  it("Skip for now marks intro seen, clears mock fixtures, sets placeholder identity", async () => {
     const ref: { current: ReturnType<typeof useMailClub> | null } = { current: null };
     const onComplete = jest.fn();
     const { getByTestId } = render(
@@ -79,7 +79,10 @@ describe("WelcomeSheet", () => {
       expect(ref.current!.hasSeenFreeCreditsIntro).toBe(true);
       expect(onComplete).toHaveBeenCalled();
     });
-    // Default user untouched
-    expect(ref.current!.currentUser.name).toBe("Scotty");
+    // Skip routes through completeSignup with empty name → placeholder identity.
+    expect(ref.current!.currentUser.name).toBe("Mail Club member");
+    // Mock fixtures wiped so the new user doesn't inherit Tatiana/Maya/etc.
+    expect(ref.current!.friends).toEqual([]);
+    expect(ref.current!.postcards).toEqual([]);
   });
 });

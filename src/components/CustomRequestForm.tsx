@@ -1,6 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
 import { Image as ImageIcon, Plus, X } from "lucide-react-native";
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { CustomTone } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -29,6 +29,18 @@ export function CustomRequestForm({
 }) {
   async function addPhoto() {
     if (photos.length >= 3) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        "Photos access denied",
+        "Mail Club needs Photos access to attach reference images. You can grant it in Settings.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings().catch(() => undefined) },
+        ]
+      );
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: false,

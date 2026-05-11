@@ -91,7 +91,7 @@ describe("Send screen — OccasionGrid", () => {
     });
     await waitFor(() => {
       expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
-      expect(getByText(/Sent into the void/)).toBeTruthy();
+      expect(getByText(/Queued for a stranger/)).toBeTruthy();
     });
   });
 });
