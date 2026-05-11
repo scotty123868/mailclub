@@ -23,9 +23,9 @@ export const friends: Friend[] = [
 ];
 
 export const postcards: Postcard[] = [
-  { id: "p1", toFriendId: "tatiana", fromCity: "Denver", toCity: "Nashville", type: "photo", stampCost: 3, status: "sent", message: "Wish you were here. This made me think of you.", sentAt: "2026-05-14" },
-  { id: "p2", toFriendId: "alex", fromCity: "Austin", toCity: "New York", type: "note", stampCost: 1, status: "delivered", message: "A tiny note from the road.", sentAt: "2026-05-10" },
-  { id: "p3", toFriendId: "nora", fromCity: "Denver", toCity: "Vancouver", type: "ask-out", stampCost: 3, status: "sent", message: "Had a great time meeting you. Want to grab coffee next week?", sentAt: "2026-05-08" },
+  { id: "p1", toFriendId: "tatiana", fromCity: "Denver", toCity: "Nashville", category: "photo", creditCost: 2, status: "sent", message: "Wish you were here. This made me think of you.", sentAt: "2026-05-14" },
+  { id: "p2", toFriendId: "alex", fromCity: "Austin", toCity: "New York", category: "handwritten", creditCost: 1, status: "delivered", message: "A tiny note from the road.", sentAt: "2026-05-10" },
+  { id: "p3", toFriendId: "nora", fromCity: "Denver", toCity: "Vancouver", category: "handwritten", creditCost: 1, status: "sent", message: "Had a great time meeting you. Want to grab coffee next week?", sentAt: "2026-05-08" },
 ];
 
 export const routes: MailRoute[] = [

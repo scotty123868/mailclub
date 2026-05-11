@@ -1,153 +1,220 @@
-import * as ImagePicker from "expo-image-picker";
-import { Camera, ChevronDown, Edit3, Gift, Heart, Image as ImageIcon, Leaf, Send, User } from "lucide-react-native";
-import { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
+import { Camera, ChevronDown, Edit3, Send, Sparkles, User } from "lucide-react-native";
+import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
+import { AIPromptCard } from "@/src/components/AIPromptCard";
+import { IllustratedAvatar, AvatarLook } from "@/src/components/Avatar";
 import { PrimaryButton } from "@/src/components/Buttons";
-import { FormatSelector } from "@/src/components/FormatSelector";
+import { CategoryCompose, ComposeState } from "@/src/components/CategoryCompose";
+import { CategoryPicker } from "@/src/components/CategoryPicker";
+import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { Header } from "@/src/components/Header";
+import { OccasionGrid } from "@/src/components/OccasionGrid";
 import { PostalCard } from "@/src/components/PostalCard";
+import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { SuccessModal } from "@/src/components/SuccessModal";
-import { useMailClub } from "@/src/state/MailClubContext";
+import { CARD_COSTS } from "@/src/data/credits";
+import type { Occasion, OccasionId } from "@/src/data/occasions";
+import { OCCASIONS } from "@/src/data/occasions";
+import { SendInput, useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
-import { Postcard } from "@/src/types/mail";
+import type { CardCategory } from "@/src/types/mail";
 
 const steps = [
-  { title: "Photo", icon: Camera, number: 1 },
-  { title: "Note", icon: Edit3, number: 2 },
+  { title: "Pick", icon: Sparkles, number: 1 },
+  { title: "Compose", icon: Edit3, number: 2 },
   { title: "Recipient", icon: User, number: 3 },
   { title: "Send", icon: Send, number: 4 },
 ];
 
-const templates = [
-  { title: "Birthday note", icon: Gift, format: "note" as const, message: "Happy birthday. I’m glad you’re in my life." },
-  { title: "Thinking of you", icon: Leaf, format: "photo" as const, message: "This made me think of you. Hope it finds you well." },
-  { title: "Date invite", icon: Heart, format: "ask-out" as const, message: "Had a great time meeting you. Want to grab coffee next week?" },
-  { title: "Send the photo from tonight", icon: Camera, format: "photo" as const, message: "Sending the photo from tonight. I didn’t want it to disappear into a camera roll." },
-];
+const INITIAL_STATE: ComposeState = {
+  category: "photo",
+  message: "Had a great time meeting you. Want to grab coffee next week?",
+  imageUri: null,
+  placeName: "",
+  customTone: undefined,
+  customPhotos: [],
+};
 
 export default function SendScreen() {
-  const { friends, stampBalance, sendPostcard } = useMailClub();
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [message, setMessage] = useState("Had a great time meeting you. Want to grab coffee next week?");
-  const [format, setFormat] = useState<Postcard["type"]>("ask-out");
+  const params = useLocalSearchParams<{ occasion?: string }>();
+  const { friends, credits, sendPostcard, sendIntoVoid } = useMailClub();
+  const [state, setState] = useState<ComposeState>(INITIAL_STATE);
   const [recipientIndex, setRecipientIndex] = useState(() => Math.max(0, friends.findIndex((friend) => friend.id === "nora")));
-  const [selectedTemplate, setSelectedTemplate] = useState("Date invite");
-  const [modal, setModal] = useState(false);
-  const [modalTitle, setModalTitle] = useState("");
-  const recipient = friends[recipientIndex] ?? friends[0];
+  const [activeOccasion, setActiveOccasion] = useState<OccasionId | null>("date");
+  const [voidMode, setVoidMode] = useState(false);
+  const [modal, setModal] = useState({ visible: false, title: "", subtitle: "" });
+  const [creditsOpen, setCreditsOpen] = useState(false);
+  const [seededOccasion, setSeededOccasion] = useState<string | undefined>(undefined);
+  const [sending, setSending] = useState(false);
 
-  async function choosePhoto() {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.82,
-    });
-    if (!result.canceled) setImageUri(result.assets[0].uri);
+  // Seed from ?occasion=... when nav'd from My Card / Constellation / Map
+  useEffect(() => {
+    const occasionParam = params?.occasion as string | undefined;
+    if (!occasionParam || seededOccasion === occasionParam) return;
+    const occ = OCCASIONS.find((o) => o.id === occasionParam);
+    if (!occ) return;
+    setActiveOccasion(occ.id);
+    setState((prev) => ({ ...prev, category: occ.category, message: occ.message }));
+    setVoidMode(occ.special === "random-recipient");
+    setSeededOccasion(occasionParam);
+  }, [params?.occasion, seededOccasion]);
+  const recipient = friends[recipientIndex] ?? friends[0];
+  const costForChoice = CARD_COSTS[state.category];
+  const cantAfford = credits < costForChoice;
+
+  function patch(p: Partial<ComposeState>) {
+    setState((prev) => ({ ...prev, ...p }));
+  }
+
+  function applyOccasion(occ: Occasion) {
+    setActiveOccasion(occ.id);
+    patch({ category: occ.category, message: occ.message });
+    setVoidMode(occ.special === "random-recipient");
+  }
+
+  function setCategory(category: CardCategory) {
+    patch({ category });
+    setActiveOccasion(null);
+  }
+
+  function buildSendInput(): SendInput {
+    if (state.category === "photo") {
+      return { kind: "photo", friendId: recipient.id, photoUri: state.imageUri ?? "", message: state.message };
+    }
+    if (state.category === "place") {
+      return { kind: "place", friendId: recipient.id, photoUri: state.imageUri ?? "", placeName: state.placeName || "Wherever you are", message: state.message };
+    }
+    if (state.category === "custom") {
+      return { kind: "custom", friendId: recipient.id, description: state.message, tone: state.customTone, referencePhotoUris: state.customPhotos };
+    }
+    return { kind: "handwritten", friendId: recipient.id, message: state.message };
   }
 
   async function onSend() {
-    const result = await sendPostcard(recipient.id, format, message);
-    if (!result.ok) return;
-    setModalTitle(`Demo postcard queued for ${result.friendName}.`);
-    setModal(true);
+    if (sending) return;
+    setSending(true);
+    try {
+      if (voidMode) {
+        const result = await sendIntoVoid(state.message);
+        if (!result.ok) return;
+        setModal({
+          visible: true,
+          title: "Sent into the void.",
+          subtitle: result.replyPreview
+            ? `${result.replyPreview.from}: "${result.replyPreview.message}"`
+            : "Someone, somewhere, will receive it.",
+        });
+        return;
+      }
+
+      const result = await sendPostcard(buildSendInput());
+      if (!result.ok) return;
+      setModal({
+        visible: true,
+        title: state.category === "custom"
+          ? `Your custom card is in the designer queue for ${result.friendName}.`
+          : `Your postcard is on its way to ${result.friendName}.`,
+        subtitle: state.category === "custom"
+          ? "Our designer + AI will draft 2 versions within 48h. (v0.1: manual queue.)"
+          : "Demo send queued locally. Real fulfillment is not connected in v0.1.",
+      });
+    } finally {
+      setSending(false);
+    }
   }
+
+  const sendLabel = sending
+    ? "Sending..."
+    : voidMode
+      ? "Send into the void"
+      : state.category === "custom"
+        ? "Queue custom card"
+        : "Send Postcard";
 
   return (
     <AppShell>
       <Header title="Send Mail" />
       <View style={styles.stepper}>
-        {steps.map((step, index) => {
-          return (
-            <View key={step.title} style={styles.step}>
-              <View style={[styles.stepCircle, index === 0 && styles.stepActive]}>
-                <Text style={[styles.stepNumber, index === 0 && styles.stepNumberActive]}>{step.number}</Text>
-              </View>
-              <Text style={[styles.stepText, index === 0 && styles.stepTextActive]}>{step.title}</Text>
+        {steps.map((step, index) => (
+          <View key={step.title} style={styles.step}>
+            <View style={[styles.stepCircle, index === 0 && styles.stepActive]}>
+              <Text style={[styles.stepNumber, index === 0 && styles.stepNumberActive]}>{step.number}</Text>
             </View>
-          );
-        })}
-      </View>
-
-      <PostalCard style={styles.composer}>
-        <Pressable onPress={choosePhoto} style={styles.photo}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.image} />
-          ) : (
-            <View style={styles.placeholder}>
-              <ImageIcon color={colors.postalBlue} size={42} strokeWidth={1.4} />
-              <Text style={styles.placeholderTitle}>Tonight’s photo</Text>
-              <Text style={styles.placeholderBody}>Choose a real-world moment worth following up on.</Text>
-            </View>
-          )}
-        </Pressable>
-        <View style={styles.noteArea}>
-          <View style={styles.postmark}>
-            <Text style={styles.postmarkText}>MAIL CLUB{"\n"}DELIVERING CONNECTIONS</Text>
+            <Text style={[styles.stepText, index === 0 && styles.stepTextActive]}>{step.title}</Text>
           </View>
-          <View style={styles.postage}><Text style={styles.postageText}>3¢</Text></View>
-          <TextInput
-            multiline
-            value={message}
-            onChangeText={setMessage}
-            placeholder="Write a short note..."
-            placeholderTextColor="#9A8D76"
-            style={styles.noteInput}
-          />
-        </View>
-      </PostalCard>
-
-      <View>
-        <Text style={styles.sectionTitle}>Choose your format</Text>
-        <FormatSelector selected={format} onSelect={setFormat} />
+        ))}
       </View>
+
+      <CategoryPicker selected={state.category} onSelect={setCategory} />
+
+      <CategoryCompose state={state} onChange={patch} />
+
+      <AIPromptCard
+        onImagined={(card) => {
+          setActiveOccasion(card.occasionId);
+          patch({ category: card.category, message: card.message });
+          setVoidMode(card.occasionId === "void");
+        }}
+      />
+
+      <OccasionGrid selectedId={activeOccasion} onSelect={applyOccasion} />
 
       <Text style={styles.toHeading}>To</Text>
-      <Pressable onPress={() => setRecipientIndex((recipientIndex + 1) % friends.length)}>
-        <PostalCard style={styles.recipient}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{recipient.avatarInitials}</Text></View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.recipientName}>{recipient.name}</Text>
-            <Text style={styles.recipientMeta}>{stampBalance} stamps available</Text>
+      {voidMode ? (
+        <PostalCard style={styles.voidRecipient}>
+          <View style={styles.voidIconWrap}>
+            <Sparkles color="#F2E2B6" size={26} strokeWidth={1.6} />
           </View>
-          <ChevronDown color={colors.ink} size={22} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.voidName}>Someone in Mail Club</Text>
+            <Text style={styles.voidMeta}>A stranger will receive your card · 1 credit</Text>
+          </View>
+          <Pressable onPress={() => setVoidMode(false)} style={styles.voidExit}>
+            <Text style={styles.voidExitText}>Cancel</Text>
+          </Pressable>
         </PostalCard>
-      </Pressable>
+      ) : (
+        <Pressable
+          onPress={() => setRecipientIndex((recipientIndex + 1) % friends.length)}
+          testID="recipient-cycler"
+          accessibilityRole="button"
+          accessibilityLabel={`Recipient: ${recipient.name}. Tap to cycle.`}
+        >
+          <PostalCard style={styles.recipient}>
+            <IllustratedAvatar look={recipient.id as AvatarLook} size={56} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.recipientName}>{recipient.name}</Text>
+              <Text style={[styles.recipientMeta, cantAfford && styles.recipientMetaWarn]}>
+                {credits} credits · this card costs {costForChoice}
+                {cantAfford ? " · need more" : ""}
+              </Text>
+              {cantAfford ? (
+                <Pressable onPress={() => setCreditsOpen(true)} style={styles.buyInline} testID="recipient-buy-credits">
+                  <Text style={styles.buyInlineText}>Buy {costForChoice - credits} more credit{costForChoice - credits === 1 ? "" : "s"}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <View style={styles.recipientPostmark}>
+              <CircularPostmark size={56} topText="STAY CURIOUS" bottomText="KEEP WRITING" centerYear="" />
+            </View>
+            <ChevronDown color={colors.ink} size={22} />
+          </PostalCard>
+        </Pressable>
+      )}
 
-      <View>
-        <Text style={styles.templateTitle}>Choose a template</Text>
-        <View style={styles.templates}>
-          {templates.map((template) => {
-            const Icon = template.icon;
-            const active = selectedTemplate === template.title;
-            return (
-              <Pressable
-                key={template.title}
-                onPress={() => {
-                  setSelectedTemplate(template.title);
-                  setFormat(template.format);
-                  setMessage(template.message);
-                }}
-                style={[styles.templateChip, active && styles.templateChipActive]}
-              >
-                <Icon color={active ? colors.postalRed : colors.ink} size={21} strokeWidth={1.5} />
-                <Text style={[styles.templateText, active && styles.templateTextActive]}>{template.title}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      <PrimaryButton title="Send Postcard" icon={Send} onPress={onSend} />
+      <PrimaryButton title={sendLabel} icon={voidMode ? Sparkles : Send} onPress={onSend} />
 
       <SuccessModal
-        visible={modal}
-        title={modalTitle}
-        subtitle="Demo send queued locally. Real fulfillment is not connected in v0.1."
-        onClose={() => setModal(false)}
+        visible={modal.visible}
+        title={modal.title}
+        subtitle={modal.subtitle}
+        onClose={() => setModal({ visible: false, title: "", subtitle: "" })}
       />
+
+      <CreditsSheet visible={creditsOpen} onClose={() => setCreditsOpen(false)} />
     </AppShell>
   );
 }
@@ -157,33 +224,22 @@ const styles = StyleSheet.create({
   step: { alignItems: "center", flex: 1, gap: 7 },
   stepCircle: { alignItems: "center", borderColor: colors.line, borderRadius: 23, borderWidth: 1.3, height: 46, justifyContent: "center", width: 46 },
   stepActive: { backgroundColor: colors.ink, borderColor: colors.ink },
-  stepNumber: { color: colors.ink, fontFamily: fonts.serif, fontSize: 18 },
+  stepNumber: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 18 },
   stepNumberActive: { color: colors.white },
-  stepText: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 15 },
-  stepTextActive: { color: colors.ink, fontWeight: "700" },
-  composer: { flexDirection: "row", minHeight: 300, overflow: "hidden", padding: 12 },
-  photo: { backgroundColor: colors.paperDark, borderRadius: 7, flex: 0.9, overflow: "hidden" },
-  image: { height: "100%", width: "100%" },
-  placeholder: { alignItems: "center", flex: 1, justifyContent: "center", padding: 28 },
-  placeholderTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 20, marginTop: 12, textAlign: "center" },
-  placeholderBody: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, marginTop: 6, textAlign: "center" },
-  postage: { alignItems: "center", backgroundColor: colors.postalRed, borderRadius: 4, height: 48, justifyContent: "center", position: "absolute", right: 10, top: 12, transform: [{ rotate: "8deg" }], width: 40 },
-  postageText: { color: colors.paper, fontFamily: fonts.serif, fontSize: 13 },
-  noteArea: { flex: 1, paddingHorizontal: 16, paddingTop: 80 },
-  postmark: { alignItems: "center", borderColor: colors.line, borderRadius: 44, borderWidth: 1, height: 78, justifyContent: "center", left: 12, position: "absolute", top: 10, width: 94 },
-  postmarkText: { color: "#9A8D76", fontFamily: fonts.sans, fontSize: 9, fontWeight: "700", lineHeight: 13, textAlign: "center" },
-  noteInput: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 23, fontStyle: "italic", lineHeight: 38, minHeight: 178, padding: 0, textAlignVertical: "top" },
-  sectionTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 22, marginBottom: 10 },
-  toHeading: { color: colors.ink, fontFamily: fonts.serif, fontSize: 21, marginBottom: -8 },
+  stepText: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 14 },
+  stepTextActive: { color: colors.ink, fontFamily: fonts.serifBold },
+  toHeading: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 22, marginBottom: -10, marginTop: 4 },
   recipient: { alignItems: "center", flexDirection: "row", gap: 12, padding: 14 },
-  avatar: { alignItems: "center", backgroundColor: colors.paperDark, borderRadius: 22, height: 44, justifyContent: "center", width: 44 },
-  avatarText: { color: colors.ink, fontFamily: fonts.serif, fontSize: 15, fontWeight: "700" },
-  recipientName: { color: colors.ink, fontFamily: fonts.serif, fontSize: 26 },
-  recipientMeta: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 15, marginTop: 3 },
-  templateTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 20, marginBottom: 10 },
-  templates: { flexDirection: "row", gap: 8 },
-  templateChip: { alignItems: "center", backgroundColor: "rgba(255,253,247,0.72)", borderColor: colors.line, borderRadius: 8, borderWidth: 1, flex: 1, gap: 6, minHeight: 74, paddingHorizontal: 8, paddingVertical: 8 },
-  templateChipActive: { borderColor: colors.postalRed, backgroundColor: "rgba(184,74,58,0.06)" },
-  templateText: { color: colors.ink, fontFamily: fonts.serif, fontSize: 13, lineHeight: 16, textAlign: "center" },
-  templateTextActive: { color: colors.postalRed },
+  recipientName: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 26 },
+  recipientMeta: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 12, fontWeight: "700", letterSpacing: 0.4, marginTop: 4 },
+  recipientMetaWarn: { color: colors.postalRed },
+  buyInline: { alignSelf: "flex-start", backgroundColor: colors.postalRed, borderRadius: 6, marginTop: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  buyInlineText: { color: colors.white, fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.5 },
+  recipientPostmark: { opacity: 0.55 },
+  voidRecipient: { alignItems: "center", backgroundColor: "rgba(17, 26, 51, 0.92)", borderColor: "#D9B46E", borderWidth: 1, flexDirection: "row", gap: 14, padding: 14 },
+  voidIconWrap: { alignItems: "center", backgroundColor: "rgba(217, 180, 110, 0.18)", borderRadius: 24, height: 48, justifyContent: "center", width: 48 },
+  voidName: { color: "#F2E2B6", fontFamily: fonts.serifSemi, fontSize: 20 },
+  voidMeta: { color: "rgba(242, 226, 182, 0.78)", fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 2 },
+  voidExit: { borderColor: "rgba(242, 226, 182, 0.35)", borderRadius: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
+  voidExitText: { color: "#F2E2B6", fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.5 },
 });

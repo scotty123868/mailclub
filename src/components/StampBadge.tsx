@@ -3,11 +3,11 @@ import { StyleSheet, Text, View } from "react-native";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
-export function StampBadge({ count }: { count: number }) {
+export function StampBadge({ count, label = "credits available" }: { count: number; label?: string }) {
   return (
     <View style={styles.badge}>
       <Stamp color={colors.postalRed} size={20} strokeWidth={1.4} />
-      <Text style={styles.text}>{count} stamps available</Text>
+      <Text style={styles.text}>{count} {label}</Text>
     </View>
   );
 }

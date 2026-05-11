@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: colors.ink, shadowColor: colors.ink, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.24, shadowRadius: 12 },
   secondary: { backgroundColor: "rgba(248, 241, 227, 0.72)", borderColor: colors.sage, borderWidth: 1.2 },
   pressed: { opacity: 0.78, transform: [{ scale: 0.99 }] },
-  text: { fontFamily: fonts.serif, fontSize: 22 },
+  text: { fontFamily: fonts.serifSemi, fontSize: 22, letterSpacing: 0.3 },
   primaryText: { color: colors.white },
   secondaryText: { color: "#637C5E" },
 });

@@ -1,3 +1,7 @@
+export type CardCategory = "handwritten" | "photo" | "place" | "custom";
+
+export type CustomTone = "playful" | "romantic" | "formal" | "weird";
+
 export type Friend = {
   id: string;
   name: string;
@@ -17,11 +21,16 @@ export type Postcard = {
   toFriendId: string;
   fromCity: string;
   toCity: string;
-  type: "note" | "photo" | "keepsake" | "ask-out";
-  stampCost: number;
+  category: CardCategory;
+  creditCost: number;
   status: "draft" | "sent" | "delivered";
   message: string;
   sentAt: string;
+  placeName?: string;
+  photoUri?: string;
+  customDescription?: string;
+  customTone?: CustomTone;
+  referencePhotoUris?: string[];
 };
 
 export type MailRoute = {

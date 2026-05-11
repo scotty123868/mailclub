@@ -20,7 +20,9 @@ export function BottomTabs({ state, descriptors, navigation }: BottomTabBarProps
           <Pressable
             key={route.key}
             accessibilityRole="button"
+            accessibilityLabel={label}
             accessibilityState={focused ? { selected: true } : {}}
+            testID={`bottom-tab-${route.name}`}
             onPress={() => navigation.navigate(route.name)}
             style={styles.item}
           >
@@ -51,5 +53,5 @@ const styles = StyleSheet.create({
   iconPill: { alignItems: "center", borderRadius: 16, height: 35, justifyContent: "center", width: 44 },
   iconPillActive: { backgroundColor: "rgba(239, 226, 204, 0.86)" },
   label: { color: "#80745F", fontFamily: fonts.serif, fontSize: 12 },
-  active: { color: colors.ink, fontWeight: "700" },
+  active: { color: colors.ink, fontFamily: fonts.serifSemi },
 });

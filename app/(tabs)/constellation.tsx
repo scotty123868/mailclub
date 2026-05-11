@@ -1,11 +1,15 @@
+import { useRouter } from "expo-router";
 import { Heart, Moon, Sparkles, Star, Users } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { ConstellationPanel } from "@/src/components/ConstellationPanel";
+import { FriendDetailSheet } from "@/src/components/FriendDetailSheet";
 import { Header } from "@/src/components/Header";
 import { PostalCard } from "@/src/components/PostalCard";
-import { MiniPostcardArt, StampArt } from "@/src/components/PostalIllustrations";
+import { MiniPostcardArt } from "@/src/components/PostalIllustrations";
+import { Stamp } from "@/src/components/Stamp";
+import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
@@ -16,60 +20,167 @@ const filters = [
 ];
 
 export default function ConstellationScreen() {
+  const router = useRouter();
+  const { friends } = useMailClub();
   const [selected, setSelected] = useState("All Friends");
+  const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
+  const activeFriend = friends.find((f) => f.id === activeFriendId) ?? null;
+
   return (
     <AppShell>
       <Header title="Constellation" />
-      <PostalCard style={styles.chips}>
+      <View style={styles.chips}>
         {filters.map((filter) => {
           const active = selected === filter.id;
           const Icon = filter.icon;
           return (
-            <Pressable key={filter.id} onPress={() => setSelected(filter.id)} style={[styles.chip, active && styles.activeChip]}>
-              <Icon color={active ? colors.white : "#8B806C"} size={16} strokeWidth={1.7} />
+            <Pressable
+              key={filter.id}
+              onPress={() => setSelected(filter.id)}
+              style={[styles.chip, active && styles.activeChip]}
+              testID={`constellation-filter-${filter.id.toLowerCase().replace(/\s+/g, "-")}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+            >
+              <Icon color={active ? colors.white : colors.ink} size={16} strokeWidth={1.6} />
               <Text style={[styles.chipText, active && styles.activeChipText]}>{filter.id}</Text>
             </Pressable>
           );
         })}
-      </PostalCard>
-      <ConstellationPanel />
-      <View style={styles.insights}>
-        <Insight icon={Heart} title="Warmest Thread" value="Tatiana · 12 cards" body="The most beautiful back-and-forth." accent={colors.postalRed} art="mountain" cents="20¢" />
-        <Insight icon={Star} title="New Spark" value="Nora" body="You met recently. Early ties grow into lasting connections." accent={colors.postalBlue} art="coast" cents="10¢" />
-        <Insight icon={Moon} title="Sleeping Stars" value="3 friends to write back" body="A little note could rekindle something wonderful." accent="#76733B" art="night" cents="5¢" />
       </View>
+
+      <ConstellationPanel />
+
+      <View style={styles.insights}>
+        <Insight
+          icon={Heart}
+          title="Warmest Thread"
+          value="Tatiana"
+          chip="12 cards"
+          body="The most beautiful back-and-forth."
+          accent={colors.postalRed}
+          art="mountain"
+          cents="20¢"
+          stampMotif="botanical"
+          stampTone="red"
+          testID="constellation-insight-warmest"
+          onPress={() => setActiveFriendId("tatiana")}
+        />
+        <Insight
+          icon={Star}
+          title="New Spark"
+          value="Nora"
+          chip="You met recently"
+          body="Early ties grow into lasting connections."
+          accent={colors.postalBlue}
+          art="coast"
+          cents="10¢"
+          stampMotif="lighthouse"
+          stampTone="blue"
+          testID="constellation-insight-spark"
+          onPress={() => setActiveFriendId("nora")}
+        />
+        <Insight
+          icon={Moon}
+          title="Sleeping Stars"
+          value="3 friends"
+          chip="to write back"
+          body="A little note could rekindle something wonderful."
+          accent="#76733B"
+          art="night"
+          cents="5¢"
+          stampMotif="moon"
+          stampTone="night"
+          testID="constellation-insight-sleeping"
+          onPress={() => router.push("/friends")}
+        />
+      </View>
+
+      <FriendDetailSheet
+        friend={activeFriend}
+        visible={activeFriendId !== null}
+        onClose={() => setActiveFriendId(null)}
+        onSend={(id) => {
+          setActiveFriendId(null);
+          router.push("/send");
+        }}
+      />
     </AppShell>
   );
 }
 
-function Insight({ icon: Icon, title, value, body, accent, art, cents }: { icon: typeof Heart; title: string; value: string; body: string; accent: string; art: "mountain" | "coast" | "night"; cents: string }) {
+function Insight({
+  icon: Icon,
+  title,
+  value,
+  chip,
+  body,
+  accent,
+  art,
+  cents,
+  stampMotif,
+  stampTone,
+  onPress,
+  testID,
+}: {
+  icon: typeof Heart;
+  title: string;
+  value: string;
+  chip: string;
+  body: string;
+  accent: string;
+  art: "mountain" | "coast" | "night";
+  cents: string;
+  stampMotif: "botanical" | "lighthouse" | "moon";
+  stampTone: "red" | "blue" | "night";
+  onPress?: () => void;
+  testID?: string;
+}) {
   return (
-    <PostalCard style={styles.insight}>
-      <View style={styles.airmailEdge} />
-      <MiniPostcardArt variant={art} />
-      <Icon color={accent} size={29} strokeWidth={1.5} />
-      <View style={styles.insightCopy}>
-        <Text style={styles.insightTitle}>{title}</Text>
-        <Text style={[styles.insightValue, { color: accent }]}>{value}</Text>
-        <Text style={styles.insightBody}>{body}</Text>
-      </View>
-      <View style={styles.insightStamp}><StampArt cents={cents} color={art === "night" ? colors.postalBlue : art === "coast" ? colors.sage : colors.postalRed} /></View>
-    </PostalCard>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      testID={testID}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={`${title}: ${value}`}
+    >
+      <PostalCard style={styles.insight}>
+        <View style={styles.airmailEdge} />
+        <MiniPostcardArt variant={art} />
+        <View style={styles.insightCopy}>
+          <View style={styles.titleRow}>
+            <Icon color={accent} size={18} strokeWidth={1.6} />
+            <Text style={styles.insightTitle}>{title}</Text>
+          </View>
+          <View style={styles.valueRow}>
+            <Text style={[styles.insightValue, { color: accent }]}>{value}</Text>
+            <Text style={[styles.insightChip, { color: accent }]}> · {chip}</Text>
+          </View>
+          <Text style={styles.insightBody}>{body}</Text>
+        </View>
+        <View style={styles.insightStamp}>
+          <Stamp motif={stampMotif} tone={stampTone} cents={cents} rotate={6} size="sm" />
+        </View>
+      </PostalCard>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  chips: { flexDirection: "row", padding: 5 },
-  chip: { alignItems: "center", borderRadius: 8, flex: 1, flexDirection: "row", gap: 6, justifyContent: "center", minHeight: 44 },
-  activeChip: { backgroundColor: colors.ink },
-  chipText: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 15 },
+  chips: { flexDirection: "row", gap: 8 },
+  chip: { alignItems: "center", borderColor: colors.line, borderRadius: 24, borderWidth: 1, flex: 1, flexDirection: "row", gap: 6, justifyContent: "center", paddingVertical: 10 },
+  activeChip: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipText: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 14 },
   activeChipText: { color: colors.white },
   insights: { gap: 12 },
-  insight: { alignItems: "center", flexDirection: "row", gap: 14, minHeight: 132, overflow: "hidden", padding: 16, paddingRight: 74 },
-  airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 8 },
-  insightCopy: { flex: 1 },
-  insightTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 19 },
-  insightValue: { fontFamily: fonts.serif, fontSize: 27, marginTop: 4 },
-  insightBody: { color: colors.mutedInk, flex: 1, fontFamily: fonts.serif, fontSize: 14, lineHeight: 20, marginTop: 3 },
-  insightStamp: { position: "absolute", right: 18, top: 24 },
+  insight: { alignItems: "center", flexDirection: "row", gap: 14, minHeight: 124, overflow: "hidden", padding: 16, paddingRight: 70 },
+  airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 7 },
+  insightCopy: { flex: 1, gap: 3 },
+  titleRow: { alignItems: "center", flexDirection: "row", gap: 6 },
+  insightTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 17 },
+  valueRow: { alignItems: "baseline", flexDirection: "row" },
+  insightValue: { fontFamily: fonts.serifSemi, fontSize: 26 },
+  insightChip: { fontFamily: fonts.serif, fontSize: 14 },
+  insightBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 18, marginTop: 2 },
+  insightStamp: { position: "absolute", right: 14, top: 18 },
 });

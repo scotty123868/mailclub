@@ -3,6 +3,7 @@
     "name": "Mail Club",
     "slug": "mail-club",
     "version": "0.1.0",
+    "scheme": "mailclub",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
