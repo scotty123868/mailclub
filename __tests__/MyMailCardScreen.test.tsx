@@ -53,9 +53,9 @@ describe("MyMailCardScreen", () => {
     expect(getByTestId("metric-cities")).toBeTruthy();
   });
 
-  it("displays About Me section with all info lines", () => {
+  it("displays About me section with all info lines", () => {
     const { getByText } = renderMyCard();
-    expect(getByText("About Me")).toBeTruthy();
+    expect(getByText("About me")).toBeTruthy();
     expect(getByText("Interests:")).toBeTruthy();
     expect(getByText("Send me:")).toBeTruthy();
     expect(getByText("Birthday:")).toBeTruthy();
@@ -95,10 +95,11 @@ describe("MyMailCardScreen", () => {
     expect(getByText("Settings")).toBeTruthy();
   });
 
-  it("opens the EditAboutMeSheet when the About Me card is tapped", () => {
-    const { getByTestId, getByText } = renderMyCard();
+  it("opens the EditAboutMeSheet when the About me card is tapped", () => {
+    const { getByTestId, getAllByText } = renderMyCard();
     fireEvent.press(getByTestId("about-me-edit-trigger"));
-    expect(getByText("About me")).toBeTruthy();
+    // Both the screen ("About me") and the sheet header ("About me") render the same text.
+    expect(getAllByText("About me").length).toBeGreaterThanOrEqual(2);
   });
 
   it("opens the CreditsSheet when the Buy button on the balance pill is tapped", () => {

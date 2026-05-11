@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { Building2, Cake, Camera, Globe2, Heart, Image as ImageIcon, LucideIcon, Mail, MapPinned, Send, Signpost, Star, Tag, UserPlus, Users } from "lucide-react-native";
+import { Building2, Cake, Camera, Globe2, Heart, Image as ImageIcon, LucideIcon, Mail, MapPinned, Pencil, Send, Signpost, Star, Tag, UserPlus, Users } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
@@ -62,15 +62,16 @@ export default function MyMailCardScreen() {
       <OnboardingFreeCreditsBanner />
 
       <View style={styles.hero}>
-        <IdentityAvatar user={currentUser} size={118} />
+        <IdentityAvatar user={currentUser} size={104} variant="hero" />
         <View style={styles.heroCopy}>
-          <Text style={styles.name}>{currentUser.name}</Text>
-          <Text style={styles.city}>⌖ {currentUser.city}, {currentUser.state}</Text>
+          <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{currentUser.name}</Text>
+          <Text style={styles.city}>⌖ {currentUser.city}{currentUser.state ? `, ${currentUser.state}` : ""}</Text>
           <Text style={styles.since}>POSTCARD FRIENDS SINCE {currentUser.since}</Text>
-          <Text style={styles.tagline}>{currentUser.tagline}</Text>
         </View>
-        <View style={styles.stamp}><Stamp motif="dove" tone="red" cents="5¢" rotate={-7} /></View>
       </View>
+      {currentUser.tagline ? (
+        <Text style={styles.tagline}>{currentUser.tagline}</Text>
+      ) : null}
 
       <CreditsBalance count={credits} onPressBuy={() => setCreditsOpen(true)} />
 
@@ -89,24 +90,18 @@ export default function MyMailCardScreen() {
       >
         <PostalCard style={styles.about}>
           <View style={styles.airmailEdge} />
-          <View style={styles.aboutPostmark}>
-            <CircularPostmark size={86} topText="STAY CURIOUS" bottomText="KEEP WRITING" centerYear="" />
-          </View>
-          <View style={styles.aboutStamp}>
-            <Stamp motif="botanical" tone="sage" cents="15¢" rotate={4} />
-          </View>
           <View style={styles.aboutCopy}>
             <View style={styles.aboutTitleRow}>
-              <Text style={styles.sectionTitle}>About Me</Text>
-              <Text style={styles.editHint}>EDIT</Text>
+              <Text style={styles.sectionTitle}>About me</Text>
+              <Pencil color={colors.mutedInk} size={15} strokeWidth={1.5} />
             </View>
             <View style={styles.divider}>
               <Svg18 />
             </View>
-            <InfoLine icon={Star} label="Interests:" value={currentUser.interests || "Not set yet — tap to add."} />
-            <InfoLine icon={ImageIcon} label="Send me:" value={currentUser.sendMe || "Not set yet — tap to add."} />
-            <InfoLine icon={Cake} label="Birthday:" value={currentUser.birthday || "Not set yet — tap to add."} />
-            <InfoLine icon={Tag} label="Currently into:" value={currentUser.currentlyInto || "Not set yet — tap to add."} italic />
+            <InfoLine icon={Star} label="Interests:" value={currentUser.interests || "Tap to add"} />
+            <InfoLine icon={ImageIcon} label="Send me:" value={currentUser.sendMe || "Tap to add"} />
+            <InfoLine icon={Cake} label="Birthday:" value={currentUser.birthday || "Tap to add"} />
+            <InfoLine icon={Tag} label="Currently into:" value={currentUser.currentlyInto || "Tap to add"} italic />
           </View>
         </PostalCard>
       </Pressable>
@@ -209,21 +204,17 @@ function IdeaPill({ title, icon: Icon, tone }: { title: string; icon: LucideIcon
 }
 
 const styles = StyleSheet.create({
-  hero: { alignItems: "center", flexDirection: "row", gap: 16, marginTop: 6 },
+  hero: { alignItems: "center", flexDirection: "row", gap: 18, marginTop: 8 },
   heroCopy: { flex: 1 },
-  name: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 44, lineHeight: 48 },
-  city: { color: colors.postalBlue, fontFamily: fonts.serif, fontSize: 19, marginTop: -2 },
-  since: { color: colors.postalRed, fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.7, marginTop: 8 },
-  tagline: { color: colors.ink, fontFamily: fonts.serifItalic, fontSize: 17, lineHeight: 22, marginTop: 8 },
-  stamp: { position: "absolute", right: 0, top: 8 },
-  about: { minHeight: 250, overflow: "hidden", padding: 22 },
-  aboutStamp: { position: "absolute", right: 24, top: 24 },
-  aboutPostmark: { left: 22, opacity: 0.6, position: "absolute", top: 80 },
-  airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 7 },
-  aboutCopy: { gap: 12, paddingRight: 86 },
-  aboutTitleRow: { alignItems: "center", flexDirection: "row", gap: 10 },
-  editHint: { color: colors.postalRed, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.7 },
-  sectionTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 30, letterSpacing: 0.2 },
+  name: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 40, lineHeight: 44 },
+  city: { color: colors.postalBlue, fontFamily: fonts.serif, fontSize: 17, marginTop: 0 },
+  since: { color: colors.postalRed, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.9, marginTop: 8 },
+  tagline: { color: colors.ink, fontFamily: fonts.serifItalic, fontSize: 17, lineHeight: 22, marginTop: 4, paddingHorizontal: 2 },
+  about: { overflow: "hidden", padding: 20, paddingLeft: 22 },
+  airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 5 },
+  aboutCopy: { gap: 12 },
+  aboutTitleRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  sectionTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 26, letterSpacing: 0.2 },
   divider: { marginTop: -4 },
   infoLine: { alignItems: "flex-start", borderBottomColor: colors.line, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: "row", gap: 12, paddingBottom: 11 },
   infoText: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 16, lineHeight: 22 },

@@ -2,8 +2,6 @@ import { Mail, Trash2, X } from "lucide-react-native";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { IllustratedAvatar, AvatarLook } from "@/src/components/Avatar";
 import { PrimaryButton } from "@/src/components/Buttons";
-import { Stamp } from "@/src/components/Stamp";
-import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { Friend, Postcard } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
@@ -54,22 +52,14 @@ export function FriendDetailSheet({
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <View style={styles.identity}>
-            <IllustratedAvatar look={friend.id as AvatarLook} size={104} />
-            <View style={styles.identityCopy}>
-              <Text style={styles.name}>{friend.name}</Text>
-              <Text style={styles.city}>{friend.city}, {friend.state}</Text>
-              {friend.relationshipSignal ? (
-                <View style={styles.signalBadge}>
-                  <Text style={styles.signalText}>{friend.relationshipSignal.toUpperCase()}</Text>
-                </View>
-              ) : null}
-            </View>
-            <View style={styles.stamp}>
-              <Stamp motif="dove" tone="red" cents={`${totalCards || 1}¢`} rotate={6} size="sm" />
-            </View>
-            <View style={styles.postmark}>
-              <CircularPostmark size={56} topText="STAY CURIOUS" bottomText="KEEP WRITING" centerYear="" />
-            </View>
+            <IllustratedAvatar look={friend.id as AvatarLook} size={92} />
+            <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{friend.name}</Text>
+            <Text style={styles.city}>{friend.city}{friend.state ? `, ${friend.state}` : ""}</Text>
+            {friend.relationshipSignal ? (
+              <View style={styles.signalBadge}>
+                <Text style={styles.signalText}>{friend.relationshipSignal.toUpperCase()}</Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.statRow}>
@@ -128,14 +118,11 @@ const styles = StyleSheet.create({
   closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
   scroll: { flex: 1 },
   scrollContent: { gap: 18, paddingBottom: 40, paddingHorizontal: 20 },
-  identity: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 10, borderWidth: 1, gap: 10, overflow: "hidden", padding: 18, position: "relative" },
-  identityCopy: { alignItems: "center", marginTop: 8 },
-  name: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 36 },
-  city: { color: colors.postalBlue, fontFamily: fonts.serif, fontSize: 16, marginTop: 2 },
-  signalBadge: { backgroundColor: "rgba(184,74,58,0.1)", borderRadius: 4, marginTop: 10, paddingHorizontal: 10, paddingVertical: 4 },
+  identity: { alignItems: "center", backgroundColor: colors.white, borderColor: colors.line, borderRadius: 10, borderWidth: 1, gap: 6, overflow: "hidden", padding: 24 },
+  name: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 32, marginTop: 8 },
+  city: { color: colors.postalBlue, fontFamily: fonts.serif, fontSize: 16, marginTop: 0 },
+  signalBadge: { backgroundColor: "rgba(184,74,58,0.1)", borderRadius: 4, marginTop: 8, paddingHorizontal: 10, paddingVertical: 4 },
   signalText: { color: colors.postalRed, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.7 },
-  stamp: { position: "absolute", right: 14, top: 14 },
-  postmark: { left: 12, opacity: 0.4, position: "absolute", top: 80 },
   statRow: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: "row", padding: 14 },
   section: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 8, borderWidth: 1, padding: 14 },
   sectionTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 17, marginBottom: 8 },

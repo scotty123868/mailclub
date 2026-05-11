@@ -141,19 +141,20 @@ export function CategoryCompose({
 }
 
 const styles = StyleSheet.create({
-  composer: { flexDirection: "row", minHeight: 320, overflow: "hidden", padding: 12 },
+  composer: { flexDirection: "row", minHeight: 300, overflow: "hidden", padding: 14 },
   customCard: { padding: 16 },
   placeRow: { marginBottom: 8 },
-  photo: { backgroundColor: colors.paperDark, borderRadius: 6, flex: 0.85, overflow: "hidden" },
+  // Softer photo slot tone — close to paper, not paperDark contrast.
+  photo: { backgroundColor: "rgba(217,200,170,0.35)", borderRadius: 6, flex: 0.85, overflow: "hidden" },
   image: { height: "100%", width: "100%" },
-  placeholder: { alignItems: "center", flex: 1, justifyContent: "center", padding: 24 },
-  placeholderTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 19, marginTop: 12, textAlign: "center" },
-  placeholderBody: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17, marginTop: 6, textAlign: "center" },
-  handwrittenSlot: { alignItems: "center", backgroundColor: "rgba(155,175,155,0.12)", justifyContent: "center" },
-  handwrittenInner: { alignItems: "center", padding: 24 },
-  noteArea: { flex: 1, paddingLeft: 16, paddingRight: 8, paddingTop: 8 },
-  postmarkOverlay: { left: 6, opacity: 0.7, position: "absolute", top: 8 },
-  stampOverlay: { position: "absolute", right: 4, top: 6 },
-  noteInput: { color: colors.ink, flex: 1, fontFamily: fonts.hand, fontSize: 26, lineHeight: 34, marginTop: 70, padding: 0, textAlignVertical: "top" },
-  signoff: { alignItems: "flex-end", paddingBottom: 6, paddingRight: 8 },
+  placeholder: { alignItems: "center", flex: 1, justifyContent: "center", padding: 20 },
+  placeholderTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 18, marginTop: 10, textAlign: "center" },
+  placeholderBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 16, marginTop: 4, textAlign: "center" },
+  handwrittenSlot: { alignItems: "center", backgroundColor: "rgba(155,175,155,0.1)", justifyContent: "center" },
+  handwrittenInner: { alignItems: "center", padding: 20 },
+  noteArea: { flex: 1, paddingLeft: 14, paddingRight: 6, paddingTop: 8 },
+  postmarkOverlay: { left: 4, opacity: 0.45, position: "absolute", top: 6 },
+  stampOverlay: { opacity: 0.95, position: "absolute", right: 2, top: 4 },
+  noteInput: { color: colors.ink, flex: 1, fontFamily: fonts.hand, fontSize: 25, lineHeight: 32, marginTop: 62, padding: 0, textAlignVertical: "top" },
+  signoff: { alignItems: "flex-end", paddingBottom: 4, paddingRight: 6 },
 });

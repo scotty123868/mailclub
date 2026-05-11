@@ -1,12 +1,15 @@
 import { Cake, ChevronRight, MapPin } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { IllustratedAvatar, AvatarLook } from "@/src/components/Avatar";
-import { Stamp } from "@/src/components/Stamp";
-import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { Friend } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
+/**
+ * Friend row in the rolodex deck. Calm and scannable — no stamp+postmark
+ * decorative collision. Signal pill, when present, sits to the right of the
+ * stats line so the card stays at a single tidy height.
+ */
 export function RolodexCard({
   friend,
   onPress,
@@ -17,10 +20,9 @@ export function RolodexCard({
   index?: number;
 }) {
   const signalColor = friend.signalTone === "red" ? colors.postalRed : friend.signalTone === "green" ? "#607A55" : colors.postalBlue;
+  const signalBg = friend.signalTone === "red" ? "rgba(184,74,58,0.08)" : friend.signalTone === "green" ? "rgba(96,122,85,0.1)" : "rgba(60,110,143,0.08)";
   const isBirthday = (friend.relationshipSignal ?? "").toLowerCase().includes("birthday");
-  const cards = friend.cardsSent + friend.cardsReceived;
-  // Subtle visual stack: cards after the first are slightly offset
-  const offsetStyle = index === 0 ? null : { marginTop: -8 };
+  const offsetStyle = index === 0 ? null : { marginTop: -6 };
 
   return (
     <Pressable
@@ -30,53 +32,42 @@ export function RolodexCard({
       accessibilityRole="button"
       accessibilityLabel={`${friend.name}, ${friend.city}. Tap for details.`}
     >
-      <View style={styles.postmark}>
-        <CircularPostmark size={52} topText={friend.city.toUpperCase()} bottomText={friend.state.toUpperCase()} centerYear="" />
-      </View>
-      <View style={styles.stamp}>
-        <Stamp motif={index % 2 === 0 ? "dove" : "botanical"} tone={index % 2 === 0 ? "red" : "sage"} cents={`${cards || 1}¢`} rotate={-6} size="sm" />
-      </View>
-
       <View style={styles.body}>
-        <IllustratedAvatar look={friend.id as AvatarLook} size={56} />
+        <IllustratedAvatar look={friend.id as AvatarLook} size={52} />
         <View style={styles.copy}>
-          <Text style={styles.name}>{friend.name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>{friend.name}</Text>
+            {friend.relationshipSignal ? (
+              <View style={[styles.signalPill, { backgroundColor: signalBg }]}>
+                {isBirthday && <Cake color={signalColor} size={11} strokeWidth={1.7} />}
+                <Text style={[styles.signalText, { color: signalColor }]} numberOfLines={1}>{friend.relationshipSignal}</Text>
+              </View>
+            ) : null}
+          </View>
           <View style={styles.metaRow}>
             <MapPin color={colors.mutedInk} size={12} strokeWidth={1.6} />
-            <Text style={styles.meta}>{friend.city}, {friend.state}</Text>
-          </View>
-          <View style={styles.stats}>
-            <Text style={styles.statText}><Text style={styles.statNum}>{friend.cardsSent}</Text> sent</Text>
-            <Text style={styles.statDivider}>·</Text>
-            <Text style={styles.statText}><Text style={styles.statNum}>{friend.cardsReceived}</Text> received</Text>
+            <Text style={styles.meta} numberOfLines={1}>{friend.city}{friend.state ? `, ${friend.state}` : ""}</Text>
+            <Text style={styles.statDivider}> · </Text>
+            <Text style={styles.statText}><Text style={styles.statNum}>{friend.cardsSent}</Text> sent · <Text style={styles.statNum}>{friend.cardsReceived}</Text> received</Text>
           </View>
         </View>
-        <ChevronRight color={colors.ink} size={20} strokeWidth={1.5} />
+        <ChevronRight color={colors.mutedInk} size={18} strokeWidth={1.5} />
       </View>
-
-      {friend.relationshipSignal ? (
-        <View style={styles.signalRow}>
-          {isBirthday && <Cake color={colors.postalRed} size={12} strokeWidth={1.6} />}
-          <Text style={[styles.signal, { color: signalColor }]}>{friend.relationshipSignal}</Text>
-        </View>
-      ) : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 8, borderWidth: 1, marginBottom: 8, padding: 14, position: "relative", shadowColor: colors.shadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3 },
-  postmark: { opacity: 0.45, position: "absolute", right: 12, top: 12 },
-  stamp: { position: "absolute", right: 70, top: 8 },
+  card: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 10, borderWidth: 1, marginBottom: 8, padding: 14, position: "relative", shadowColor: colors.shadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
   body: { alignItems: "center", flexDirection: "row", gap: 14 },
   copy: { flex: 1 },
-  name: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 24 },
-  metaRow: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 2 },
-  meta: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 13 },
-  stats: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 6 },
-  statText: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 11, letterSpacing: 0.3 },
+  nameRow: { alignItems: "center", flexDirection: "row", gap: 8 },
+  name: { color: colors.ink, flexShrink: 1, fontFamily: fonts.serifSemi, fontSize: 22 },
+  metaRow: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 4 },
+  meta: { color: colors.mutedInk, flexShrink: 0, fontFamily: fonts.serif, fontSize: 13 },
+  statText: { color: colors.mutedInk, flexShrink: 1, fontFamily: fonts.sans, fontSize: 11, letterSpacing: 0.2 },
   statNum: { color: colors.ink, fontFamily: fonts.sansBold },
-  statDivider: { color: colors.mutedInk },
-  signalRow: { alignItems: "center", borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: "row", gap: 4, marginTop: 10, paddingTop: 8 },
-  signal: { fontFamily: fonts.serifItalic, fontSize: 13 },
+  statDivider: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 11 },
+  signalPill: { alignItems: "center", borderRadius: 10, flexDirection: "row", gap: 4, paddingHorizontal: 8, paddingVertical: 3 },
+  signalText: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.3 },
 });

@@ -8,11 +8,9 @@ import { FriendDetailSheet } from "@/src/components/FriendDetailSheet";
 import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { Header } from "@/src/components/Header";
 import { PostalCard } from "@/src/components/PostalCard";
-import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { PrivacyCard } from "@/src/components/PrivacyCard";
 import { QRCodeModal } from "@/src/components/QRCodeModal";
 import { RolodexCard } from "@/src/components/RolodexCard";
-import { Stamp } from "@/src/components/Stamp";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -42,14 +40,10 @@ export default function FriendsScreen() {
 
       <PostalCard style={styles.mailCard}>
         <View style={styles.mailCardRow}>
-          <IdentityAvatar user={currentUser} size={62} />
+          <IdentityAvatar user={currentUser} size={56} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.mailCardName}>{currentUser.name}</Text>
-            <Text style={styles.mailCardCity}>⌖ {currentUser.city}, {currentUser.state}</Text>
-            <Text style={styles.mailCardSince}>POSTCARD FRIENDS SINCE {currentUser.since}</Text>
-          </View>
-          <View style={styles.mailCardStamp}>
-            <Stamp motif="dove" tone="red" cents="3¢" rotate={-6} size="sm" />
+            <Text style={styles.mailCardName} numberOfLines={1}>{currentUser.name}</Text>
+            <Text style={styles.mailCardCity} numberOfLines={1}>⌖ {currentUser.city}{currentUser.state ? `, ${currentUser.state}` : ""}</Text>
           </View>
         </View>
         <Pressable
@@ -59,12 +53,9 @@ export default function FriendsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Show my QR code"
         >
-          <QrCode color={colors.ink} size={20} strokeWidth={1.6} />
-          <Text style={styles.qrBtnText}>Show My QR Code</Text>
+          <QrCode color={colors.ink} size={18} strokeWidth={1.6} />
+          <Text style={styles.qrBtnText}>Show my code</Text>
         </Pressable>
-        <View style={styles.mailCardPostmark}>
-          <CircularPostmark size={60} topText="MAIL CARD" bottomText="SHARE TO ADD" centerYear="" />
-        </View>
       </PostalCard>
 
       <View style={styles.rolodexHeader}>
@@ -123,14 +114,11 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
-  mailCard: { gap: 12, overflow: "hidden", padding: 16 },
+  mailCard: { gap: 14, overflow: "hidden", padding: 16 },
   mailCardRow: { alignItems: "center", flexDirection: "row", gap: 12 },
-  mailCardName: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 26 },
-  mailCardCity: { color: colors.postalBlue, fontFamily: fonts.serif, fontSize: 13 },
-  mailCardSince: { color: colors.postalRed, fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 0.5, marginTop: 4 },
-  mailCardStamp: { position: "absolute", right: 4, top: -2 },
-  mailCardPostmark: { opacity: 0.35, position: "absolute", right: 12, top: 70 },
-  qrBtn: { alignItems: "center", borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 8, justifyContent: "center", paddingVertical: 10 },
+  mailCardName: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 24 },
+  mailCardCity: { color: colors.postalBlue, fontFamily: fonts.serif, fontSize: 14, marginTop: 2 },
+  qrBtn: { alignItems: "center", borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 8, justifyContent: "center", paddingVertical: 11 },
   qrBtnText: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 15 },
   rolodexHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 4 },
   rolodexTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 22 },

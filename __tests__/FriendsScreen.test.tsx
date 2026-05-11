@@ -33,7 +33,6 @@ describe("FriendsScreen — rolodex layout", () => {
   it("renders the compact mail card with name + show-QR button", () => {
     const { getByText, getByTestId } = renderFriends();
     expect(getByText("Scotty")).toBeTruthy();
-    expect(getByText(/POSTCARD FRIENDS SINCE/)).toBeTruthy();
     expect(getByTestId("show-qr-btn")).toBeTruthy();
   });
 

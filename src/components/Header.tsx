@@ -18,14 +18,15 @@ export function Header({ title, onPressSettings }: { title: string; onPressSetti
         <Pressable
           onPress={onPressSettings}
           hitSlop={10}
+          style={styles.gearWrap}
           testID="header-settings-btn"
           accessibilityRole="button"
           accessibilityLabel="Open settings"
         >
-          <Settings color={colors.ink} size={26} strokeWidth={1.4} />
+          <Settings color={colors.mutedInk} size={22} strokeWidth={1.6} />
         </Pressable>
       ) : (
-        <Settings color={colors.ink} size={26} strokeWidth={1.4} />
+        <View style={styles.gearWrap}><View style={{ width: 22, height: 22 }} /></View>
       )}
     </View>
   );
@@ -37,4 +38,5 @@ const styles = StyleSheet.create({
   brand: { color: colors.ink, fontFamily: fonts.script, fontSize: type.brand, lineHeight: type.brand + 2, includeFontPadding: false },
   flourish: { marginTop: -4, marginLeft: 4 },
   title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: type.heading, letterSpacing: 0.2 },
+  gearWrap: { alignItems: "center", height: 36, justifyContent: "center", width: 36 },
 });
