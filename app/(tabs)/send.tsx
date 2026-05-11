@@ -127,11 +127,11 @@ export default function SendScreen() {
       setModal({
         visible: true,
         title: state.category === "custom"
-          ? `Your custom card is in the designer queue for ${result.friendName}.`
-          : `Your postcard is on its way to ${result.friendName}.`,
+          ? `Saved your custom card for ${result.friendName}.`
+          : `Queued for ${result.friendName}.`,
         subtitle: state.category === "custom"
-          ? "Our designer + AI will draft 2 versions and email you within 48 hours."
-          : "Queued for delivery. Real postcard fulfillment ships in the next release.",
+          ? "Lives in your drafts until the designer queue opens. We'll email you when there's something to review."
+          : "Sits in the queue until our printing partner is live. You can see it in your sent mail.",
       });
     } finally {
       setSending(false);

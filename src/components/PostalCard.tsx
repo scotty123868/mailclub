@@ -1,9 +1,20 @@
 import { PropsWithChildren } from "react";
-import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
+import { AccessibilityProps, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { colors } from "@/src/theme/colors";
 
-export function PostalCard({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
-  return <View style={[styles.card, style]}>{children}</View>;
+type PostalCardProps = PropsWithChildren<
+  AccessibilityProps & {
+    style?: StyleProp<ViewStyle>;
+    testID?: string;
+  }
+>;
+
+export function PostalCard({ children, style, testID, ...rest }: PostalCardProps) {
+  return (
+    <View style={[styles.card, style]} testID={testID} {...rest}>
+      {children}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

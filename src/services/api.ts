@@ -375,6 +375,28 @@ export async function signOut() {
   if (error) throw error;
 }
 
+export async function resetPassword(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: "mailclub://auth/reset",
+  });
+  if (error) throw error;
+}
+
+/**
+ * Deletes the signed-in user's account. Apple Guideline 5.1.1(v) requires
+ * any account-creation app to expose a delete-account flow inside the app.
+ *
+ * Server-side: a SECURITY DEFINER RPC `delete_my_account()` calls
+ * auth.admin.delete_user(auth.uid()) which cascades through ON DELETE CASCADE
+ * to wipe profile, friends, postcards, void_replies, credit_transactions.
+ */
+export async function deleteMyAccount() {
+  const { error } = await supabase.rpc("delete_my_account");
+  if (error) throw error;
+  // Local cleanup happens in the context after this resolves.
+  await supabase.auth.signOut();
+}
+
 export function onAuthStateChange(cb: (userId: string | null) => void) {
   const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
     cb(session?.user?.id ?? null);

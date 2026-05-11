@@ -126,7 +126,7 @@ export default function MyMailCardScreen() {
       <View style={styles.previewGrid}>
         <Pressable onPress={() => router.push("/constellation")} style={styles.previewPress} testID="preview-constellation">
           <View style={styles.previewCard}>
-            <ConstellationPanel compact />
+            <ConstellationPanel compact friends={friends} />
             <View style={styles.previewText}>
               <Text style={styles.previewTitleLight}>Your Constellation</Text>
               <Text style={styles.previewBodyLight}>The people who light up your world.</Text>

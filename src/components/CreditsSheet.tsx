@@ -1,7 +1,7 @@
 import { Clock, Sparkles, X } from "lucide-react-native";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
-import { CREDIT_PACKS, CATEGORY_LABELS, CARD_COSTS } from "@/src/data/credits";
+import { CARD_COSTS, CATEGORY_BLURBS, CATEGORY_LABELS, CREDIT_PACKS } from "@/src/data/credits";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -62,10 +62,10 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
               <Sparkles color={colors.postalRed} size={18} strokeWidth={1.6} />
               <Text style={styles.explainerTitle}>What can I send?</Text>
             </View>
-            <ExplainerRow label={CATEGORY_LABELS.handwritten} cost={CARD_COSTS.handwritten} blurb="Your words, printed in handwriting." />
-            <ExplainerRow label={CATEGORY_LABELS.photo} cost={CARD_COSTS.photo} blurb="A photo + a short note, mailed." />
-            <ExplainerRow label={CATEGORY_LABELS.place} cost={CARD_COSTS.place} blurb='"Greetings from Florida" style.' />
-            <ExplainerRow label={CATEGORY_LABELS.custom} cost={CARD_COSTS.custom} blurb="A designer + AI make it for you." />
+            <ExplainerRow label={CATEGORY_LABELS.handwritten} cost={CARD_COSTS.handwritten} blurb={CATEGORY_BLURBS.handwritten} />
+            <ExplainerRow label={CATEGORY_LABELS.photo} cost={CARD_COSTS.photo} blurb={CATEGORY_BLURBS.photo} />
+            <ExplainerRow label={CATEGORY_LABELS.place} cost={CARD_COSTS.place} blurb={CATEGORY_BLURBS.place} />
+            <ExplainerRow label={CATEGORY_LABELS.custom} cost={CARD_COSTS.custom} blurb={CATEGORY_BLURBS.custom} />
           </View>
 
           <Text style={styles.fineprint}>

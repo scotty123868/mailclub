@@ -60,7 +60,7 @@ export default function ConstellationScreen() {
         })}
       </View>
 
-      <ConstellationPanel />
+      <ConstellationPanel friends={friends} />
 
       {friends.length === 0 ? (
         <View style={styles.empty} testID="constellation-empty">

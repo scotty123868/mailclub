@@ -21,7 +21,7 @@ import { fonts } from "@/src/theme/typography";
 type Step = "identity" | "account";
 
 export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComplete: () => void }) {
-  const { completeSignup, signInWithEmail } = useMailClub();
+  const { completeSignup, signInWithEmail, resetPassword } = useMailClub();
   const [step, setStep] = useState<Step>("identity");
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
@@ -31,6 +31,7 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
   const [mode, setMode] = useState<"signup" | "signin">("signup");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const canContinue = name.trim().length > 0;
   const canSubmit = email.trim().includes("@") && password.length >= 8;
@@ -45,6 +46,22 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
     setMode("signup");
     setSaving(false);
     setError(null);
+    setInfo(null);
+  }
+
+  async function onForgotPassword() {
+    setError(null);
+    setInfo(null);
+    if (!email.trim().includes("@")) {
+      setError("Enter your email above first, then tap forgot password.");
+      return;
+    }
+    const result = await resetPassword(email.trim());
+    if (result.ok) {
+      setInfo("Check your inbox for a reset link.");
+    } else {
+      setError(result.error ?? "Couldn't send the reset email.");
+    }
   }
 
   async function continueFromIdentity() {
@@ -239,6 +256,7 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
               </View>
 
               {error ? <Text style={styles.error} testID="welcome-auth-error">{error}</Text> : null}
+              {info ? <Text style={styles.info} testID="welcome-auth-info">{info}</Text> : null}
 
               <View style={styles.footer}>
                 <PrimaryButton
@@ -248,7 +266,7 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
                   disabled={!canSubmit || saving}
                 />
                 <Pressable
-                  onPress={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); }}
+                  onPress={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); setInfo(null); }}
                   style={styles.skipBtn}
                   testID="welcome-toggle-mode"
                   accessibilityRole="button"
@@ -257,6 +275,16 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
                     {mode === "signup" ? "I already have an account" : "Create a new account"}
                   </Text>
                 </Pressable>
+                {mode === "signin" ? (
+                  <Pressable
+                    onPress={onForgotPassword}
+                    style={styles.forgotBtn}
+                    testID="welcome-forgot-password"
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.forgotText}>Forgot password?</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </>
           )}
@@ -286,4 +314,7 @@ const styles = StyleSheet.create({
   skipBtn: { alignItems: "center", paddingVertical: 10 },
   skipText: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 14, textDecorationLine: "underline" },
   error: { color: colors.postalRed, fontFamily: fonts.serifSemi, fontSize: 13, marginTop: 4, textAlign: "center" },
+  info: { color: "#4A5A38", fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 4, textAlign: "center" },
+  forgotBtn: { alignItems: "center", paddingVertical: 6 },
+  forgotText: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13 },
 });

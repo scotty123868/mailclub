@@ -49,10 +49,10 @@ describe("CustomRequestForm", () => {
     expect(onChangePhotos).toHaveBeenCalledWith(["b.jpg"]);
   });
 
-  it("shows the 'designer + AI' notice", () => {
+  it("shows the drafts queue notice (no fake designer promise)", () => {
     const { getByText } = render(
       <CustomRequestForm description="" onChangeDescription={() => {}} tone={undefined} onChangeTone={() => {}} photos={[]} onChangePhotos={() => {}} />
     );
-    expect(getByText(/designer \+ AI/i)).toBeTruthy();
+    expect(getByText(/saved to your drafts/i)).toBeTruthy();
   });
 });

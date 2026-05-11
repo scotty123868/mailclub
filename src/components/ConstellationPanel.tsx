@@ -1,28 +1,41 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Defs, G, Line, Path, RadialGradient, Rect, Stop, Text as SvgText } from "react-native-svg";
+import { Friend } from "@/src/types/mail";
 import { colors, gradients } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 import { CircularPostmark } from "./PostmarkDecoration";
 
-const nodes = [
-  { id: "you", label: "You", x: 205, y: 230, r: 12, labelDx: 0, labelDy: 32 },
-  { id: "tatiana", label: "Tatiana", x: 90, y: 110, r: 7, labelDx: 0, labelDy: -14 },
-  { id: "alex", label: "Alex", x: 308, y: 110, r: 7, labelDx: 0, labelDy: -14 },
-  { id: "maya", label: "Maya", x: 76, y: 268, r: 7, labelDx: -28, labelDy: 4 },
-  { id: "ben", label: "Ben", x: 332, y: 228, r: 7, labelDx: 14, labelDy: 4 },
-  { id: "sam", label: "Sam", x: 168, y: 340, r: 7, labelDx: -22, labelDy: 4 },
-  { id: "nora", label: "Nora", x: 320, y: 326, r: 7, labelDx: 14, labelDy: 4 },
-  { id: "a", label: "", x: 162, y: 162, r: 3, labelDx: 0, labelDy: 0 },
-  { id: "b", label: "", x: 255, y: 170, r: 3, labelDx: 0, labelDy: 0 },
-  { id: "c", label: "", x: 312, y: 168, r: 3, labelDx: 0, labelDy: 0 },
-  { id: "d", label: "", x: 110, y: 200, r: 3, labelDx: 0, labelDy: 0 },
-];
+type Node = { id: string; label: string; x: number; y: number; r: number; labelDx: number; labelDy: number };
 
-const edges: [string, string][] = [
-  ["you", "tatiana"], ["you", "alex"], ["you", "maya"], ["you", "ben"], ["you", "sam"], ["you", "nora"],
-  ["tatiana", "a"], ["a", "alex"], ["alex", "b"], ["b", "c"], ["c", "ben"], ["maya", "sam"], ["sam", "nora"], ["d", "tatiana"], ["d", "you"],
-];
+// Positions on a 410x420 canvas. We place "you" at the center and orbit up to
+// 6 friends around it in a circle. The decorative non-label stars stay fixed
+// so the field has texture even with one friend.
+const CENTER = { x: 205, y: 230 };
+const FRIEND_RADIUS = 130;
+
+function buildNodes(friends: Friend[]): { nodes: Node[]; edges: [string, string][] } {
+  const visible = friends.slice(0, 6);
+  const friendNodes: Node[] = visible.map((f, i) => {
+    const angle = (i / Math.max(1, visible.length)) * Math.PI * 2 - Math.PI / 2;
+    const x = CENTER.x + Math.cos(angle) * FRIEND_RADIUS;
+    const y = CENTER.y + Math.sin(angle) * FRIEND_RADIUS;
+    const labelDy = y < CENTER.y ? -14 : 18;
+    const labelDx = x < CENTER.x - 20 ? -20 : x > CENTER.x + 20 ? 20 : 0;
+    return { id: f.id, label: f.name, x, y, r: 7, labelDx, labelDy };
+  });
+  const decorativeNodes: Node[] = [
+    { id: "a", label: "", x: 162, y: 162, r: 3, labelDx: 0, labelDy: 0 },
+    { id: "b", label: "", x: 255, y: 170, r: 3, labelDx: 0, labelDy: 0 },
+    { id: "c", label: "", x: 312, y: 168, r: 3, labelDx: 0, labelDy: 0 },
+    { id: "d", label: "", x: 110, y: 200, r: 3, labelDx: 0, labelDy: 0 },
+  ];
+  const youNode: Node = { id: "you", label: "You", x: CENTER.x, y: CENTER.y, r: 12, labelDx: 0, labelDy: 32 };
+  const allNodes = [youNode, ...friendNodes, ...decorativeNodes];
+  const friendEdges: [string, string][] = friendNodes.map((n) => ["you", n.id]);
+  return { nodes: allNodes, edges: friendEdges };
+}
 
 function Star({ cx, cy, r, glow = true }: { cx: number; cy: number; r: number; glow?: boolean }) {
   return (
@@ -37,8 +50,9 @@ function Star({ cx, cy, r, glow = true }: { cx: number; cy: number; r: number; g
   );
 }
 
-export function ConstellationPanel({ compact = false }: { compact?: boolean }) {
+export function ConstellationPanel({ compact = false, friends = [] }: { compact?: boolean; friends?: Friend[] }) {
   const height = compact ? 180 : 480;
+  const { nodes, edges } = useMemo(() => buildNodes(friends), [friends]);
   const find = (id: string) => nodes.find((n) => n.id === id)!;
   return (
     <LinearGradient colors={gradients.night} style={[styles.panel, { height }]}>

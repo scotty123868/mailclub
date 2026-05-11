@@ -1,4 +1,4 @@
-import { Bell, ChevronRight, CreditCard, FileText, Lock, LogOut, Mail, Stamp, X } from "lucide-react-native";
+import { Bell, ChevronRight, CreditCard, FileText, Lock, LogOut, Mail, Stamp, Trash2, X } from "lucide-react-native";
 import { ComponentType } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useMailClub } from "@/src/state/MailClubContext";
@@ -24,7 +24,7 @@ export function SettingsSheet({
   onOpenPrivacy?: () => void;
   onOpenAbout?: () => void;
 }) {
-  const { credits, currentUser, notifications, privacy, signOut } = useMailClub();
+  const { credits, currentUser, notifications, privacy, signOut, deleteAccount } = useMailClub();
 
   const notifOnCount = Object.values(notifications).filter(Boolean).length;
   const privacyLabel = privacy.whoCanSendToMe === "anyone"
@@ -45,6 +45,42 @@ export function SettingsSheet({
           onPress: async () => {
             await signOut();
             onClose();
+          },
+        },
+      ]
+    );
+  }
+
+  function confirmDeleteAccount() {
+    Alert.alert(
+      "Delete your Mail Club account?",
+      "Permanently removes your profile, friends, sent mail, and replies. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete forever",
+          style: "destructive",
+          onPress: () => {
+            // Second confirmation — Apple-recommended pattern for destructive actions.
+            Alert.alert(
+              "Really delete everything?",
+              "There's no recovery once you confirm.",
+              [
+                { text: "Keep my account", style: "cancel" },
+                {
+                  text: "Yes, delete",
+                  style: "destructive",
+                  onPress: async () => {
+                    const result = await deleteAccount();
+                    if (!result.ok) {
+                      Alert.alert("Couldn't delete account", result.error ?? "Try again.");
+                      return;
+                    }
+                    onClose();
+                  },
+                },
+              ]
+            );
           },
         },
       ]
@@ -118,6 +154,7 @@ export function SettingsSheet({
 
           <Section title="">
             <Row icon={LogOut} label="Sign out" tone="red" onPress={confirmSignOut} testID="settings-row-signout" />
+            <Row icon={Trash2} label="Delete account" tone="red" detail="Permanently remove all your data" onPress={confirmDeleteAccount} testID="settings-row-delete-account" />
           </Section>
 
           <Text style={styles.version}>Mail Club · beta</Text>

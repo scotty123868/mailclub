@@ -91,6 +91,8 @@ type MailClubState = {
   completeSignup: (input: { name: string; city: string; state: string; email?: string; password?: string }) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signUpWithEmail: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
+  deleteAccount: () => Promise<{ ok: boolean; error?: string }>;
 };
 
 const MailClubContext = createContext<MailClubState | null>(null);
@@ -600,6 +602,28 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  const resetPasswordAction = useCallback(async (email: string) => {
+    if (!SUPABASE_CONFIGURED) return { ok: false, error: "Backend not configured" };
+    try {
+      await api.resetPassword(email);
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? "Reset failed" };
+    }
+  }, []);
+
+  const deleteAccountAction = useCallback(async () => {
+    if (!SUPABASE_CONFIGURED) return { ok: false, error: "Backend not configured" };
+    try {
+      await api.deleteMyAccount();
+      resetLocalState();
+      await AsyncStorage.removeItem(STORE_KEY);
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? "Delete failed" };
+    }
+  }, []);
+
   const value = useMemo<MailClubState>(() => ({
     currentUser: userInfo,
     friends,
@@ -630,6 +654,8 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     completeSignup: completeSignupAction,
     signInWithEmail: signInWithEmailAction,
     signUpWithEmail: signUpWithEmailAction,
+    resetPassword: resetPasswordAction,
+    deleteAccount: deleteAccountAction,
   }), [
     userInfo, friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup,
     hydrated, authedUserId, voidReplies, notifications, privacy,
@@ -637,6 +663,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     updateAboutMeAction, removeFriendAction, addFriendByAddressAction, queueInvitationAction,
     addMayaConnectionAction, updateNotificationsAction, updatePrivacyAction, signOutAction,
     completeSignupAction, signInWithEmailAction, signUpWithEmailAction,
+    resetPasswordAction, deleteAccountAction,
   ]);
 
   return <MailClubContext.Provider value={value}>{children}</MailClubContext.Provider>;

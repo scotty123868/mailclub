@@ -27,9 +27,9 @@ export const CATEGORY_LABELS: Record<CardCategory, string> = {
 
 export const CATEGORY_BLURBS: Record<CardCategory, string> = {
   handwritten: "Your words, printed in handwriting.",
-  photo: "A photo + a short note, mailed.",
-  place: "Greetings from somewhere real.",
-  custom: "A designer + AI make it for you.",
+  photo: "A photo + a short note on a postcard.",
+  place: "A postcard from somewhere — greetings-from style.",
+  custom: "You describe it, we craft it with a designer.",
 };
 
 export function creditCostFor(category: CardCategory): number {

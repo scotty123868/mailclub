@@ -129,7 +129,7 @@ export function CustomRequestForm({
       </View>
 
       <Text style={styles.notice}>
-        Custom cards are drafted by a real designer + AI. We'll send you 2 versions within 48h.
+        Custom card requests are saved to your drafts. The designer queue opens when fulfillment ships — we'll email you when your draft is reviewed.
       </Text>
     </View>
   );
