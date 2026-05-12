@@ -596,13 +596,17 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       return { ok: true, friend };
     }
     try {
-      // Pass birthday through to the API. The server-side ignores it gracefully
-      // when the column doesn't exist yet (Supabase pgrest returns the unknown
-      // field error); a follow-up migration in 0.5.1 adds friends.birthday.
-      const friend = await api.addFriend({ name, city, state, ...addressFields });
-      // Merge birthday onto the locally-held friend record so the rolodex
-      // displays it even before the server column lands.
-      const friendWithBirthday: Friend = birthday ? { ...friend, birthday } : friend;
+      // Pass birthday through to the API. addFriend() only writes the column
+      // when birthday is non-empty, so a 0.4.x schema (no birthday column)
+      // still succeeds. A 0.5.1 migration adds the column, after which the
+      // value persists round-trip.
+      const friend = await api.addFriend({ name, city, state, birthday, ...addressFields });
+      // Belt-and-suspenders: if the server happens to be on the old schema
+      // and dropped birthday silently, merge it onto the local copy so the
+      // rolodex shows it this session.
+      const friendWithBirthday: Friend = birthday && !friend.birthday
+        ? { ...friend, birthday }
+        : friend;
       setFriends((items) => [friendWithBirthday, ...items]);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true, friend: friendWithBirthday };

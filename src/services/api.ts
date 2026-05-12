@@ -174,6 +174,13 @@ type FriendRow = {
   last_interaction_at: string;
   relationship_signal: string | null;
   signal_tone: "red" | "green" | "blue" | null;
+  /**
+   * Added in v0.5.0 Phase 2.6. The friends.birthday column ships in the
+   * 0.5.1 migration; until then the column is missing and supabase will
+   * return null/undefined here. The friend row type allows null so the
+   * mapping handles both shapes.
+   */
+  birthday: string | null;
   address_line1: string | null;
   address_line2: string | null;
   address_city: string | null;
@@ -195,6 +202,7 @@ function friendFromRow(row: FriendRow): Friend {
     lastInteractionAt: row.last_interaction_at,
     relationshipSignal: row.relationship_signal ?? undefined,
     signalTone: row.signal_tone ?? undefined,
+    birthday: row.birthday ?? undefined,
     addressLine1: row.address_line1 ?? undefined,
     addressLine2: row.address_line2 ?? undefined,
     addressCity: row.address_city ?? undefined,
@@ -217,6 +225,7 @@ export type AddFriendInput = {
   name: string;
   city: string;
   state: string;
+  birthday?: string;
   addressLine1?: string;
   addressLine2?: string;
   addressCity?: string;
@@ -241,6 +250,13 @@ export async function addFriend(input: AddFriendInput): Promise<Friend> {
     relationship_signal: "Just added",
     signal_tone: "blue",
   };
+  // Optional birthday. The friends.birthday column ships in the 0.5.1
+  // migration; once that lands this write succeeds. Until then PostgREST
+  // returns "column friends.birthday does not exist" and the catch in
+  // MailClubContext.addFriendByAddressAction surfaces a friendly message.
+  // We omit the field here when undefined so the insert succeeds on a
+  // schema without the column.
+  if (input.birthday?.trim()) row.birthday = input.birthday.trim();
   // Optional mailing address — only set non-blank fields so we don't write
   // empty strings (which would still count as "address present" and confuse
   // the can-send check).

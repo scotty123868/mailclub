@@ -44,6 +44,21 @@ type Step = 1 | 2 | 3 | 4;
 // proper user address storage on CurrentUser, which we don't have yet.
 type DeliveryMode = "friend" | "link" | "address";
 
+type PrintRecipient = {
+  name: string;
+  city: string;
+  state: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  zip?: string;
+};
+type PrintSnapshot = {
+  photoUri: string;
+  message: string;
+  recipient: PrintRecipient;
+  sender: { name: string; city: string; state: string };
+};
+
 export default function SendScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ friendId?: string; mode?: string }>();
@@ -79,6 +94,14 @@ export default function SendScreen() {
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [success, setSuccess] = useState({ visible: false, title: "", subtitle: "" });
   const [seededFriend, setSeededFriend] = useState<string | undefined>(undefined);
+
+  // Print snapshot: the photo/message/recipient frozen at the moment of send.
+  // The offscreen Lob print views read from this if present, falling back to
+  // live compose state. This decouples Lob's async capture from the user
+  // starting a new postcard. (codex P1, Phase 2.6 review: without this,
+  // `resetCompose()` in submitPostcardToLob's .finally could wipe the next
+  // postcard's state mid-edit.)
+  const [printSnapshot, setPrintSnapshot] = useState<PrintSnapshot | null>(null);
 
   // -- Refs ---------------------------------------------------------------
   const printFrontRef = useRef<View>(null);
@@ -369,11 +392,22 @@ export default function SendScreen() {
         subtitle: `Heading to ${targetName} via USPS First Class Mail. It should arrive in about 1–2 weeks.`,
       });
 
-      // Capture-then-reset. The Success modal is visible (overlay), so the
-      // user doesn't see the compose state behind. We defer resetCompose()
-      // until after Lob captures the offscreen 1875px PNGs — otherwise the
-      // 250ms capture delay races against a synchronous state reset and
-      // captures a blank card. (codex P1, Phase 2.5 review.)
+      // Freeze the print inputs into a snapshot BEFORE we reset compose
+      // state. The offscreen Lob views render from `printSnapshot` if set,
+      // so capture works on stable frozen data even if the user dismisses
+      // the success modal and starts a new postcard mid-flight.
+      // (codex P1, Phase 2.6 review.)
+      setPrintSnapshot({
+        photoUri: photoUri ?? "",
+        message,
+        recipient: recipientForPreview,
+        sender: {
+          name: currentUser.name || "You",
+          city: currentUser.city || "",
+          state: currentUser.state || "",
+        },
+      });
+
       if (result.postcardId) {
         submitPostcardToLob(result.postcardId)
           .catch((err) => {
@@ -381,11 +415,16 @@ export default function SendScreen() {
             console.warn("Lob submission failed (will retry server-side):", err);
           })
           .finally(() => {
-            resetCompose();
+            // Snapshot served its purpose — release it so the offscreen
+            // views go back to mirroring live compose state.
+            setPrintSnapshot(null);
           });
-      } else {
-        resetCompose();
       }
+
+      // Safe to reset immediately. The success modal overlays the screen,
+      // so the user doesn't see the compose blanks. The printSnapshot above
+      // is what Lob captures against.
+      resetCompose();
     } finally {
       setSending(false);
       sendingLockRef.current = false;
@@ -547,9 +586,14 @@ export default function SendScreen() {
       <CreditsSheet visible={creditsOpen} onClose={() => setCreditsOpen(false)} />
 
       {/*
-        Off-screen 1875×1250 renders for Lob capture. Same pattern as before:
-        positioned way off-screen but mounted so layout + paint complete,
-        which is what react-native-view-shot needs.
+        Off-screen 1875×1250 renders for Lob capture. Positioned way
+        off-screen but mounted so layout + paint complete, which is what
+        react-native-view-shot needs.
+
+        Renders from `printSnapshot` if set (frozen at send time) — that's
+        the source of truth during the async Lob capture. Falls back to
+        live compose state when no send is in flight, so the offscreen
+        views stay warm and ready (laid out, painted, ref-able).
       */}
       <View
         style={styles.offscreen}
@@ -559,18 +603,20 @@ export default function SendScreen() {
       >
         <PostcardFrontPreview
           ref={printFrontRef}
-          photoUri={photoUri ?? undefined}
+          photoUri={printSnapshot?.photoUri || photoUri || undefined}
           width={PRINT_W}
         />
         <PostcardBackPreview
           ref={printBackRef}
-          message={message}
-          recipient={recipientForPreview}
-          sender={{
-            name: currentUser.name || "You",
-            city: currentUser.city || "",
-            state: currentUser.state || "",
-          }}
+          message={printSnapshot?.message ?? message}
+          recipient={printSnapshot?.recipient ?? recipientForPreview}
+          sender={
+            printSnapshot?.sender ?? {
+              name: currentUser.name || "You",
+              city: currentUser.city || "",
+              state: currentUser.state || "",
+            }
+          }
           width={PRINT_W}
         />
       </View>
