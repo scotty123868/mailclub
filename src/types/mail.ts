@@ -15,6 +15,12 @@ export type Friend = {
   relationshipSignal?: string;
   signalTone?: "red" | "green" | "blue";
   photoUrl?: string;
+  /**
+   * Birthday as a free-form short string (e.g. "June 8", "1992-06-08").
+   * Optional. We surface birthday reminders in 0.5.x by parsing the
+   * month/day pattern; full year is unused. (Added in 0.5.0 Phase 2.6.)
+   */
+  birthday?: string;
   /** Mailing address — required for Lob to ship a card. */
   addressLine1?: string;
   addressLine2?: string;

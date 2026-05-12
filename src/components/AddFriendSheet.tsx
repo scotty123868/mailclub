@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, MapPin, UserPlus, X } from "lucide-react-native";
+import { Cake, ChevronDown, ChevronUp, MapPin, UserPlus, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
@@ -26,6 +26,7 @@ export function AddFriendSheet({
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [birthday, setBirthday] = useState("");
   const [showMailingAddress, setShowMailingAddress] = useState(false);
   const [addressLine1, setAddressLine1] = useState("");
   const [addressLine2, setAddressLine2] = useState("");
@@ -39,6 +40,7 @@ export function AddFriendSheet({
     setName("");
     setCity("");
     setState("");
+    setBirthday("");
     setShowMailingAddress(false);
     setAddressLine1("");
     setAddressLine2("");
@@ -87,6 +89,7 @@ export function AddFriendSheet({
       name,
       city,
       state,
+      birthday: birthday.trim() || undefined,
       addressLine1: showMailingAddress ? addressLine1 : undefined,
       addressLine2: showMailingAddress ? addressLine2 : undefined,
       addressCity: showMailingAddress ? addressCity || city : undefined,
@@ -172,6 +175,31 @@ export function AddFriendSheet({
                 maxLength={3}
                 autoCorrect={false}
               />
+            </View>
+
+            {/* Birthday — optional. v0.5.0 Phase 2.6. We'll surface birthday
+                reminders in a 0.5.x release ("Jamie's birthday is in 3 days
+                — send a card?"). Stored as a free-form string for now;
+                month/day parsing happens at reminder time. */}
+            <View style={styles.field}>
+              <View style={styles.birthdayLabelRow}>
+                <Cake color={colors.postalRed} size={16} strokeWidth={1.6} />
+                <Text style={styles.label}>Birthday (optional)</Text>
+              </View>
+              <TextInput
+                value={birthday}
+                onChangeText={setBirthday}
+                placeholder="June 8"
+                placeholderTextColor="#9A8D76"
+                style={styles.input}
+                testID="add-friend-birthday"
+                autoCapitalize="words"
+                autoCorrect={false}
+                maxLength={32}
+              />
+              <Text style={styles.fieldHint}>
+                We'll remind you a few days before so you can send a card.
+              </Text>
             </View>
 
             {/* Mailing-address section — collapsed by default */}
@@ -312,6 +340,8 @@ const styles = StyleSheet.create({
   field: { gap: 6 },
   row: { flexDirection: "row", gap: 10 },
   label: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 14 },
+  birthdayLabelRow: { alignItems: "center", flexDirection: "row", gap: 6 },
+  fieldHint: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 16, marginTop: 4 },
   input: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 8, borderWidth: 1, color: colors.ink, fontFamily: fonts.serif, fontSize: 17, paddingHorizontal: 14, paddingVertical: 10 },
   error: { color: colors.postalRed, fontFamily: fonts.serifSemi, fontSize: 13, marginTop: 4 },
   addressToggle: {

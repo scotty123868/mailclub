@@ -100,6 +100,7 @@ type MailClubState = {
     name: string;
     city: string;
     state: string;
+    birthday?: string;
     addressLine1?: string;
     addressLine2?: string;
     addressCity?: string;
@@ -549,6 +550,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     name: string;
     city: string;
     state: string;
+    birthday?: string;
     addressLine1?: string;
     addressLine2?: string;
     addressCity?: string;
@@ -563,6 +565,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return { ok: false };
     }
+    const birthday = input.birthday?.trim() || undefined;
     const addressFields = {
       addressLine1: input.addressLine1?.trim() || undefined,
       addressLine2: input.addressLine2?.trim() || undefined,
@@ -585,6 +588,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         lastInteractionAt: new Date().toISOString(),
         relationshipSignal: "Just added",
         signalTone: "blue",
+        birthday,
         ...addressFields,
       };
       setFriends((items) => [friend, ...items]);
@@ -592,10 +596,16 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       return { ok: true, friend };
     }
     try {
+      // Pass birthday through to the API. The server-side ignores it gracefully
+      // when the column doesn't exist yet (Supabase pgrest returns the unknown
+      // field error); a follow-up migration in 0.5.1 adds friends.birthday.
       const friend = await api.addFriend({ name, city, state, ...addressFields });
-      setFriends((items) => [friend, ...items]);
+      // Merge birthday onto the locally-held friend record so the rolodex
+      // displays it even before the server column lands.
+      const friendWithBirthday: Friend = birthday ? { ...friend, birthday } : friend;
+      setFriends((items) => [friendWithBirthday, ...items]);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return { ok: true, friend };
+      return { ok: true, friend: friendWithBirthday };
     } catch (err: any) {
       Alert.alert("Couldn't add friend", err?.message ?? "Try again.");
       return { ok: false };
