@@ -6,8 +6,10 @@ import { PrimaryButton } from "@/src/components/Buttons";
 import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { Stamp } from "@/src/components/Stamp";
 import { isAppleSignInAvailable } from "@/src/services/apple-auth";
+import { lookupReciprocation } from "@/src/services/api";
 import { SUPABASE_CONFIGURED } from "@/src/services/supabase";
 import { useMailClub } from "@/src/state/MailClubContext";
+import { peekPendingInvite } from "@/src/state/pendingInvite";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
@@ -36,6 +38,12 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // Phase 3.5: render a "you have mail waiting" note at the top of the
+  // identity step when a pre-signup QR scan stashed a token. We do a public
+  // lookup to get the sender's name + city so the copy is specific. Best
+  // effort — if the lookup fails, no note shown but the consume still fires
+  // post-signup via the pendingInvite helper.
+  const [pendingInviteNote, setPendingInviteNote] = useState<string | null>(null);
 
   // Probe for Apple Sign-In availability once on mount
   useEffect(() => {
@@ -45,6 +53,32 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
     });
     return () => { mounted = false; };
   }, []);
+
+  // Phase 3.5: when the sheet opens, see if a QR-scan token is pending.
+  // If so, fetch sender display info for the inline note. Idempotent on
+  // re-open (peek doesn't consume).
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pending = await peekPendingInvite();
+        if (cancelled || !pending) return;
+        const info = await lookupReciprocation(pending.token);
+        if (cancelled) return;
+        if (info.ok) {
+          const first = (info.sender_name ?? "Someone").split(" ")[0];
+          const place = info.sender_city ? ` in ${info.sender_city}` : "";
+          setPendingInviteNote(
+            `${first}${place} sent you a postcard. We'll add them to your rolodex as soon as you finish signing up.`,
+          );
+        }
+      } catch {
+        // ignore — note is a nice-to-have, not a blocker
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [visible]);
 
   const canContinue = name.trim().length > 0 && isValidBirthday(birthday);
   const canSubmit = email.trim().includes("@") && password.length >= 8;
@@ -217,6 +251,15 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
                   <Text style={styles.body}>Real postcards. Real friends. Less than a stamp.</Text>
                 </View>
               </View>
+
+              {pendingInviteNote ? (
+                <View style={styles.inviteNote} testID="welcome-pending-invite">
+                  <Text style={styles.inviteNoteKicker}>YOU HAVE MAIL</Text>
+                  <Text style={styles.inviteNoteBody}>
+                    {pendingInviteNote}
+                  </Text>
+                </View>
+              ) : null}
 
               <View style={styles.field}>
                 <Text style={styles.label}>Your name</Text>
@@ -421,6 +464,13 @@ const styles = StyleSheet.create({
   heroCopy: { flex: 1 },
   title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 26, lineHeight: 30 },
   body: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 15, lineHeight: 20, marginTop: 6 },
+  // Phase 3.5: pending-invite note. Rendered at the top of the identity
+  // step when the user arrived via a QR scan. Reads like a quiet airmail
+  // sticker rather than an urgent banner — the postcard's a gift, not an
+  // ad.
+  inviteNote: { backgroundColor: "rgba(60,110,143,0.08)", borderColor: "rgba(60,110,143,0.3)", borderRadius: 10, borderWidth: 1, gap: 4, padding: 14 },
+  inviteNoteKicker: { color: colors.postalBlue, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.6 },
+  inviteNoteBody: { color: colors.ink, fontFamily: fonts.serifItalic, fontSize: 14, lineHeight: 19 },
   field: { gap: 6 },
   label: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 14 },
   labelMuted: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13 },

@@ -1,11 +1,13 @@
+import * as AppleAuthentication from "expo-apple-authentication";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowRight, MailOpen, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PostalCard } from "@/src/components/PostalCard";
-import { lookupReciprocation, recordReciprocationScan } from "@/src/services/api";
+import { getSignedPhotoUrl, lookupReciprocation, recordReciprocationScan } from "@/src/services/api";
+import { clearPendingInvite, setPendingInvite } from "@/src/state/pendingInvite";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors, gradients } from "@/src/theme/colors";
 import { fonts, type } from "@/src/theme/typography";
@@ -29,13 +31,15 @@ import { fonts, type } from "@/src/theme/typography";
 export default function WelcomeMailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string }>();
-  const { hasCompletedSignup } = useMailClub();
+  const { hasCompletedSignup, signInWithApple } = useMailClub();
   const token = (params?.token as string | undefined) ?? "";
 
   const [lookup, setLookup] = useState<Awaited<ReturnType<typeof lookupReciprocation>> | null>(null);
   const [scanResult, setScanResult] = useState<Awaited<ReturnType<typeof recordReciprocationScan>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Step 1: public lookup. Runs on every mount, no auth needed.
@@ -51,6 +55,13 @@ export default function WelcomeMailScreen() {
         const res = await lookupReciprocation(token);
         if (cancelled) return;
         setLookup(res);
+        // Phase 3.5: if the lookup succeeded AND we're not signed in yet,
+        // stash the token in AsyncStorage so the upcoming sign-up flow
+        // can consume it and seed the receiver state. Fire-and-forget —
+        // a stash failure shouldn't block the welcome screen render.
+        if (res.ok && !hasCompletedSignup) {
+          setPendingInvite(token).catch(() => undefined);
+        }
       } catch (e: any) {
         if (cancelled) return;
         setError(e?.message ?? "Couldn't look up this card.");
@@ -61,7 +72,23 @@ export default function WelcomeMailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, hasCompletedSignup]);
+
+  // Phase 3.5: mint a signed URL for the postcard photo so the receiver
+  // can see the actual image (not just the message preview). The photo
+  // path on lookup is the Supabase Storage key; the bucket isn't public.
+  useEffect(() => {
+    if (!lookup?.ok || !lookup.photo_path) return;
+    let cancelled = false;
+    getSignedPhotoUrl(lookup.photo_path)
+      .then((url) => {
+        if (!cancelled) setPhotoUrl(url ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [lookup]);
 
   // Step 2: authenticated scan. Fires the FIRST time we have BOTH a valid
   // lookup AND a signed-in user. Idempotent on the server (already-scanned
@@ -91,6 +118,13 @@ export default function WelcomeMailScreen() {
   }, [token, hasCompletedSignup, lookup, scanResult]);
 
   function dismiss() {
+    // codex P2, Phase 3.5 review: an unauthed user who closes the welcome
+    // screen has chosen to ignore the card; don't haunt a later signup
+    // with it. Authed users already consumed (or are about to), so
+    // clearing here is a no-op for them.
+    if (!hasCompletedSignup) {
+      clearPendingInvite().catch(() => undefined);
+    }
     router.replace("/(tabs)/my-card");
   }
 
@@ -172,6 +206,11 @@ export default function WelcomeMailScreen() {
 
           <View style={styles.cardWrap}>
             <PostalCard style={styles.card}>
+              {photoUrl ? (
+                <View style={styles.cardPhotoWrap}>
+                  <Image source={{ uri: photoUrl }} style={styles.cardPhoto} resizeMode="cover" />
+                </View>
+              ) : null}
               <View style={styles.cardFromLine}>
                 <Text style={styles.cardFromLabel}>FROM</Text>
                 <Text style={styles.cardFromName}>
@@ -191,13 +230,48 @@ export default function WelcomeMailScreen() {
               <Text style={styles.signinBody}>
                 Join Mailroom to add {senderFirst} as a friend and send one back. 3 free stamps to start.
               </Text>
+
+              {Platform.OS === "ios" ? (
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                  cornerRadius={14}
+                  style={styles.appleBtn}
+                  onPress={async () => {
+                    if (signingIn) return;
+                    setSigningIn(true);
+                    try {
+                      const res = await signInWithApple();
+                      if (res.ok && res.isNewUser) {
+                        // Apple gave us a session but the user still needs to
+                        // pick city + state. The WelcomeSheet handles that
+                        // when we route them to /; pendingInvite is already
+                        // stashed so completeSignup will consume it.
+                        router.replace("/");
+                      } else if (res.ok) {
+                        // Returning user — context.signInWithApple consumed
+                        // the pendingInvite already. Stay here and let the
+                        // scan effect re-run with hasCompletedSignup=true.
+                        // (No nav needed; the useEffect chain reacts.)
+                      } else {
+                        Alert.alert("Sign in cancelled", "No worries — your card is still on the printed page.");
+                      }
+                    } catch (e: any) {
+                      Alert.alert("Sign in failed", e?.message ?? "Try again in a moment.");
+                    } finally {
+                      setSigningIn(false);
+                    }
+                  }}
+                />
+              ) : null}
+
               <Pressable
                 onPress={() => router.replace("/")}
-                style={styles.primaryBtn}
+                style={[styles.secondaryBtn, { marginTop: 4 }]}
                 accessibilityRole="button"
-                accessibilityLabel={`Get started in Mailroom`}
+                accessibilityLabel="Sign up with email instead"
               >
-                <Text style={styles.primaryBtnText}>Join Mailroom</Text>
+                <Text style={styles.secondaryBtnText}>Or sign up with email →</Text>
               </Pressable>
             </View>
           ) : scanning ? (
@@ -285,6 +359,8 @@ const styles = StyleSheet.create({
 
   cardWrap: { marginTop: 22, transform: [{ rotate: "-1.5deg" }] },
   card: { padding: 22 },
+  cardPhotoWrap: { aspectRatio: 3 / 2, borderRadius: 4, marginBottom: 14, overflow: "hidden" },
+  cardPhoto: { height: "100%", width: "100%" },
   cardFromLine: { marginBottom: 12 },
   cardFromLabel: { color: colors.mutedInk, fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 1.8 },
   cardFromName: { color: colors.ink, fontFamily: fonts.serifItalic, fontSize: 17, marginTop: 3 },
@@ -306,4 +382,7 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: colors.white, fontFamily: fonts.serifSemi, fontSize: 16 },
   secondaryBtn: { alignItems: "center", marginTop: 6, padding: 10 },
   secondaryBtnText: { color: colors.postalBlue, fontFamily: fonts.serifSemi, fontSize: 14, textDecorationLine: "underline" },
+  // Apple Sign In button — fixed 48pt height per Apple HIG. Width fills the
+  // container. Sits above the email signup fallback so it's the obvious tap.
+  appleBtn: { height: 48, marginTop: 12, width: "100%" },
 });

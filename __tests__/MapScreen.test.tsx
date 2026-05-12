@@ -59,11 +59,13 @@ describe("MapScreen", () => {
   });
 
   it("filter chips actually filter — Received shows the empty state", () => {
-    // v0.5.0: filter chips wired up. Received has no inbound data yet so we
-    // show the empty state copy instead of pretending there's data.
+    // v0.5.0: filter chips wired up. v0.5.0 Phase 3.5: Received hits the
+    // fetch_received_postcards RPC; with no scanned tokens for this user,
+    // we show a "nothing in your mailbox yet" empty state instead of any
+    // of the user's outbound routes.
     const { getByText, queryByText } = renderMap();
     fireEvent.press(getByText("Received"));
-    expect(getByText(/No replies yet/i)).toBeTruthy();
+    expect(getByText(/mailbox/i)).toBeTruthy();
     expect(queryByText("Denver → Nashville")).toBeNull();
   });
 

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { Globe2, Mail, MapPin, Send, Users } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { Header } from "@/src/components/Header";
@@ -10,6 +10,7 @@ import { MiniPostcardArt } from "@/src/components/PostalIllustrations";
 import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { RouteDetailSheet } from "@/src/components/RouteDetailSheet";
 import { Stamp } from "@/src/components/Stamp";
+import { fetchReceivedPostcards, type ReceivedPostcard } from "@/src/services/api";
 import { useMailClub } from "@/src/state/MailClubContext";
 import type { MailRoute as RouteRow } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
@@ -44,11 +45,35 @@ export default function MapScreen() {
   const router = useRouter();
   const [selected, setSelected] = useState<SegmentId>("Friends");
   const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
-  const { postcards, friends } = useMailClub();
+  const { postcards, friends, currentUser } = useMailClub();
+
+  // Phase 3.5: receiver-side feed. Loaded on first switch to the Received
+  // filter and refreshed on every subsequent switch. fetchReceivedPostcards
+  // hits the new fetch_received_postcards RPC which RLS-scopes to the
+  // current user's scanned postcard_claims rows.
+  const [received, setReceived] = useState<ReceivedPostcard[]>([]);
+  const [receivedLoading, setReceivedLoading] = useState(false);
+  const [receivedError, setReceivedError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selected !== "Received") return;
+    let cancelled = false;
+    setReceivedLoading(true);
+    setReceivedError(null);
+    fetchReceivedPostcards()
+      .then((rows) => {
+        if (!cancelled) setReceived(rows);
+      })
+      .catch((e) => {
+        if (!cancelled) setReceivedError(e?.message ?? "Couldn't load received mail.");
+      })
+      .finally(() => {
+        if (!cancelled) setReceivedLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selected]);
 
   // Apply the segment filter to the source data BEFORE deriving routes.
-  // Today every postcard is outbound; the "Received" path is intentionally
-  // empty until inbound mail lands in 0.5.1.
   const filteredPostcards = useMemo(() => {
     if (selected === "Received") return [];
     return postcards;
@@ -56,7 +81,21 @@ export default function MapScreen() {
 
   // Group postcards into unique (fromCity → toCity) routes. Each route gets
   // the most recent send date, a friend-name aggregate, and a stable id.
+  // For the Received filter, build the routes from `received` instead:
+  // sender's city → receiver's (current user's) city. One route per
+  // received card (no grouping — each scan is its own event).
   const routes: RouteRow[] = useMemo(() => {
+    if (selected === "Received") {
+      const homeCity = currentUser?.city || "Home";
+      return received.map((r) => ({
+        id: `received-${r.postcardId}`,
+        from: r.senderCity || "Somewhere",
+        to: homeCity,
+        date: formatRouteDate(r.scannedAt || r.sentAt),
+        miles: estimateMiles(r.senderCity || "Somewhere", homeCity),
+        people: r.senderName,
+      }));
+    }
     const groups = new Map<string, { from: string; to: string; sentAt: string; people: Set<string> }>();
     for (const p of filteredPostcards) {
       const key = `${p.fromCity || "Home"}→${p.toCity}`;
@@ -77,7 +116,7 @@ export default function MapScreen() {
       miles: estimateMiles(g.from, g.to),
       people: Array.from(g.people).join(", "),
     }));
-  }, [filteredPostcards, friends]);
+  }, [selected, received, currentUser, filteredPostcards, friends]);
 
   // Polylines that the MapPanel actually draws. We only render a line when
   // BOTH cities resolve to a known geocoord; unknowns drop silently until
@@ -97,13 +136,21 @@ export default function MapScreen() {
   const activeRoute = routes.find((r) => r.id === activeRouteId) ?? null;
 
   // Stats reflect the currently-filtered view, not the all-time totals.
-  // Received → all zeros (no inbound data today) so the strip doesn't lie.
-  // Friends/Sent → unique cities you've connected with via the filtered set,
-  // friends in your rolodex, and total miles across the filtered routes.
-  // (codex P2, Phase 1 review: previously friends.length was always all-time.)
+  // Received → uses the loaded `received` list. Friends/Sent → derives
+  // from the user's outbound `postcards`.
   const stats = useMemo(() => {
     if (selected === "Received") {
-      return { citiesCount: 0, friendsCount: 0, totalMiles: 0 };
+      const cities = new Set<string>();
+      const senders = new Set<string>();
+      for (const r of received) {
+        if (r.senderCity) cities.add(r.senderCity);
+        senders.add(r.senderId);
+      }
+      return {
+        citiesCount: cities.size,
+        friendsCount: senders.size,
+        totalMiles: routes.reduce((sum, r) => sum + r.miles, 0),
+      };
     }
     const cities = new Set<string>();
     for (const p of filteredPostcards) {
@@ -118,7 +165,7 @@ export default function MapScreen() {
       friendsCount: friends.length,
       totalMiles: routes.reduce((sum, r) => sum + r.miles, 0),
     };
-  }, [selected, filteredPostcards, friends, routes]);
+  }, [selected, filteredPostcards, friends, routes, received]);
 
   function formatRouteDate(iso: string): string {
     try {
@@ -183,12 +230,16 @@ export default function MapScreen() {
           <View style={styles.routesEmpty} testID="routes-empty">
             <MapPin color={colors.postalBlue} size={26} strokeWidth={1.5} />
             <Text style={styles.routesEmptyTitle}>
-              {selected === "Received" ? "No replies yet." : "No routes yet."}
+              {selected === "Received"
+                ? (receivedLoading ? "Checking your mailbox..." : "Nothing in your mailbox yet.")
+                : "No routes yet."}
             </Text>
             <Text style={styles.routesEmptyBody}>
               {selected === "Received"
-                ? "Inbound postcards arrive in 0.5.1. Until then, send one and watch the line trace itself."
-                : "Send your first card — it's free — and watch the line trace itself across the map."}
+                ? (receivedError
+                    ? receivedError
+                    : "When a friend mails you a Mailroom postcard, scan the QR on the back and it'll land here.")
+                : "Send your first card, it's free, and watch the line trace itself across the map."}
             </Text>
           </View>
         ) : (

@@ -6,6 +6,7 @@ import { CARD_COSTS, CREDIT_PACKS, FREE_CREDITS } from "@/src/data/credits";
 import { currentUser as defaultCurrentUser, friends as initialFriends, milestones, postcards as initialPostcards, routes } from "@/src/data/mock";
 import * as api from "@/src/services/api";
 import { signInWithApple as appleSignInService, type AppleAuthResult } from "@/src/services/apple-auth";
+import { clearPendingInvite, consumePendingInvite } from "@/src/state/pendingInvite";
 import { SUPABASE_CONFIGURED, supabase } from "@/src/services/supabase";
 import type { CardCategory, CurrentUser, CustomTone, Friend, Postcard } from "@/src/types/mail";
 
@@ -671,6 +672,10 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     resetLocalState();
     await AsyncStorage.removeItem(STORE_KEY);
+    // Phase 3.5: clear any pending invite so it doesn't carry across user
+    // identities. If a different user signs in next, they shouldn't
+    // inherit the previous user's pre-signup QR scan.
+    await clearPendingInvite();
     if (SUPABASE_CONFIGURED) {
       try {
         await api.signOut();
@@ -745,12 +750,49 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       // eslint-disable-next-line no-console
       console.warn("complete_signup RPC failed", err?.message);
     }
+
+    // Phase 3.5: consume any pending invite from a pre-signup QR scan.
+    await attemptConsumePendingInvite();
   }, [authedUserId]);
+
+  /**
+   * Phase 3.5 helper — drain the pendingInvite stash. If a token is
+   * present, fire `record_reciprocation_scan` so the sender shows up in
+   * the user's rolodex and the postcard lands in their Received map.
+   * Idempotent: pendingInvite.consume() removes-then-returns so a second
+   * call returns null; the server-side RPC is also first-scan-wins, so
+   * even double-fires are safe. Called from completeSignup AND every
+   * sign-in path so brand-new and returning users both get the seed.
+   */
+  async function attemptConsumePendingInvite(): Promise<void> {
+    try {
+      const pendingToken = await consumePendingInvite();
+      if (!pendingToken) return;
+      const scan = await api.recordReciprocationScan(pendingToken);
+      if (scan.ok && !scan.already_scanned) {
+        // Refresh friends list so the new sender appears in the rolodex
+        // immediately without waiting for the next pull.
+        try {
+          const friendsList = await api.fetchFriends();
+          setFriends(friendsList);
+        } catch {
+          // best-effort refresh, ignore
+        }
+      }
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.warn("consumePendingInvite failed:", err?.message);
+    }
+  }
 
   const signInWithEmailAction = useCallback(async (email: string, password: string) => {
     if (!SUPABASE_CONFIGURED) return { ok: false, error: "Backend not configured" };
     try {
       await api.signInWithEmail(email, password);
+      // Phase 3.5: consume any pending QR-scan token now that we're authed.
+      // Idempotent — consume returns null if there's nothing pending or
+      // we already consumed it earlier.
+      await attemptConsumePendingInvite();
       return { ok: true };
     } catch (err: any) {
       return { ok: false, error: err?.message ?? "Sign in failed" };
@@ -780,6 +822,12 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       // Optimistic mirror into local userInfo so the next render reflects
       // Apple's name immediately, even before the profile fetch returns.
       setUserInfo((u) => ({ ...u, name: result.fullName ?? u.name }));
+    }
+    if (result.ok && !result.isNewUser) {
+      // Returning user: consume the QR-scan token directly here. For new
+      // users completeSignup handles the consume after they fill in city +
+      // state; calling here too is idempotent if both fire.
+      await attemptConsumePendingInvite();
     }
     return result;
   }, []);

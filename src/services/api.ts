@@ -520,6 +520,55 @@ export async function recordReciprocationScan(
   return data as ReciprocationScanResult;
 }
 
+// ---------------------------------------------------------------------------
+// Receiver feed — Phase 3.5
+// The postcards a user has received (via QR scan on a printed card). Drives
+// the Map tab's "Received" filter, the Constellation tab's friend list, and
+// any future "Inbox" surface.
+// ---------------------------------------------------------------------------
+
+export type ReceivedPostcard = {
+  postcardId: string;
+  claimId: string;
+  senderId: string;
+  senderName: string;
+  senderCity: string;
+  message: string;
+  category: string;
+  photoPath?: string;
+  sentAt: string;
+  scannedAt: string;
+};
+
+export async function fetchReceivedPostcards(): Promise<ReceivedPostcard[]> {
+  const { data, error } = await supabase.rpc("fetch_received_postcards");
+  if (error) throw error;
+  type Row = {
+    postcard_id: string;
+    claim_id: string;
+    sender_id: string;
+    sender_name: string | null;
+    sender_city: string | null;
+    message: string;
+    category: string;
+    photo_path: string | null;
+    sent_at: string;
+    scanned_at: string | null;
+  };
+  return ((data as Row[]) ?? []).map((r) => ({
+    postcardId: r.postcard_id,
+    claimId: r.claim_id,
+    senderId: r.sender_id,
+    senderName: r.sender_name ?? "Mailroom friend",
+    senderCity: r.sender_city ?? "",
+    message: r.message,
+    category: r.category,
+    photoPath: r.photo_path ?? undefined,
+    sentAt: r.sent_at,
+    scannedAt: r.scanned_at ?? r.sent_at,
+  }));
+}
+
 export async function sendIntoVoid(message: string): Promise<Postcard> {
   const { data, error } = await supabase.rpc("send_postcard", {
     p_to_kind: "void",
