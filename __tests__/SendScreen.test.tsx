@@ -23,78 +23,169 @@ function renderSend() {
   );
 }
 
-describe("SendScreen — simplified MVP flow", () => {
-  it("renders the flip card, photo + note buttons, recipient picker, and send button", () => {
-    const { getByText, getByTestId } = renderSend();
-    expect(getByText("Send Mail")).toBeTruthy();
-    expect(getByTestId("postcard-flip")).toBeTruthy();
-    expect(getByTestId("compose-photo-btn")).toBeTruthy();
-    expect(getByTestId("compose-note-btn")).toBeTruthy();
-    expect(getByTestId("recipient-segment-friend")).toBeTruthy();
-    expect(getByTestId("recipient-segment-ask")).toBeTruthy();
-    expect(getByTestId("recipient-segment-address")).toBeTruthy();
-    expect(getByText("Send postcard")).toBeTruthy();
+async function attachPhoto(getByTestId: any) {
+  (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValueOnce({
+    canceled: false,
+    assets: [{ uri: "file://chosen.jpg" }],
+  });
+  fireEvent.press(getByTestId("send-photo-target"));
+  await waitFor(() => expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled());
+}
+
+function advance(getByTestId: any) {
+  fireEvent.press(getByTestId("send-continue-btn"));
+}
+
+/**
+ * v0.5.0 send flow is a 4-step internal state machine:
+ *   1. Cover     — pick a photo
+ *   2. Inside    — write a note
+ *   3. Recipient — name + friend match
+ *   4. Delivery  — magic link / address / friend, then Send
+ */
+describe("SendScreen — multi-step flow", () => {
+  it("renders step 1 (Cover) on first render", () => {
+    const { getByTestId, getByText, queryByTestId } = renderSend();
+    expect(getByText("Send")).toBeTruthy();
+    expect(getByTestId("send-step-header-1")).toBeTruthy();
+    expect(getByTestId("send-step-1")).toBeTruthy();
+    expect(getByTestId("send-photo-target")).toBeTruthy();
+    // Subsequent steps not yet rendered
+    expect(queryByTestId("send-step-2")).toBeNull();
+    expect(queryByTestId("send-step-3")).toBeNull();
+    expect(queryByTestId("send-step-4")).toBeNull();
+    // Continue button visible on step 1
+    expect(getByTestId("send-continue-btn")).toBeTruthy();
   });
 
-  it("opens the photo library when the Photo button is pressed", async () => {
+  it("opens the photo library when the Cover target is pressed", async () => {
     const { getByTestId } = renderSend();
-    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValueOnce({
-      canceled: false,
-      assets: [{ uri: "file://chosen.jpg" }],
-    });
-    fireEvent.press(getByTestId("compose-photo-btn"));
-    await waitFor(() => {
-      expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled();
-    });
+    await attachPhoto(getByTestId);
   });
 
-  it("opens the message editor sheet when the Note button is pressed", () => {
-    const { getByTestId, queryByTestId } = renderSend();
-    expect(queryByTestId("msg-input")).toBeNull();
-    fireEvent.press(getByTestId("compose-note-btn"));
-    expect(getByTestId("msg-input")).toBeTruthy();
-  });
-
-  it("switches recipient mode when a different segment is pressed", () => {
-    const { getByTestId, queryByTestId } = renderSend();
-    expect(queryByTestId("recipient-link")).toBeNull();
-    fireEvent.press(getByTestId("recipient-segment-ask"));
-    expect(getByTestId("recipient-link")).toBeTruthy();
-    fireEvent.press(getByTestId("recipient-segment-address"));
-    expect(getByTestId("recipient-address")).toBeTruthy();
-  });
-
-  it("blocks sending when there is no photo and prompts to choose one", () => {
-    const { getByText } = renderSend();
-    fireEvent.press(getByText("Send postcard"));
+  it("blocks advancing from step 1 when no photo is picked", () => {
+    const { getByTestId } = renderSend();
+    advance(getByTestId);
     expect(ALERT_SPY).toHaveBeenCalledWith("Not quite ready", expect.stringContaining("photo"));
   });
 
-  it("blocks sending when the address fields are incomplete", async () => {
-    const { getByTestId, getByText, queryByTestId } = renderSend();
-    // Add a photo
-    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValueOnce({
-      canceled: false,
-      assets: [{ uri: "file://chosen.jpg" }],
-    });
-    fireEvent.press(getByTestId("compose-photo-btn"));
-    await waitFor(() => expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled());
-    // Add a note
-    fireEvent.press(getByTestId("compose-note-btn"));
-    fireEvent.changeText(getByTestId("msg-input"), "Hi friend");
-    fireEvent.press(getByTestId("msg-save"));
-    await waitFor(() => expect(queryByTestId("msg-input")).toBeNull());
-    // Switch to address mode with empty form
-    fireEvent.press(getByTestId("recipient-segment-address"));
-    fireEvent.press(getByText("Send postcard"));
-    expect(ALERT_SPY).toHaveBeenCalledWith("Not quite ready", expect.stringContaining("address"));
+  it("advances to step 2 (Inside) after a photo is picked", async () => {
+    const { getByTestId } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    expect(getByTestId("send-step-header-2")).toBeTruthy();
+    expect(getByTestId("send-step-2")).toBeTruthy();
+    expect(getByTestId("send-message-target")).toBeTruthy();
   });
 
-  it("cycles through saved friends when the friend card is tapped", () => {
-    // The default mock-friends list starts with Tatiana. Tap to cycle → Alex.
-    const { getByTestId, getAllByText } = renderSend();
-    expect(getAllByText("Tatiana").length).toBeGreaterThan(0);
-    fireEvent.press(getByTestId("recipient-friend-cycler"));
-    expect(getAllByText("Alex").length).toBeGreaterThan(0);
+  it("opens the message editor when the Inside target is tapped", async () => {
+    const { getByTestId, queryByTestId } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    expect(queryByTestId("msg-input")).toBeNull();
+    fireEvent.press(getByTestId("send-message-target"));
+    expect(getByTestId("msg-input")).toBeTruthy();
+  });
+
+  it("blocks advancing from step 2 with an empty note", async () => {
+    const { getByTestId } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    advance(getByTestId);
+    expect(ALERT_SPY).toHaveBeenCalledWith("Not quite ready", expect.stringContaining("note"));
+  });
+
+  it("advances to step 3 (Recipient) after the note is saved", async () => {
+    const { getByTestId } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    fireEvent.press(getByTestId("send-message-target"));
+    fireEvent.changeText(getByTestId("msg-input"), "Hi friend");
+    fireEvent.press(getByTestId("msg-save"));
+    advance(getByTestId);
+    expect(getByTestId("send-step-3")).toBeTruthy();
+    expect(getByTestId("send-name-input")).toBeTruthy();
+  });
+
+  it("blocks advancing from step 3 with an empty name", async () => {
+    const { getByTestId } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    fireEvent.press(getByTestId("send-message-target"));
+    fireEvent.changeText(getByTestId("msg-input"), "Hi friend");
+    fireEvent.press(getByTestId("msg-save"));
+    advance(getByTestId);
+    advance(getByTestId);
+    expect(ALERT_SPY).toHaveBeenCalledWith("Not quite ready", expect.stringContaining("name"));
+  });
+
+  it("surfaces friend matches as the user types a name", async () => {
+    // Default mock-friends list includes Tatiana
+    const { getByTestId } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    fireEvent.press(getByTestId("send-message-target"));
+    fireEvent.changeText(getByTestId("msg-input"), "Hi friend");
+    fireEvent.press(getByTestId("msg-save"));
+    advance(getByTestId);
+    fireEvent.changeText(getByTestId("send-name-input"), "Tati");
+    // At least one match row should render for Tatiana
+    expect(getByTestId(/^send-friend-match-/)).toBeTruthy();
+  });
+
+  it("locks the friend reference when a match row is tapped", async () => {
+    const { getByTestId, getAllByTestId } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    fireEvent.press(getByTestId("send-message-target"));
+    fireEvent.changeText(getByTestId("msg-input"), "Hi friend");
+    fireEvent.press(getByTestId("msg-save"));
+    advance(getByTestId);
+    fireEvent.changeText(getByTestId("send-name-input"), "Tati");
+    const matchRows = getAllByTestId(/^send-friend-match-/);
+    fireEvent.press(matchRows[0]);
+    expect(getByTestId("send-friend-locked")).toBeTruthy();
+  });
+
+  it("step 4 (Delivery) shows magic-link, address, and (if friend has address) the friend's saved-address option", async () => {
+    const { getByTestId, getAllByTestId } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    fireEvent.press(getByTestId("send-message-target"));
+    fireEvent.changeText(getByTestId("msg-input"), "Hi friend");
+    fireEvent.press(getByTestId("msg-save"));
+    advance(getByTestId);
+    fireEvent.changeText(getByTestId("send-name-input"), "Tati");
+    fireEvent.press(getAllByTestId(/^send-friend-match-/)[0]);
+    advance(getByTestId);
+    // Always-on options
+    expect(getByTestId("send-delivery-link")).toBeTruthy();
+    expect(getByTestId("send-delivery-address")).toBeTruthy();
+  });
+
+  it("step 4 with no locked friend defaults to magic-link mode and shows 'Share a link' as the CTA", async () => {
+    // v0.5.0: in link mode, the action is Share-a-link (Lob fires when the
+    // recipient claims), not Send-postcard, so the button label adapts.
+    // (codex P2, Phase 2.5 review.)
+    const { getByTestId, getByText } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    fireEvent.press(getByTestId("send-message-target"));
+    fireEvent.changeText(getByTestId("msg-input"), "Hi friend");
+    fireEvent.press(getByTestId("msg-save"));
+    advance(getByTestId);
+    fireEvent.changeText(getByTestId("send-name-input"), "Brand new person");
+    advance(getByTestId);
+    expect(getByTestId("send-step-4")).toBeTruthy();
+    expect(getByText("Share a link")).toBeTruthy();
+  });
+
+  it("the Back button on step 2 returns to step 1", async () => {
+    const { getByTestId } = renderSend();
+    await attachPhoto(getByTestId);
+    advance(getByTestId);
+    expect(getByTestId("send-step-header-2")).toBeTruthy();
+    fireEvent.press(getByTestId("send-back-btn"));
+    expect(getByTestId("send-step-header-1")).toBeTruthy();
   });
 });

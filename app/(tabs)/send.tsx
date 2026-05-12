@@ -1,12 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, Edit3, Image as ImageIcon, Send, RotateCw } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, Camera, Check, Link as LinkIcon, MapPin, Send } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
-import { FlipCard, FlipCardHandle } from "@/src/components/FlipCard";
 import { Header } from "@/src/components/Header";
 import { MessageEditorSheet } from "@/src/components/MessageEditorSheet";
 import { PostcardBackPreview, PostcardFrontPreview } from "@/src/components/PostcardPreview";
@@ -14,32 +13,36 @@ import {
   AddressDraft,
   EMPTY_ADDRESS,
   isAddressComplete,
-  RecipientMode,
-  RecipientPicker,
-} from "@/src/components/RecipientPicker";
+} from "@/src/types/address";
 import { SuccessModal } from "@/src/components/SuccessModal";
 import { CARD_COST_PHOTO } from "@/src/data/credits";
 import { capturePostcardForPrint, lobRenderDimensions, submitToLob } from "@/src/services/lob";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
-import { fonts } from "@/src/theme/typography";
+import { fonts, type } from "@/src/theme/typography";
+import type { Friend } from "@/src/types/mail";
 
 /**
- * Send screen — the MVP "photo + note on the back" flow.
+ * Send screen — v0.5.0 multi-step flow (gallery decision).
  *
- * Architecture:
- *   • Big flippable postcard preview at the top. Tap to flip.
- *   • Two action buttons: "Photo" opens the library; "Note" opens the
- *     message editor sheet. Each auto-flips the card to the relevant face.
- *   • Recipient picker has three modes: friend / ask (send-a-link) / address.
- *   • Send button at the bottom shows the cost (1 credit) and dispatches the
- *     right action based on the recipient mode.
+ * Four sequential pages, one decision per page:
+ *   1. Cover         — pick your photo
+ *   2. Inside        — write your note
+ *   3. Recipient     — who's it for? (name + inline friend match)
+ *   4. Delivery      — how does it get to them? (magic link default)
+ *
+ * Step state lives in this component (single route, internal step machine).
+ * Back navigates one step, or exits to the previous tab on step 1.
  *
  * Lob capture happens off-screen at 1875px wide after a successful direct
- * send. The send-a-link flow defers Lob capture until the recipient claims.
+ * send, just like before. The send-via-link flow still defers Lob capture
+ * until the recipient claims via the magic link.
  */
 
-const PREVIEW_WIDTH = 320;
+type Step = 1 | 2 | 3 | 4;
+// "self" delivery (send to your own address) is deferred to 0.5.1 — needs
+// proper user address storage on CurrentUser, which we don't have yet.
+type DeliveryMode = "friend" | "link" | "address";
 
 export default function SendScreen() {
   const router = useRouter();
@@ -53,14 +56,22 @@ export default function SendScreen() {
     addFriendByAddress,
   } = useMailClub();
 
+  // -- Step machine -------------------------------------------------------
+  const [step, setStep] = useState<Step>(1);
+
   // -- Compose state ------------------------------------------------------
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
 
   // -- Recipient state ----------------------------------------------------
-  const [mode, setMode] = useState<RecipientMode>("friend");
-  const [friendIndex, setFriendIndex] = useState(0);
+  // The user types a name on step 3. If it matches a friend in the rolodex,
+  // we surface the match and let them tap to lock the friend reference.
+  const [recipientName, setRecipientName] = useState("");
+  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+
+  // -- Delivery state -----------------------------------------------------
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("link");
   const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
 
   // -- Send + modal state -------------------------------------------------
@@ -70,50 +81,77 @@ export default function SendScreen() {
   const [seededFriend, setSeededFriend] = useState<string | undefined>(undefined);
 
   // -- Refs ---------------------------------------------------------------
-  const flipRef = useRef<FlipCardHandle>(null);
   const printFrontRef = useRef<View>(null);
   const printBackRef = useRef<View>(null);
-  // Synchronous lock against double-tap. React state (`sending`) only
-  // flips after the next render, so two taps within the same event-loop
-  // tick could both pass `if (sending) return`. A useRef latch flips
-  // synchronously and is the authoritative gate.
+  // Synchronous lock against double-tap on the final Send button. React
+  // state (`sending`) only flips after the next render, so two presses in
+  // the same event-loop tick could both pass the gate. A useRef latch is
+  // the authoritative double-press defender.
   const sendingLockRef = useRef(false);
   const { width: PRINT_W } = lobRenderDimensions();
 
-  // Seed recipient from ?friendId=... when navigated from a friend sheet
+  // -- Param seeding ------------------------------------------------------
+
+  // Seed recipient from ?friendId=... when navigated from a friend sheet.
+  // Pre-fills the name + selectedFriendId AND jumps to step 4 so the user
+  // doesn't have to walk through cover/inside/recipient just to pick a
+  // friend they already chose. They still pick a photo + write a note,
+  // but on their next pass the flow starts at delivery for that friend.
+  // (codex P1: comment now matches behavior — setStep(4) is called.)
   useEffect(() => {
     const friendParam = params?.friendId as string | undefined;
     if (!friendParam || seededFriend === friendParam) return;
-    const idx = friends.findIndex((f) => f.id === friendParam);
-    if (idx >= 0) {
-      setFriendIndex(idx);
-      setMode("friend");
+    const friend = friends.find((f) => f.id === friendParam);
+    if (friend) {
+      setSelectedFriendId(friend.id);
+      setRecipientName(friend.name);
+      setDeliveryMode(friend.addressLine1 ? "friend" : "link");
+      // Only jump to step 4 if the user already has a photo + message
+      // queued; otherwise let them assemble the card first.
+      if (photoUri && message.trim().length > 0) {
+        setStep(4);
+      }
     }
     setSeededFriend(friendParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.friendId, friends, seededFriend]);
 
-  // Seed recipient mode from ?mode=... when navigated from a "Send your first
-  // card" prompt on an empty Friends rolodex. Bypasses the "No friends yet"
-  // state inside the picker and lands the user on the right tab immediately.
-  // (codex P2, Phase 2 review.)
+  // Seed delivery mode from ?mode=... — used by the empty-rolodex
+  // "Send your first card" CTA on the Friends tab to bias toward link mode.
   useEffect(() => {
-    const m = params?.mode as RecipientMode | undefined;
+    const m = params?.mode as DeliveryMode | undefined;
     if (m === "link" || m === "address" || m === "friend") {
-      setMode(m);
+      setDeliveryMode(m);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.mode]);
 
-  const friend = useMemo(
-    () => (friends.length ? friends[Math.min(friendIndex, friends.length - 1)] : null),
-    [friends, friendIndex],
-  );
+  // -- Derived values -----------------------------------------------------
 
-  // Address kind: friends mode → friend address; address mode → typed; link → recipient-supplied
+  const selectedFriend: Friend | null = useMemo(() => {
+    if (!selectedFriendId) return null;
+    return friends.find((f) => f.id === selectedFriendId) ?? null;
+  }, [friends, selectedFriendId]);
+
+  // Friends matching the typed recipient name. Case-insensitive prefix and
+  // substring match. Top 5 results. Hidden once the user locks a specific
+  // friend by tapping a result row (then we show a single confirmation row).
+  const friendMatches: Friend[] = useMemo(() => {
+    const q = recipientName.trim().toLowerCase();
+    if (!q) return [];
+    return friends
+      .filter((f) => f.name.toLowerCase().includes(q))
+      .slice(0, 5);
+  }, [recipientName, friends]);
+
+  // Recipient block used by both the BackPreview and the off-screen Lob
+  // capture. Always reflects the latest source-of-truth: locked friend's
+  // address if present, manual address if in address mode, "awaiting" copy
+  // if delivery is by magic link.
   const recipientForPreview = useMemo(() => {
-    if (mode === "address") {
+    if (deliveryMode === "address") {
       return {
-        name: address.name || "Recipient",
+        name: address.name || recipientName || "Recipient",
         city: address.city,
         state: address.state,
         addressLine1: address.line1,
@@ -121,27 +159,25 @@ export default function SendScreen() {
         zip: address.zip,
       };
     }
-    if (mode === "link") {
-      return { name: "Awaiting address...", city: "", state: "" };
+    if (deliveryMode === "link") {
+      return { name: recipientName || "Awaiting address...", city: "", state: "" };
     }
-    if (friend) {
+    if (selectedFriend) {
       return {
-        name: friend.name,
-        city: friend.addressCity || friend.city,
-        state: friend.addressState || friend.state,
-        addressLine1: friend.addressLine1,
-        addressLine2: friend.addressLine2,
-        zip: friend.addressZip,
+        name: selectedFriend.name,
+        city: selectedFriend.addressCity || selectedFriend.city,
+        state: selectedFriend.addressState || selectedFriend.state,
+        addressLine1: selectedFriend.addressLine1,
+        addressLine2: selectedFriend.addressLine2,
+        zip: selectedFriend.addressZip,
       };
     }
-    return { name: "", city: "", state: "" };
-  }, [mode, address, friend]);
+    return { name: recipientName || "", city: "", state: "" };
+  }, [deliveryMode, address, selectedFriend, recipientName, currentUser]);
 
-  // -- Actions ------------------------------------------------------------
+  // -- Photo picker -------------------------------------------------------
 
   async function openPhotoPicker() {
-    // expo-image-picker defaults to the photo library — that's exactly what we
-    // want for MVP. Camera-first felt wrong: people want to send saved photos.
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert(
@@ -159,59 +195,110 @@ export default function SendScreen() {
     });
     if (!result.canceled && result.assets[0]?.uri) {
       setPhotoUri(result.assets[0].uri);
-      // Flip back to front so they see the photo land on the card
-      flipRef.current?.flipTo("front");
     }
   }
 
-  function openMessageEditor() {
-    flipRef.current?.flipTo("back");
-    setEditorOpen(true);
-  }
+  // -- Step navigation ----------------------------------------------------
 
-  // -- Validation ---------------------------------------------------------
-
-  function validate(): { ok: true } | { ok: false; reason: string } {
-    if (!photoUri) return { ok: false, reason: "Pick a photo for the front first." };
-    if (message.trim().length === 0) return { ok: false, reason: "Write a quick note on the back." };
-    if (credits < CARD_COST_PHOTO) return { ok: false, reason: "You're out of credits. Tap to buy more." };
-
-    if (mode === "friend") {
-      if (!friend) return { ok: false, reason: "Pick a friend to send to, or use Ask / Address." };
-      if (!friend.addressLine1) {
-        return {
-          ok: false,
-          reason: `We don't have ${friend.name}'s mailing address. Switch to "Ask" to request it.`,
-        };
-      }
+  function canAdvance(): { ok: true } | { ok: false; reason?: string } {
+    if (step === 1) {
+      return photoUri
+        ? { ok: true }
+        : { ok: false, reason: "Pick a photo first to keep moving." };
     }
-    if (mode === "address" && !isAddressComplete(address)) {
-      return { ok: false, reason: "Fill in the full mailing address (street, city, state, ZIP)." };
+    if (step === 2) {
+      return message.trim().length > 0
+        ? { ok: true }
+        : { ok: false, reason: "Write a quick note for the back." };
+    }
+    if (step === 3) {
+      return recipientName.trim().length > 0
+        ? { ok: true }
+        : { ok: false, reason: "Type a name so we know who it's for." };
     }
     return { ok: true };
+  }
+
+  function goBack() {
+    if (step > 1) {
+      setStep((step - 1) as Step);
+    } else {
+      router.back();
+    }
+  }
+
+  function goNext() {
+    const v = canAdvance();
+    if (!v.ok) {
+      if (v.reason) Alert.alert("Not quite ready", v.reason);
+      return;
+    }
+    if (step < 4) {
+      const next = (step + 1) as Step;
+      setStep(next);
+      // When advancing to step 4 with a locked friend who has an address,
+      // default to "friend" delivery (their saved address). Otherwise default
+      // to "link" so the user doesn't have to type an address they don't have.
+      if (next === 4 && selectedFriend?.addressLine1) {
+        setDeliveryMode("friend");
+      } else if (next === 4 && deliveryMode === "friend") {
+        // The previously-selected friend has no address; flip to link as the
+        // sensible default rather than leaving them on a broken option.
+        setDeliveryMode("link");
+      }
+    } else {
+      onSend();
+    }
+  }
+
+  function lockFriend(friend: Friend) {
+    setSelectedFriendId(friend.id);
+    setRecipientName(friend.name);
+  }
+
+  function unlockFriend() {
+    setSelectedFriendId(null);
   }
 
   // -- Send ---------------------------------------------------------------
 
   async function onSend() {
-    // Synchronous lock first — defeats the double-tap race where two presses
-    // in one event-loop tick both observe `sending === false` because React
-    // hasn't committed the next render yet.
     if (sendingLockRef.current || sending) return;
     sendingLockRef.current = true;
-    const v = validate();
-    if (!v.ok) {
+
+    if (credits < CARD_COST_PHOTO) {
       sendingLockRef.current = false;
-      if (v.reason.includes("out of credits")) {
-        setCreditsOpen(true);
-        return;
-      }
-      Alert.alert("Not quite ready", v.reason);
+      setCreditsOpen(true);
       return;
     }
+
+    // Delivery-mode-specific gate before we kick off the network round-trip.
+    // codex P1: validate against the RESOLVED address (name falls back to
+    // recipientName) — otherwise an "address-mode" send with a name from
+    // step 3 but no separate edit in step 4 would falsely fail validation.
+    if (deliveryMode === "address") {
+      const resolved: AddressDraft = {
+        ...address,
+        name: address.name || recipientName,
+      };
+      if (!isAddressComplete(resolved)) {
+        sendingLockRef.current = false;
+        Alert.alert("Address incomplete", "Fill in name, street, city, state, and ZIP before sending.");
+        return;
+      }
+    }
+    if (deliveryMode === "friend" && !selectedFriend?.addressLine1) {
+      sendingLockRef.current = false;
+      Alert.alert(
+        "No address on file",
+        `We don't have a mailing address for ${selectedFriend?.name || "this friend"}. Pick "Magic link" or "I have their address" instead.`,
+      );
+      return;
+    }
+
     setSending(true);
     try {
-      if (mode === "link") {
+      if (deliveryMode === "link") {
         const result = await sendPostcardViaLink({
           category: "photo",
           message,
@@ -222,29 +309,31 @@ export default function SendScreen() {
           return;
         }
         const senderFirst = (currentUser.name || "Someone").split(" ")[0];
-        const shareMsg = `${senderFirst} sent you a postcard via Mailroom. Open this link to share your address so we can deliver it:\n\n${result.claimUrl}`;
+        const recipientFirst = recipientName.trim().split(" ")[0] || "your friend";
+        const shareMsg = `Hi ${recipientFirst}, ${senderFirst} sent you a postcard via Mailroom. Open this link to share your address so we can deliver it:\n\n${result.claimUrl}`;
         try {
           await Share.share({ message: shareMsg, url: result.claimUrl });
         } catch {
-          // user dismissed the share sheet — link is still valid
+          // user dismissed share sheet — link is still valid
         }
         setSuccess({
           visible: true,
           title: "Link sent.",
           subtitle:
-            "When they tap the link and share their address, we'll print and ship your postcard. You'll get a notification when it's on its way.",
+            `When ${recipientFirst} taps the link and shares their address, we'll print and ship your postcard. You'll get a notification when it's on its way.`,
         });
         resetCompose();
         return;
       }
 
-      // For "address" mode, we silently create a friend first, then send to them.
-      // This means subsequent sends to the same person have the address saved.
+      // For "address" mode: silently create the friend first, then send.
+      // For "self" mode: addr is the current user's address (we'd already
+      // have it from onboarding; otherwise fall through to address flow).
       let targetFriendId: string;
       let targetName: string;
-      if (mode === "address") {
+      if (deliveryMode === "address") {
         const result = await addFriendByAddress({
-          name: address.name,
+          name: address.name || recipientName,
           city: address.city,
           state: address.state,
           addressLine1: address.line1,
@@ -261,9 +350,9 @@ export default function SendScreen() {
         targetFriendId = result.friend.id;
         targetName = result.friend.name;
       } else {
-        if (!friend) return;
-        targetFriendId = friend.id;
-        targetName = friend.name;
+        if (!selectedFriend) return;
+        targetFriendId = selectedFriend.id;
+        targetName = selectedFriend.name;
       }
 
       const result = await sendPostcard({
@@ -280,17 +369,23 @@ export default function SendScreen() {
         subtitle: `Heading to ${targetName} via USPS First Class Mail. It should arrive in about 1–2 weeks.`,
       });
 
-      // Fire-and-forget Lob capture/upload. Capturing the off-screen 1875px
-      // PNGs + uploading can take a few seconds, so we don't block the
-      // success modal. If it fails, the server-side webhook handles retries.
+      // Capture-then-reset. The Success modal is visible (overlay), so the
+      // user doesn't see the compose state behind. We defer resetCompose()
+      // until after Lob captures the offscreen 1875px PNGs — otherwise the
+      // 250ms capture delay races against a synchronous state reset and
+      // captures a blank card. (codex P1, Phase 2.5 review.)
       if (result.postcardId) {
-        submitPostcardToLob(result.postcardId).catch((err) => {
-          // eslint-disable-next-line no-console
-          console.warn("Lob submission failed (will retry server-side):", err);
-        });
+        submitPostcardToLob(result.postcardId)
+          .catch((err) => {
+            // eslint-disable-next-line no-console
+            console.warn("Lob submission failed (will retry server-side):", err);
+          })
+          .finally(() => {
+            resetCompose();
+          });
+      } else {
+        resetCompose();
       }
-
-      resetCompose();
     } finally {
       setSending(false);
       sendingLockRef.current = false;
@@ -298,7 +393,6 @@ export default function SendScreen() {
   }
 
   async function submitPostcardToLob(postcardId: string): Promise<void> {
-    // Give the print-scale views a beat to mount + layout before capture.
     await new Promise((resolve) => setTimeout(resolve, 250));
     if (!printFrontRef.current || !printBackRef.current) {
       throw new Error("Print-scale postcard views not mounted");
@@ -317,125 +411,120 @@ export default function SendScreen() {
   function resetCompose() {
     setPhotoUri(null);
     setMessage("");
+    setRecipientName("");
+    setSelectedFriendId(null);
     setAddress(EMPTY_ADDRESS);
-    flipRef.current?.flipTo("front");
+    setDeliveryMode("link");
+    setStep(1);
   }
 
   // -- Render -------------------------------------------------------------
 
   const cantAfford = credits < CARD_COST_PHOTO;
-
-  const sendLabel = sending
+  // codex P2: distinguish "Send postcard" (we print + mail today) from
+  // "Share a link" (the recipient claims it before we print). Same Lob spend
+  // either way, but the immediate action is different so the button label
+  // should match.
+  const finalCtaLabel = sending
     ? "Sending..."
-    : mode === "link"
-      ? "Share a link"
-      : cantAfford
-        ? "Buy credits"
+    : cantAfford
+      ? "Buy stamps"
+      : deliveryMode === "link"
+        ? "Share a link"
         : "Send postcard";
+  const continueLabel = step < 4 ? "Continue" : finalCtaLabel;
 
   return (
     <AppShell>
-      <Header title="Send Mail" />
+      <Header title="Send" />
 
-      <View style={styles.previewBlock}>
-        <FlipCard
-          ref={flipRef}
-          testID="postcard-flip"
-          style={styles.flipWrap}
-          front={
-            <View style={styles.faceWrap}>
-              <PostcardFrontPreview
-                photoUri={photoUri ?? undefined}
-                width={PREVIEW_WIDTH}
-                testID="preview-front"
-              />
-              {!photoUri ? (
-                <View style={styles.frontHint} pointerEvents="none">
-                  <Camera color={colors.mutedInk} size={28} strokeWidth={1.6} />
-                  <Text style={styles.frontHintText}>Tap the Photo button to choose one</Text>
-                </View>
-              ) : null}
-            </View>
-          }
-          back={
-            <View style={styles.faceWrap}>
-              <PostcardBackPreview
-                message={message || "Tap the Note button below to write your message..."}
-                recipient={recipientForPreview}
-                sender={{
-                  name: currentUser.name || "You",
-                  city: currentUser.city || "",
-                  state: currentUser.state || "",
-                }}
-                width={PREVIEW_WIDTH}
-                testID="preview-back"
-              />
-            </View>
-          }
+      <StepHeader step={step} onBack={goBack} />
+
+      {step === 1 && (
+        <CoverStep
+          photoUri={photoUri}
+          onPickPhoto={openPhotoPicker}
+          testID="send-step-1"
         />
-        <View style={styles.flipBadgeRow}>
-          <RotateCw color={colors.mutedInk} size={13} strokeWidth={1.8} />
-          <Text style={styles.flipBadgeText}>Tap the card to flip</Text>
-        </View>
-      </View>
+      )}
 
-      <View style={styles.composeRow}>
+      {step === 2 && (
+        <InsideStep
+          message={message}
+          recipientForPreview={recipientForPreview}
+          sender={{
+            name: currentUser.name || "You",
+            city: currentUser.city || "",
+            state: currentUser.state || "",
+          }}
+          onOpenEditor={() => setEditorOpen(true)}
+          testID="send-step-2"
+        />
+      )}
+
+      {step === 3 && (
+        <RecipientStep
+          name={recipientName}
+          onNameChange={(t) => {
+            setRecipientName(t);
+            // Clear locked friend if the user edits the name away
+            if (selectedFriend && t.trim().toLowerCase() !== selectedFriend.name.toLowerCase()) {
+              unlockFriend();
+            }
+          }}
+          matches={friendMatches}
+          locked={selectedFriend}
+          onLockFriend={lockFriend}
+          onUnlockFriend={unlockFriend}
+          testID="send-step-3"
+        />
+      )}
+
+      {step === 4 && (
+        <DeliveryStep
+          recipientName={recipientName}
+          selectedFriend={selectedFriend}
+          deliveryMode={deliveryMode}
+          onModeChange={setDeliveryMode}
+          address={address}
+          onAddressChange={setAddress}
+          testID="send-step-4"
+        />
+      )}
+
+      <View style={styles.actionRow}>
         <Pressable
-          onPress={openPhotoPicker}
-          style={[styles.composeBtn, photoUri && styles.composeBtnFilled]}
-          testID="compose-photo-btn"
+          onPress={goBack}
+          style={styles.backBtn}
+          testID="send-back-btn"
           accessibilityRole="button"
-          accessibilityLabel="Choose a photo"
+          accessibilityLabel={step === 1 ? "Cancel" : "Go back"}
         >
-          <ImageIcon color={photoUri ? colors.white : colors.ink} size={20} strokeWidth={1.7} />
-          <Text style={[styles.composeBtnText, photoUri && styles.composeBtnTextFilled]}>
-            {photoUri ? "Change photo" : "Photo"}
-          </Text>
+          <ArrowLeft color={colors.ink} size={18} strokeWidth={1.8} />
+          <Text style={styles.backBtnText}>{step === 1 ? "Cancel" : "Back"}</Text>
         </Pressable>
-        <Pressable
-          onPress={openMessageEditor}
-          style={[styles.composeBtn, message.trim() && styles.composeBtnFilled]}
-          testID="compose-note-btn"
-          accessibilityRole="button"
-          accessibilityLabel="Write a note"
-        >
-          <Edit3 color={message.trim() ? colors.white : colors.ink} size={20} strokeWidth={1.7} />
-          <Text style={[styles.composeBtnText, message.trim() && styles.composeBtnTextFilled]}>
-            {message.trim() ? "Edit note" : "Note"}
-          </Text>
-        </Pressable>
-      </View>
 
-      <Text style={styles.toHeading}>To</Text>
-      <RecipientPicker
-        mode={mode}
-        onModeChange={setMode}
-        friends={friends}
-        friendIndex={friendIndex}
-        onFriendIndexChange={setFriendIndex}
-        address={address}
-        onAddressChange={setAddress}
-        onAddFriend={() => router.push("/friends")}
-      />
-
-      <View style={styles.sendRow}>
-        <View style={styles.priceCol}>
-          <Text style={styles.priceMain} numberOfLines={1}>1 stamp</Text>
-          <Text style={styles.priceMeta} numberOfLines={1}>You have {credits}</Text>
-          {cantAfford ? (
-            <Pressable onPress={() => setCreditsOpen(true)} testID="send-buy-more">
-              <Text style={styles.buyMore}>Buy more</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <View style={styles.sendBtnCol}>
+        {step === 4 ? (
+          <View style={styles.sendCol}>
+            <Text style={styles.priceMain} numberOfLines={1}>1 stamp</Text>
+            <Text style={styles.priceMeta} numberOfLines={1}>You have {credits}</Text>
+            <PrimaryButton
+              title={continueLabel}
+              icon={Send}
+              onPress={cantAfford ? () => setCreditsOpen(true) : onSend}
+              disabled={sending}
+              style={styles.sendBtn}
+            />
+          </View>
+        ) : (
           <PrimaryButton
-            title={sendLabel}
-            icon={Send}
-            onPress={cantAfford ? () => setCreditsOpen(true) : onSend}
-            disabled={sending}
+            title={continueLabel}
+            icon={ArrowRight}
+            onPress={goNext}
+            style={styles.continueBtn}
+            testID="send-continue-btn"
           />
-        </View>
+        )}
       </View>
 
       <MessageEditorSheet
@@ -458,12 +547,9 @@ export default function SendScreen() {
       <CreditsSheet visible={creditsOpen} onClose={() => setCreditsOpen(false)} />
 
       {/*
-        Off-screen 1875×1250 renders for Lob capture. We position these way
-        off-screen so they don't appear in the UI but DO mount + layout +
-        paint — which is what react-native-view-shot needs.
-
-        Don't use display:none or opacity:0 here; view-shot captures those as
-        blank. The `left: -10000` trick keeps the view rendered.
+        Off-screen 1875×1250 renders for Lob capture. Same pattern as before:
+        positioned way off-screen but mounted so layout + paint complete,
+        which is what react-native-view-shot needs.
       */}
       <View
         style={styles.offscreen}
@@ -492,32 +578,541 @@ export default function SendScreen() {
   );
 }
 
+// =============================================================================
+// STEP HEADER  (progress dots + back affordance is rendered separately)
+// =============================================================================
+
+function StepHeader({ step, onBack: _onBack }: { step: Step; onBack: () => void }) {
+  const labels = ["Cover", "Inside", "Recipient", "Delivery"];
+  return (
+    <View style={stepHeaderStyles.row} testID={`send-step-header-${step}`}>
+      <Text style={stepHeaderStyles.crumb}>
+        Step {step} of 4 · <Text style={stepHeaderStyles.crumbActive}>{labels[step - 1]}</Text>
+      </Text>
+      <View style={stepHeaderStyles.dotsRow}>
+        {[1, 2, 3, 4].map((i) => (
+          <View
+            key={i}
+            style={[
+              stepHeaderStyles.dot,
+              i === step && stepHeaderStyles.dotActive,
+              i < step && stepHeaderStyles.dotComplete,
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const stepHeaderStyles = StyleSheet.create({
+  row: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+  crumb: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13 },
+  crumbActive: { color: colors.ink, fontFamily: fonts.serifSemi, fontStyle: "normal" },
+  dotsRow: { flexDirection: "row", gap: 6 },
+  dot: { backgroundColor: colors.line, borderRadius: 4, height: 7, width: 7 },
+  dotActive: { backgroundColor: colors.ink, width: 22 },
+  dotComplete: { backgroundColor: colors.postalBlue },
+});
+
+// =============================================================================
+// STEP 1 — COVER (pick your photo)
+// =============================================================================
+
+function CoverStep({
+  photoUri,
+  onPickPhoto,
+  testID,
+}: {
+  photoUri: string | null;
+  onPickPhoto: () => void;
+  testID?: string;
+}) {
+  return (
+    <View style={stepStyles.wrap} testID={testID}>
+      <Text style={stepStyles.title}>Pick your photo</Text>
+      <Text style={stepStyles.subtitle}>Tonight's dinner. Last weekend. The dog. Any photo works.</Text>
+
+      <Pressable
+        onPress={onPickPhoto}
+        style={({ pressed }) => [coverStyles.target, pressed && coverStyles.targetPressed]}
+        testID="send-photo-target"
+        accessibilityRole="button"
+        accessibilityLabel={photoUri ? "Change photo" : "Choose a photo"}
+      >
+        {photoUri ? (
+          <PostcardFrontPreview photoUri={photoUri} width={300} testID="preview-front" />
+        ) : (
+          <View style={coverStyles.empty}>
+            <Camera color={colors.mutedInk} size={36} strokeWidth={1.6} />
+            <Text style={coverStyles.emptyTitle}>Tap to choose a photo</Text>
+            <Text style={coverStyles.emptyHint}>Postcards print best in landscape.</Text>
+          </View>
+        )}
+      </Pressable>
+
+      {photoUri ? (
+        <Pressable
+          onPress={onPickPhoto}
+          style={coverStyles.changeLink}
+          testID="send-photo-change"
+          accessibilityRole="button"
+        >
+          <Text style={coverStyles.changeLinkText}>Change photo</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+const coverStyles = StyleSheet.create({
+  target: { alignItems: "center", marginTop: 18 },
+  targetPressed: { opacity: 0.7 },
+  empty: { alignItems: "center", aspectRatio: 3 / 2, backgroundColor: "rgba(245, 240, 230, 0.6)", borderColor: colors.line, borderRadius: 8, borderStyle: "dashed", borderWidth: 1.5, gap: 8, justifyContent: "center", width: 300 },
+  emptyTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 16 },
+  emptyHint: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12 },
+  changeLink: { alignSelf: "center", marginTop: 14 },
+  changeLinkText: { color: colors.postalBlue, fontFamily: fonts.serifSemi, fontSize: 14, textDecorationLine: "underline" },
+});
+
+// =============================================================================
+// STEP 2 — INSIDE (write the note)
+// =============================================================================
+
+function InsideStep({
+  message,
+  recipientForPreview,
+  sender,
+  onOpenEditor,
+  testID,
+}: {
+  message: string;
+  recipientForPreview: { name: string; city: string; state: string; addressLine1?: string; addressLine2?: string; zip?: string };
+  sender: { name: string; city: string; state: string };
+  onOpenEditor: () => void;
+  testID?: string;
+}) {
+  return (
+    <View style={stepStyles.wrap} testID={testID}>
+      <Text style={stepStyles.title}>Write your note</Text>
+      <Text style={stepStyles.subtitle}>Up to 300 characters. About 50 words. Brevity is the postcard's whole point.</Text>
+
+      <Pressable
+        onPress={onOpenEditor}
+        style={({ pressed }) => [insideStyles.target, pressed && { opacity: 0.7 }]}
+        testID="send-message-target"
+        accessibilityRole="button"
+        accessibilityLabel={message ? "Edit your note" : "Write your note"}
+      >
+        <PostcardBackPreview
+          message={message || "Tap to start writing..."}
+          recipient={recipientForPreview}
+          sender={sender}
+          width={300}
+          testID="preview-back"
+        />
+      </Pressable>
+
+      <Pressable
+        onPress={onOpenEditor}
+        style={insideStyles.editLink}
+        testID="send-message-edit"
+        accessibilityRole="button"
+      >
+        <Text style={insideStyles.editLinkText}>{message ? "Edit note" : "Write note"}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const insideStyles = StyleSheet.create({
+  target: { alignItems: "center", marginTop: 18 },
+  editLink: { alignSelf: "center", marginTop: 14 },
+  editLinkText: { color: colors.postalBlue, fontFamily: fonts.serifSemi, fontSize: 14, textDecorationLine: "underline" },
+});
+
+// =============================================================================
+// STEP 3 — RECIPIENT (name + friend match)
+// =============================================================================
+
+function RecipientStep({
+  name,
+  onNameChange,
+  matches,
+  locked,
+  onLockFriend,
+  onUnlockFriend,
+  testID,
+}: {
+  name: string;
+  onNameChange: (t: string) => void;
+  matches: Friend[];
+  locked: Friend | null;
+  onLockFriend: (f: Friend) => void;
+  onUnlockFriend: () => void;
+  testID?: string;
+}) {
+  return (
+    <View style={stepStyles.wrap} testID={testID}>
+      <Text style={stepStyles.title}>Who's it for?</Text>
+      <Text style={stepStyles.subtitle}>Just a name. We'll figure out delivery on the next page.</Text>
+
+      <TextInput
+        value={name}
+        onChangeText={onNameChange}
+        placeholder="Recipient's name"
+        placeholderTextColor={colors.mutedInk}
+        style={recipientStyles.input}
+        autoFocus
+        autoCapitalize="words"
+        autoCorrect={false}
+        testID="send-name-input"
+      />
+
+      {locked ? (
+        <View style={recipientStyles.lockedRow} testID="send-friend-locked">
+          <Check color={colors.postalBlue} size={18} strokeWidth={2} />
+          <View style={{ flex: 1 }}>
+            <Text style={recipientStyles.lockedName}>{locked.name}</Text>
+            <Text style={recipientStyles.lockedMeta}>
+              From your rolodex · {locked.addressLine1 ? `${locked.city || locked.addressCity}` : "no address on file"}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onUnlockFriend}
+            style={recipientStyles.unlockBtn}
+            testID="send-friend-unlock"
+            accessibilityRole="button"
+            accessibilityLabel="Unlink this friend"
+          >
+            <Text style={recipientStyles.unlockText}>Clear</Text>
+          </Pressable>
+        </View>
+      ) : matches.length > 0 ? (
+        <View style={recipientStyles.matchesList}>
+          <Text style={recipientStyles.matchesLabel}>FROM YOUR ROLODEX</Text>
+          {matches.map((m) => (
+            <Pressable
+              key={m.id}
+              onPress={() => onLockFriend(m)}
+              style={({ pressed }) => [recipientStyles.matchRow, pressed && { opacity: 0.7 }]}
+              testID={`send-friend-match-${m.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Send to ${m.name}`}
+            >
+              <View style={recipientStyles.matchAvatar}>
+                <Text style={recipientStyles.matchInitial}>{m.name.charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={recipientStyles.matchName}>{m.name}</Text>
+                <Text style={recipientStyles.matchMeta}>
+                  {m.addressLine1 ? `${m.city || m.addressCity}` : "no address on file"}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : name.trim() ? (
+        <Text style={recipientStyles.noMatchHelper}>
+          No one in your rolodex by that name. That's fine — we'll send them a private link on the next page.
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+const recipientStyles = StyleSheet.create({
+  input: {
+    backgroundColor: "rgba(245, 240, 230, 0.6)",
+    borderColor: colors.line,
+    borderRadius: 10,
+    borderWidth: 1.2,
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 24,
+    marginTop: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  lockedRow: { alignItems: "center", backgroundColor: "rgba(60,110,143,0.08)", borderColor: colors.postalBlue, borderRadius: 10, borderWidth: 1.2, flexDirection: "row", gap: 12, marginTop: 14, padding: 14 },
+  lockedName: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 17 },
+  lockedMeta: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 2 },
+  unlockBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  unlockText: { color: colors.postalRed, fontFamily: fonts.serifSemi, fontSize: 13 },
+  matchesList: { gap: 6, marginTop: 16 },
+  matchesLabel: { color: colors.mutedInk, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1, marginBottom: 4 },
+  matchRow: { alignItems: "center", backgroundColor: "rgba(245, 240, 230, 0.6)", borderColor: colors.line, borderRadius: 10, borderWidth: 1, flexDirection: "row", gap: 12, padding: 12 },
+  matchAvatar: { alignItems: "center", backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 18, borderWidth: 1, height: 36, justifyContent: "center", width: 36 },
+  matchInitial: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 16 },
+  matchName: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 16 },
+  matchMeta: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, marginTop: 1 },
+  noMatchHelper: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 18, marginTop: 14 },
+});
+
+// =============================================================================
+// STEP 4 — DELIVERY (how does it get to them?)
+// =============================================================================
+
+function DeliveryStep({
+  recipientName,
+  selectedFriend,
+  deliveryMode,
+  onModeChange,
+  address,
+  onAddressChange,
+  testID,
+}: {
+  recipientName: string;
+  selectedFriend: Friend | null;
+  deliveryMode: DeliveryMode;
+  onModeChange: (m: DeliveryMode) => void;
+  address: AddressDraft;
+  onAddressChange: (a: AddressDraft) => void;
+  testID?: string;
+}) {
+  const friendHasAddress = !!selectedFriend?.addressLine1;
+  const recipientFirst = (recipientName || "Your friend").split(" ")[0];
+
+  return (
+    <View style={stepStyles.wrap} testID={testID}>
+      <Text style={stepStyles.title}>Delivery details</Text>
+      <Text style={stepStyles.subtitle}>How does it get to {recipientFirst}?</Text>
+
+      <View style={deliveryStyles.options}>
+        {friendHasAddress && selectedFriend && (
+          <DeliveryOption
+            mode="friend"
+            current={deliveryMode}
+            onSelect={onModeChange}
+            icon={Check}
+            title={`Send to ${selectedFriend.name}'s saved address`}
+            body={`${selectedFriend.addressLine1}, ${selectedFriend.addressCity || selectedFriend.city}`}
+            testID="send-delivery-friend"
+          />
+        )}
+
+        <DeliveryOption
+          mode="link"
+          current={deliveryMode}
+          onSelect={onModeChange}
+          icon={LinkIcon}
+          title={`Text ${recipientFirst} a private link`}
+          body="Your card stays secret. They fill in their own address."
+          testID="send-delivery-link"
+        />
+
+        <DeliveryOption
+          mode="address"
+          current={deliveryMode}
+          onSelect={onModeChange}
+          icon={MapPin}
+          title="I have their address"
+          body="Type it in. We save it for next time."
+          testID="send-delivery-address"
+        />
+      </View>
+
+      {deliveryMode === "address" && (
+        <View style={deliveryStyles.addressForm} testID="send-address-form">
+          <AddressField
+            label="Recipient name"
+            value={address.name || recipientName}
+            onChange={(v) => onAddressChange({ ...address, name: v })}
+            placeholder="Full name"
+            autoCapitalize="words"
+          />
+          <AddressField
+            label="Street address"
+            value={address.line1}
+            onChange={(v) => onAddressChange({ ...address, line1: v })}
+            placeholder="123 Bedford Ave"
+            autoComplete="address-line1"
+            textContentType="streetAddressLine1"
+          />
+          <AddressField
+            label="Apt / Unit"
+            value={address.line2 || ""}
+            onChange={(v) => onAddressChange({ ...address, line2: v })}
+            placeholder="Apt 4B (optional)"
+            autoComplete="address-line2"
+            textContentType="streetAddressLine2"
+            required={false}
+          />
+          <View style={deliveryStyles.row}>
+            <View style={{ flex: 2 }}>
+              <AddressField
+                label="City"
+                value={address.city}
+                onChange={(v) => onAddressChange({ ...address, city: v })}
+                placeholder="Brooklyn"
+                autoCapitalize="words"
+                textContentType="addressCity"
+              />
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <AddressField
+                label="State"
+                value={address.state}
+                onChange={(v) => onAddressChange({ ...address, state: v.toUpperCase().slice(0, 2) })}
+                placeholder="NY"
+                autoCapitalize="characters"
+                maxLength={2}
+                textContentType="addressState"
+              />
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <AddressField
+                label="ZIP"
+                value={address.zip}
+                onChange={(v) => onAddressChange({ ...address, zip: v })}
+                placeholder="11211"
+                keyboardType="number-pad"
+                maxLength={10}
+                textContentType="postalCode"
+              />
+            </View>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function DeliveryOption({
+  mode,
+  current,
+  onSelect,
+  icon: Icon,
+  title,
+  body,
+  testID,
+}: {
+  mode: DeliveryMode;
+  current: DeliveryMode;
+  onSelect: (m: DeliveryMode) => void;
+  icon: typeof LinkIcon;
+  title: string;
+  body: string;
+  testID: string;
+}) {
+  const active = mode === current;
+  return (
+    <Pressable
+      onPress={() => onSelect(mode)}
+      style={[deliveryStyles.option, active && deliveryStyles.optionActive]}
+      testID={testID}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+    >
+      <View style={[deliveryStyles.optionIcon, active && deliveryStyles.optionIconActive]}>
+        <Icon color={active ? colors.white : colors.ink} size={18} strokeWidth={1.7} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[deliveryStyles.optionTitle, active && deliveryStyles.optionTitleActive]}>{title}</Text>
+        <Text style={deliveryStyles.optionBody}>{body}</Text>
+      </View>
+      {active ? <Check color={colors.postalBlue} size={20} strokeWidth={2.4} /> : <View style={{ width: 20 }} />}
+    </Pressable>
+  );
+}
+
+type AutoCompleteHint =
+  | "address-line1"
+  | "address-line2"
+  | "postal-code"
+  | "country"
+  | "name"
+  | "off";
+
+type TextContentHint =
+  | "streetAddressLine1"
+  | "streetAddressLine2"
+  | "addressCity"
+  | "addressState"
+  | "postalCode"
+  | "countryName"
+  | "name"
+  | "none";
+
+function AddressField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  autoCapitalize = "none",
+  autoComplete,
+  textContentType,
+  keyboardType,
+  maxLength,
+  required = true,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  autoComplete?: AutoCompleteHint;
+  textContentType?: TextContentHint;
+  keyboardType?: "default" | "number-pad" | "email-address";
+  maxLength?: number;
+  required?: boolean;
+}) {
+  return (
+    <View style={addressStyles.field}>
+      <Text style={addressStyles.label}>{label}{required ? "" : " (optional)"}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={colors.mutedInk}
+        style={addressStyles.input}
+        autoCapitalize={autoCapitalize}
+        autoComplete={autoComplete}
+        textContentType={textContentType}
+        keyboardType={keyboardType || "default"}
+        maxLength={maxLength}
+      />
+    </View>
+  );
+}
+
+const deliveryStyles = StyleSheet.create({
+  options: { gap: 10, marginTop: 16 },
+  option: { alignItems: "center", backgroundColor: "rgba(245, 240, 230, 0.6)", borderColor: colors.line, borderRadius: 12, borderWidth: 1.2, flexDirection: "row", gap: 12, padding: 14 },
+  optionActive: { backgroundColor: "rgba(60,110,143,0.06)", borderColor: colors.postalBlue },
+  optionIcon: { alignItems: "center", backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 18, borderWidth: 1, height: 36, justifyContent: "center", width: 36 },
+  optionIconActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  optionTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 15 },
+  optionTitleActive: { color: colors.ink },
+  optionBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 16, marginTop: 2 },
+  addressForm: { gap: 8, marginTop: 14 },
+  row: { flexDirection: "row" },
+});
+
+const addressStyles = StyleSheet.create({
+  field: { marginBottom: 4 },
+  label: { color: colors.mutedInk, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.8, marginBottom: 6, textTransform: "uppercase" },
+  input: { backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 8, borderWidth: 1, color: colors.ink, fontFamily: fonts.serif, fontSize: 15, paddingHorizontal: 12, paddingVertical: 10 },
+});
+
+// =============================================================================
+// SHARED STEP STYLES + ACTION ROW
+// =============================================================================
+
+const stepStyles = StyleSheet.create({
+  wrap: { gap: 4, marginTop: 8 },
+  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: type.title, letterSpacing: -0.4, lineHeight: type.title + 4 },
+  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 15, lineHeight: 21, marginTop: 4 },
+});
+
 const styles = StyleSheet.create({
-  previewBlock: { alignItems: "center", gap: 6, marginTop: 6 },
-  flipWrap: { height: PREVIEW_WIDTH / 1.5, width: PREVIEW_WIDTH },
-  faceWrap: { alignItems: "center", justifyContent: "center" },
-  frontHint: { alignItems: "center", backgroundColor: "rgba(245, 240, 230, 0.92)", borderRadius: 12, gap: 6, paddingHorizontal: 18, paddingVertical: 14, position: "absolute" },
-  frontHintText: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, textAlign: "center" },
-  flipBadgeRow: { alignItems: "center", flexDirection: "row", gap: 5, marginTop: 4 },
-  flipBadgeText: { color: colors.mutedInk, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.1, textTransform: "uppercase" },
-
-  composeRow: { flexDirection: "row", gap: 10, marginTop: 14 },
-  composeBtn: { alignItems: "center", borderColor: colors.ink, borderRadius: 10, borderWidth: 1.2, flex: 1, flexDirection: "row", gap: 8, justifyContent: "center", paddingHorizontal: 14, paddingVertical: 12 },
-  composeBtnFilled: { backgroundColor: colors.ink, borderColor: colors.ink },
-  composeBtnText: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 15 },
-  composeBtnTextFilled: { color: colors.white },
-
-  toHeading: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 22, marginBottom: -6, marginTop: 8 },
-
-  sendRow: { alignItems: "center", flexDirection: "row", gap: 14, marginTop: 16 },
-  // v0.5.0: stack "1 stamp" over "You have N" so the row never wraps on
-  // narrow phones or with double-digit balances. Previously the two pieces
-  // ran inline with separator " · " and clipped awkwardly.
-  priceCol: { flexShrink: 1, minWidth: 90 },
-  sendBtnCol: { flex: 1 },
-  priceMain: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 18, lineHeight: 22 },
-  priceMeta: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 16 },
-  buyMore: { color: colors.postalRed, fontFamily: fonts.serifSemi, fontSize: 13, marginTop: 2, textDecorationLine: "underline" },
-
+  actionRow: { alignItems: "center", flexDirection: "row", gap: 14, marginTop: 24 },
+  backBtn: { alignItems: "center", flexDirection: "row", gap: 4, paddingHorizontal: 4, paddingVertical: 10 },
+  backBtnText: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 15 },
+  continueBtn: { flex: 1 },
+  sendCol: { alignItems: "flex-end", flex: 1, gap: 2 },
+  sendBtn: { alignSelf: "stretch", marginTop: 6 },
+  priceMain: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 16, lineHeight: 20 },
+  priceMeta: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 14 },
   offscreen: { left: -10000, position: "absolute", top: -10000 },
 });
