@@ -2,7 +2,7 @@
   "expo": {
     "name": "Mailroom",
     "slug": "mailroom",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "scheme": "mailroom",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mailrooms.app",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "usesAppleSignIn": true,
       "config": {
         "googleMapsApiKey": ""

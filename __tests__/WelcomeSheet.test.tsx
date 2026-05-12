@@ -1,88 +1,112 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import React from "react";
-import { Text } from "react-native";
 import { WelcomeSheet } from "@/src/components/WelcomeSheet";
-import { useMailClub } from "@/src/state/MailClubContext";
 import { AllProviders } from "./test-utils";
 
 beforeEach(async () => {
   await AsyncStorage.clear();
 });
 
-function Probe({ refOut }: { refOut: { current: ReturnType<typeof useMailClub> | null } }) {
-  const ctx = useMailClub();
-  refOut.current = ctx;
-  return <Text>p</Text>;
-}
-
-describe("WelcomeSheet", () => {
-  it("renders the headline + inputs when visible", () => {
-    const { getByText, getByTestId } = render(
+/**
+ * v0.6.0 WelcomeSheet is a multi-page sign-up flow:
+ *   1. hero        — Apple Sign In + email fallback link + brand art
+ *   1b. auth-email — email + password fields (sign-up or sign-in)
+ *   2. name        — single-field name input
+ *   3. explain     — pause page, "Got it"
+ *   4. address     — single-bar address with parser, calls completeSignup
+ *   5. done        — celebration, dismisses on tap
+ *
+ * Tests focus on step rendering + navigation. The deep auth + signup logic
+ * lives in MailClubContext and has its own test suite (MailClubContext.test).
+ */
+describe("WelcomeSheet (multi-page signup)", () => {
+  it("renders the hero step when visible", () => {
+    const { getByTestId, queryByTestId } = render(
       <AllProviders>
         <WelcomeSheet visible={true} onComplete={() => {}} />
       </AllProviders>
     );
-    expect(getByText(/Welcome to Mailroom/i)).toBeTruthy();
-    expect(getByTestId("welcome-name")).toBeTruthy();
-    expect(getByTestId("welcome-city")).toBeTruthy();
-    expect(getByTestId("welcome-state")).toBeTruthy();
+    expect(getByTestId("welcome-step-hero")).toBeTruthy();
+    expect(queryByTestId("welcome-step-name")).toBeNull();
+    expect(queryByTestId("welcome-step-address")).toBeNull();
+    expect(queryByTestId("welcome-step-done")).toBeNull();
   });
 
   it("renders nothing when not visible", () => {
-    const { queryByText } = render(
+    const { queryByTestId } = render(
       <AllProviders>
         <WelcomeSheet visible={false} onComplete={() => {}} />
       </AllProviders>
     );
-    expect(queryByText(/Welcome to Mailroom/i)).toBeNull();
+    expect(queryByTestId("welcome-step-hero")).toBeNull();
   });
 
-  it("submit persists name+city+state and marks intro seen", async () => {
-    const ref: { current: ReturnType<typeof useMailClub> | null } = { current: null };
-    const onComplete = jest.fn();
-    const { getByTestId, getByText } = render(
+  it("shows the brand tagline 'Mail a photo for less than a stamp.'", () => {
+    const { getByText } = render(
       <AllProviders>
-        <Probe refOut={ref} />
-        <WelcomeSheet visible={true} onComplete={onComplete} />
+        <WelcomeSheet visible={true} onComplete={() => {}} />
       </AllProviders>
     );
-    await act(async () => {
-      fireEvent.changeText(getByTestId("welcome-name"), "Pat");
-      fireEvent.changeText(getByTestId("welcome-city"), "Boise");
-      fireEvent.changeText(getByTestId("welcome-state"), "ID");
-    });
-    await act(async () => {
-      fireEvent.press(getByText("Start writing"));
-    });
-    await waitFor(() => {
-      expect(ref.current!.currentUser.name).toBe("Pat");
-      expect(ref.current!.currentUser.city).toBe("Boise");
-      expect(ref.current!.hasSeenFreeCreditsIntro).toBe(true);
-      expect(onComplete).toHaveBeenCalled();
-    });
+    expect(getByText("Mail a photo for less than a stamp.")).toBeTruthy();
   });
 
-  it("Skip for now marks intro seen, clears mock fixtures, sets placeholder identity", async () => {
-    const ref: { current: ReturnType<typeof useMailClub> | null } = { current: null };
-    const onComplete = jest.fn();
+  it("hero exposes the email-fallback link", () => {
     const { getByTestId } = render(
       <AllProviders>
-        <Probe refOut={ref} />
-        <WelcomeSheet visible={true} onComplete={onComplete} />
+        <WelcomeSheet visible={true} onComplete={() => {}} />
       </AllProviders>
     );
-    await act(async () => {
-      fireEvent.press(getByTestId("welcome-skip"));
-    });
-    await waitFor(() => {
-      expect(ref.current!.hasSeenFreeCreditsIntro).toBe(true);
-      expect(onComplete).toHaveBeenCalled();
-    });
-    // Skip routes through completeSignup with empty name → placeholder identity.
-    expect(ref.current!.currentUser.name).toBe("Mailroom member");
-    // Mock fixtures wiped so the new user doesn't inherit Tatiana/Maya/etc.
-    expect(ref.current!.friends).toEqual([]);
-    expect(ref.current!.postcards).toEqual([]);
+    expect(getByTestId("welcome-switch-email")).toBeTruthy();
+  });
+
+  it("tapping the email link advances to the auth-email step", () => {
+    const { getByTestId, queryByTestId } = render(
+      <AllProviders>
+        <WelcomeSheet visible={true} onComplete={() => {}} />
+      </AllProviders>
+    );
+    fireEvent.press(getByTestId("welcome-switch-email"));
+    expect(getByTestId("welcome-step-auth-email")).toBeTruthy();
+    expect(queryByTestId("welcome-step-hero")).toBeNull();
+  });
+
+  it("auth-email step has email + password inputs", () => {
+    const { getByTestId } = render(
+      <AllProviders>
+        <WelcomeSheet visible={true} onComplete={() => {}} />
+      </AllProviders>
+    );
+    fireEvent.press(getByTestId("welcome-switch-email"));
+    expect(getByTestId("welcome-email")).toBeTruthy();
+    expect(getByTestId("welcome-password")).toBeTruthy();
+  });
+
+  it("back button on auth-email returns to hero", () => {
+    const { getByTestId } = render(
+      <AllProviders>
+        <WelcomeSheet visible={true} onComplete={() => {}} />
+      </AllProviders>
+    );
+    fireEvent.press(getByTestId("welcome-switch-email"));
+    expect(getByTestId("welcome-step-auth-email")).toBeTruthy();
+    fireEvent.press(getByTestId("welcome-back"));
+    expect(getByTestId("welcome-step-hero")).toBeTruthy();
+  });
+
+  it("auth-email lets the user swap between signup and signin", () => {
+    const { getByTestId, getByText } = render(
+      <AllProviders>
+        <WelcomeSheet visible={true} onComplete={() => {}} />
+      </AllProviders>
+    );
+    fireEvent.press(getByTestId("welcome-switch-email"));
+    // Default is signup → has "Make an account."
+    expect(getByText("Make an account.")).toBeTruthy();
+    // Swap to signin
+    fireEvent.press(getByTestId("welcome-swap-mode"));
+    expect(getByText("Welcome back.")).toBeTruthy();
+    // Forgot-password only appears in signin
+    expect(getByTestId("welcome-forgot")).toBeTruthy();
   });
 });

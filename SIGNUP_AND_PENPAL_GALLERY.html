@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1280" />
+<title>Mailroom — Signup Redesign + Pen-pal Gallery (v1, May 12 2026)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Great+Vibes&family=Caveat:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper:        #F8F1E3;
+    --paper-warm:   #F4ECDB;
+    --paper-deep:   #EDE4D0;
+    --paper-edge:   #E4D8C0;
+    --ink:          #0F2542;
+    --ink-soft:     #1A2A3F;
+    --ink-muted:    #475569;
+    --red:          #B5391A;
+    --red-soft:     #C25A3E;
+    --green:        #7A8B6E;
+    --green-soft:   #9CAD8E;
+    --blue-accent:  #4A6FA5;
+    --text:         #1A2A3F;
+    --text-muted:   #6B7280;
+    --text-faint:   #94A3B8;
+    --border-soft:  rgba(15,37,66,0.08);
+    --border-mid:   rgba(15,37,66,0.16);
+    --shadow-soft:  0 1px 2px rgba(15,37,66,0.04), 0 8px 24px rgba(15,37,66,0.08);
+    --shadow-card:  0 2px 8px rgba(15,37,66,0.06), 0 24px 48px rgba(15,37,66,0.10);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #F1E9D5;
+    font-family: "Lora", Georgia, serif;
+    color: var(--text);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1280px; margin: 0 auto; padding: 56px 40px 120px; }
+
+  .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 56px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border-mid);
+  }
+  .top h1 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 52px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+  }
+  .top .subtitle { color: var(--text-muted); font-size: 17px; max-width: 620px; }
+  .top .meta { font-size: 13px; color: var(--text-muted); text-align: right; line-height: 1.7; }
+  .top .meta strong { color: var(--ink); display: block; font-size: 14px; }
+
+  nav.sticky {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(241,233,213,0.96);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+    padding: 14px 40px;
+    margin: -56px -40px 32px;
+    display: flex; gap: 24px; align-items: center;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  nav.sticky::-webkit-scrollbar { display: none; }
+  nav.sticky a {
+    color: var(--ink-muted);
+    text-decoration: none;
+    font-size: 13px;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  nav.sticky a:hover { color: var(--red); }
+  nav.sticky .brand {
+    font-family: "Great Vibes", cursive;
+    font-size: 22px; color: var(--ink);
+    margin-right: 16px; line-height: 1;
+  }
+
+  section { margin-bottom: 100px; scroll-margin-top: 24px; }
+  section > .section-head { margin-bottom: 36px; padding-bottom: 20px; border-bottom: 1px solid var(--border-soft); }
+  .section-head h2 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 38px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+  }
+  .section-head h2 .num {
+    color: var(--red);
+    font-weight: 500;
+    margin-right: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .section-head .lede {
+    font-size: 18px; color: var(--ink-muted); max-width: 780px; line-height: 1.6;
+  }
+  .section-head .lede em { color: var(--red); font-style: italic; }
+
+  .intro-note {
+    background: var(--paper);
+    border: 1px solid var(--border-soft);
+    border-radius: 16px;
+    padding: 32px 36px;
+    margin-bottom: 56px;
+    box-shadow: var(--shadow-soft);
+  }
+  .intro-note h3 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 26px;
+    margin: 0 0 12px;
+    color: var(--ink);
+  }
+  .intro-note p { margin: 0 0 12px; color: var(--ink-muted); font-size: 16px; line-height: 1.65; }
+  .intro-note p:last-child { margin-bottom: 0; }
+  .intro-note strong { color: var(--ink); }
+
+  /* ===== HERO ART OPTIONS ===== */
+  .art-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 28px;
+  }
+  .art-card {
+    background: var(--paper);
+    border: 1px solid var(--border-soft);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+  }
+  .art-card .art-img {
+    aspect-ratio: 1;
+    background: #ddd center/cover no-repeat;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .art-card .art-body { padding: 20px 22px 22px; }
+  .art-card .art-label {
+    color: var(--red);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .art-card .art-title {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 22px;
+    color: var(--ink);
+    font-weight: 600;
+    margin: 0 0 6px;
+  }
+  .art-card .art-desc { color: var(--ink-muted); font-size: 14px; line-height: 1.5; }
+  .art-card .art-recommended {
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+
+  /* ===== PHONE MOCK ===== */
+  .phone {
+    aspect-ratio: 9 / 19.5;
+    border-radius: 44px;
+    background: #0c0c0c;
+    padding: 10px;
+    box-shadow: var(--shadow-card);
+    position: relative;
+  }
+  .phone-screen {
+    width: 100%; height: 100%;
+    border-radius: 36px;
+    background: var(--paper);
+    overflow: hidden;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  .phone-screen.dark { background: #0a0a0a; }
+  .status-bar {
+    height: 36px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px;
+    font-family: "Lora", serif;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .phone-content { flex: 1; overflow: hidden; position: relative; padding: 0 16px; }
+
+  .phone-art {
+    aspect-ratio: 1;
+    background: #ddd center/cover no-repeat;
+    border-radius: 16px;
+    margin: 10px auto 18px;
+    max-width: 90%;
+  }
+
+  /* Phase 6 signup-flow page 1 — hero composition. Uses flex column to lay
+     out art at top, brand text in middle, CTAs anchored at bottom. Replaces
+     the absolute-positioned mess from v1 which had broken markup. */
+  .phone-content-hero {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px 26px !important;
+    gap: 16px;
+  }
+  .phone-art-hero {
+    aspect-ratio: 1;
+    background: #ddd center/cover no-repeat;
+    border-radius: 14px;
+    width: 100%;
+    flex-shrink: 0;
+  }
+  .hero-text { text-align: center; padding: 0 6px; }
+  .hero-wordmark {
+    font-family: "Great Vibes", cursive;
+    font-size: 36px;
+    color: var(--ink);
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+  .hero-cta-line {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 22px;
+    color: var(--ink);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  .hero-bottom-actions {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .btn-apple-fixed {
+    background: #000;
+    color: #fff;
+    border-radius: 12px;
+    padding: 14px 18px;
+    text-align: center;
+    font-family: -apple-system, "Helvetica Neue", sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  /* ===== GRID ===== */
+  .grid { display: grid; gap: 28px; }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols-4 { grid-template-columns: repeat(4, 1fr); gap: 22px; }
+  .grid.cols-5 { grid-template-columns: repeat(5, 1fr); gap: 18px; }
+
+  .mock { display: flex; flex-direction: column; align-items: stretch; }
+  .mock .caption { margin-top: 18px; }
+  .mock .caption .step {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--red);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .mock .caption .label {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 20px;
+    color: var(--ink);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .mock .caption .note { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+
+  .page-title-big {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 32px;
+    color: var(--ink);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .page-title-mega {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 38px;
+    color: var(--ink);
+    font-weight: 600;
+    line-height: 0.98;
+    letter-spacing: -0.015em;
+  }
+  .helper {
+    font-size: 13px;
+    color: var(--ink-muted);
+    font-style: italic;
+    line-height: 1.45;
+  }
+
+  .input-line {
+    border: 1.5px solid var(--border-mid);
+    background: #FCF7E9;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-family: "Cormorant Garamond", serif;
+    font-size: 22px;
+    color: var(--ink);
+  }
+  .input-line.active { border-color: var(--ink); background: #fff; }
+  .input-line .placeholder { color: var(--text-faint); font-style: italic; }
+
+  .btn-primary {
+    background: var(--ink);
+    color: #fff;
+    padding: 14px 18px;
+    border-radius: 14px;
+    font-family: "Cormorant Garamond", serif;
+    font-size: 17px;
+    font-weight: 600;
+    text-align: center;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-apple {
+    background: #000;
+    color: #fff;
+    padding: 14px 18px;
+    border-radius: 12px;
+    font-family: -apple-system, "Helvetica Neue", sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: center;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+    padding: 12px 16px;
+    border-radius: 14px;
+    font-family: "Cormorant Garamond", serif;
+    font-size: 16px;
+    text-align: center;
+  }
+  .btn-link {
+    color: var(--blue-accent);
+    text-align: center;
+    font-family: "Cormorant Garamond", serif;
+    font-size: 14px;
+    font-style: italic;
+    text-decoration: underline;
+  }
+
+  .ac-dropdown {
+    background: #fff;
+    border: 1px solid var(--border-soft);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 8px 32px rgba(15,37,66,0.12);
+    margin-top: 6px;
+  }
+  .ac-row { padding: 10px 12px; border-radius: 8px; display: flex; gap: 10px; }
+  .ac-row.hl { background: var(--paper-warm); }
+  .ac-row .pin { color: var(--red); font-size: 14px; flex-shrink: 0; margin-top: 2px; }
+  .ac-row .text { font-size: 13px; line-height: 1.35; color: var(--ink); }
+  .ac-row .text .second { display: block; font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+  .step-dots { display: flex; gap: 6px; align-items: center; }
+  .step-dots .dot { background: var(--border-mid); border-radius: 4px; height: 6px; width: 6px; }
+  .step-dots .dot.active { background: var(--ink); width: 22px; }
+  .step-dots .dot.done { background: var(--postalBlue, #4A6FA5); }
+
+  .callout {
+    background: var(--paper);
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin: 24px 0 0;
+    box-shadow: var(--shadow-soft);
+  }
+  .callout h4 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 20px;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .callout p { margin: 0; color: var(--ink-muted); font-size: 15px; line-height: 1.6; }
+  .callout ul { margin: 8px 0 0; padding-left: 20px; color: var(--ink-muted); font-size: 15px; }
+  .callout ul li { margin-bottom: 4px; }
+  .callout.warn { border-left: 4px solid var(--red); }
+  .callout.good { border-left: 4px solid var(--green); }
+
+  .penpal-card {
+    background: var(--paper);
+    border: 1px solid var(--border-soft);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    box-shadow: var(--shadow-soft);
+  }
+  .penpal-card .pp-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 24px;
+    background: rgba(122,139,110,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .penpal-card .pp-title {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 20px;
+    color: var(--ink);
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .penpal-card .pp-body { color: var(--ink-muted); font-size: 14px; line-height: 1.55; }
+
+  .decision-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+    font-size: 15px;
+  }
+  .decision-table th {
+    background: var(--ink);
+    color: #fff;
+    text-align: left;
+    padding: 12px 18px;
+    font-family: "Cormorant Garamond", serif;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .decision-table td {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-soft);
+    vertical-align: top;
+  }
+  .decision-table tr:last-child td { border-bottom: none; }
+  .decision-table .decision { font-weight: 600; color: var(--ink); width: 28%; }
+  .decision-table .options { color: var(--ink-muted); width: 50%; }
+  .decision-table .rec-col { color: var(--red); font-weight: 600; width: 22%; }
+
+  @media (max-width: 1100px) {
+    .grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+    .grid.cols-5 { grid-template-columns: repeat(3, 1fr); }
+    .art-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="top">
+    <div>
+      <h1>Mailroom — Signup<br/>Redesign + Pen-pals</h1>
+      <p class="subtitle">5 hero-art options from Recraft, a multi-page sign-up flow that drops the birthday + uses address autocomplete, and the pen-pal feature wired back in. HTML review before code.</p>
+    </div>
+    <div class="meta">
+      <strong>v1 · May 12, 2026</strong>
+      Prepared for Scotty<br/>
+      Mailroom 0.5.0 → 0.6.0
+    </div>
+  </header>
+
+  <nav class="sticky">
+    <span class="brand">Mailroom</span>
+    <a href="#hero-art">01 · Hero art</a>
+    <a href="#signup-flow">02 · Signup flow</a>
+    <a href="#address-input">03 · Address autocomplete</a>
+    <a href="#penpal">04 · Pen-pal feature</a>
+    <a href="#decisions">05 · Decisions</a>
+  </nav>
+
+  <div class="intro-note">
+    <h3>What changes vs today</h3>
+    <p><strong>Today (v0.5.0 build 5):</strong> WelcomeSheet is one dense screen with name, city, state, birthday, Apple Sign In, and an email fallback all stacked. Functional but cramped, and the birthday ask up-front is friction nobody asked for.</p>
+    <p><strong>Tomorrow (v0.6.0):</strong> one decision per page. Option B hero art ("Cards across the map") on page 1 carries the brand promise visually with the new CTA "Mail a photo for less than a stamp." Name on page 2, an explanation moment on page 3, address autocomplete on page 4 (single bar that suggests as you type), 3-stamps confirmation on page 5. No birthday.</p>
+    <p><strong>Pen-pal feature</strong> is Postcrossing applied to Mailroom: <em>send a card to a stranger, get one back.</em> About 2 weeks. Both ways are blind — you don't know where your card is going, the recipient doesn't know who sent theirs. Reply by scanning the QR if you want to upgrade the connection.</p>
+    <p><strong>No virtual mail.</strong> The receiver's app NEVER shows them mail before it physically arrives at their address. No pending counter, no in-app pre-notification. The card surprises them in their real mailbox, they scan the QR on the back, and only then does it land in their app feed. <em>Preserves the entire point.</em></p>
+  </div>
+
+  <!-- ============================== SECTION 01 — HERO ART =============================== -->
+  <section id="hero-art">
+    <div class="section-head">
+      <h2><span class="num">01</span>Hero art · pick one for page 1, one for page 5</h2>
+      <p class="lede">First batch (A–E) ran against the brief "vintage postal, cream paper, warm, captures the ritual." Second batch (F–J) is more colorful per your feedback. <em>Option B is locked as the page-1 hero.</em> Pick a DIFFERENT one for the page-5 confirmation so the two aren't repetitive.</p>
+    </div>
+
+    <h3 style="font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--ink); margin: 0 0 18px;">First batch · vintage + restrained</h3>
+
+    <div class="art-grid">
+
+      <div class="art-card">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f7dd/7JVYWLiGkoLHu-v-WprdE_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-label">Option A · the ritual</div>
+          <div class="art-title">Hands at the mailbox</div>
+          <div class="art-desc">A pair of hands gently placing a vintage postcard into a hand-painted wooden mailbox in a sunlit garden. Cream paper, a single red postage stamp glowing on the corner. Captures the intimate ritual of sending mail. Hand-drawn editorial illustration.</div>
+        </div>
+      </div>
+
+      <div class="art-card" style="outline: 3px solid var(--green); outline-offset: 4px;">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f7df/4Od6qptT-B8w25TwPJlyS_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-recommended" style="background: var(--green);">✓ CHOSEN</div>
+          <div class="art-label">Option B · the network</div>
+          <div class="art-title">Cards across the map</div>
+          <div class="art-desc">Two friends in different cities exchanging postcards across a stylized cream-and-red vintage atlas of the US. Dashed flight-paths arc between Denver, Brooklyn, Austin, Vancouver. Connection as geography. 2D art poster style. <strong>This is the hero used on signup pages 1 and 5.</strong></div>
+        </div>
+      </div>
+
+      <div class="art-card">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f7df/R3osvb36En5Dz1epCQkJp_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-label">Option C · the writing desk</div>
+          <div class="art-title">Postcard in progress</div>
+          <div class="art-desc">Overhead flat-lay of a wooden writing desk in soft morning light. Handwritten postcard, fountain pen, dried wildflowers, an open envelope, coffee, a vintage photo. The intimacy of writing to someone you care about. Grain illustration style.</div>
+        </div>
+      </div>
+
+      <div class="art-card">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f7df/YdUremzctr-lDPzpDBZib_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-label">Option D · the quiet send</div>
+          <div class="art-title">Mailbox in a garden</div>
+          <div class="art-desc">Small hand-painted mailbox in a wildflower garden at golden hour. Postcard half-tucked into the slot. Behind, a winding path leads to a distant town with warm windows glowing. Community waiting just past the horizon.</div>
+        </div>
+      </div>
+
+      <div class="art-card">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f7df/J-GC5mlm2udvq4RjcyYr3_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-label">Option E · the flock</div>
+          <div class="art-title">Constellation of cards</div>
+          <div class="art-desc">A flock of paper postcards in flight across a soft watercolor twilight sky, like origami birds. Below, small houses with warm lit windows form a community across rolling hills.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <h3 style="font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--ink); margin: 40px 0 18px;">Second batch · more color, more life</h3>
+
+    <div class="art-grid">
+
+      <div class="art-card">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f88d/LnHFAx6uwZmQiMjMRGPOF_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-label">Option F · folk-art map</div>
+          <div class="art-title">Postcards across America</div>
+          <div class="art-desc">Vibrant folk-art map with postcards flying across like paper birds, small characters in each city holding cards. Coral, golden yellow, sage, sky blue, terracotta. Same idea as B but saturated and joyful.</div>
+        </div>
+      </div>
+
+      <div class="art-card">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f88e/63sM0i7YTGQLWJlZfXOXG_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-label">Option G · the writer</div>
+          <div class="art-title">Cafe table, postcard in hand</div>
+          <div class="art-desc">Young person at a sunlit cafe table writing a card. Coffee, succulent, stamp sheet, photo of the recipient. Peach, golden yellow, teal, coral, sage. The act of writing as a daily ritual, very human.</div>
+        </div>
+      </div>
+
+      <div class="art-card">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f88d/HgNtt7-dSDKWsVuvQUuTh_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-label">Option H · the triptych</div>
+          <div class="art-title">Three friends, three cities</div>
+          <div class="art-desc">Three friends writing postcards simultaneously from Brooklyn, the Pacific Northwest, and Austin. Triptych composition. Coral, ochre, teal, navy, sage. Captures distance bridged by mail.</div>
+        </div>
+      </div>
+
+      <div class="art-card">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f88d/_v00tx669TWzGTAB_E9Cx_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-label">Option I · the cluttered desk</div>
+          <div class="art-title">Beautiful chaos of caring</div>
+          <div class="art-desc">Overhead flat-lay of a writing desk packed with watercolor paints, dried wildflowers, vintage stamps, polaroids, golden afternoon light. Coral, mustard, forest green, dusty blue, terracotta.</div>
+        </div>
+      </div>
+
+      <div class="art-card">
+        <div class="art-img" style="background-image: url('https://v3b.fal.media/files/b/0a99f88d/TZOoHTUvWwyCaLMMKM3vu_image.webp');"></div>
+        <div class="art-body">
+          <div class="art-label">Option J · the open card</div>
+          <div class="art-title">A postcard on a table</div>
+          <div class="art-desc">Cinematic close-up of an open postcard on a wooden table. The card's photo side shows two tiny figures waving across rolling hills under a coral sunset. Cream, coral, sage, gold, deep navy.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="callout">
+      <h4>Pick for page 5</h4>
+      <p>Page 1 stays Option B. For the "3 stamps, on us." confirmation page, choose any other option. My instinct: <strong>Option G (cafe table)</strong> or <strong>Option I (cluttered desk)</strong> — both lean human and warm without competing with B's map illustration. <strong>Option F</strong> is too close to B (also a map). <strong>Option E</strong> works if you want a quiet/twilight feel for the finish.</p>
+      <p style="margin-top: 10px;"><strong>If still nothing fits</strong> — say a direction (more photo-realistic, more abstract, more people, different palette) and I'll fire another batch in 90 seconds.</p>
+    </div>
+  </section>
+
+  <!-- ============================== SECTION 02 — SIGNUP FLOW =============================== -->
+  <section id="signup-flow">
+    <div class="section-head">
+      <h2><span class="num">02</span>Sign-up flow · one decision per page</h2>
+      <p class="lede">5 short pages instead of one dense form. <em>No birthday.</em> Just hero, name, an explanation breath, address autocomplete, you're in. Apple Sign In and email both available on the first screen — typing the name comes AFTER auth on the new-user path.</p>
+    </div>
+
+    <div class="grid cols-5">
+
+      <!-- 1. Hero -->
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content phone-content-hero">
+            <div class="phone-art-hero" style="background-image: url('https://v3b.fal.media/files/b/0a99f7df/4Od6qptT-B8w25TwPJlyS_image.webp');"></div>
+            <div class="hero-text">
+              <div class="hero-wordmark">Mailroom</div>
+              <div class="hero-cta-line">Mail a photo for less than a stamp.</div>
+            </div>
+            <div class="hero-bottom-actions">
+              <div class="btn-apple-fixed">  Sign in with Apple</div>
+              <div class="btn-link" style="padding: 12px;">Sign up with email →</div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">Page 1 · Hero</div>
+          <div class="label">Brand + auth</div>
+          <div class="note">Hero art (Option B — cards across the map), the brand promise as the CTA line ("Mail a photo for less than a stamp."), and Apple Sign In as the primary action. Email is the underlined fallback.</div>
+        </div>
+      </div>
+
+      <!-- 2. Name -->
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content">
+            <div style="padding-top: 22px;">
+              <div class="step-dots"><div class="dot done"></div><div class="dot active"></div><div class="dot"></div><div class="dot"></div></div>
+              <div class="page-title-mega" style="margin-top: 22px;">What should your<br/>friends call you?</div>
+              <div class="helper" style="margin-top: 8px;">Just a first name is fine. We'll print it on the back of the postcards you send.</div>
+              <div class="input-line active" style="font-size: 28px; margin-top: 24px;">Scotty<span style="opacity:0.5;">|</span></div>
+            </div>
+            <div style="position: absolute; bottom: 38px; left: 16px; right: 16px;">
+              <div class="btn-primary">Continue →</div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">Page 2 · Name</div>
+          <div class="label">"What should your friends call you?"</div>
+          <div class="note">Full-screen single input. Big serif heading. autoFocus so the keyboard pops on mount. Nothing else competing.</div>
+        </div>
+      </div>
+
+      <!-- 3. Explanation -->
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content">
+            <div style="padding-top: 22px;">
+              <div class="step-dots"><div class="dot done"></div><div class="dot done"></div><div class="dot active"></div><div class="dot"></div></div>
+              <div class="page-title-mega" style="margin-top: 22px; font-size: 30px;">Mailroom mails<br/>real postcards.</div>
+              <div class="helper" style="margin-top: 12px; font-size: 15px; line-height: 1.65;">
+                Pick a photo. Write a few words. We print it, stamp it, and mail it through USPS. Costs 80¢ each — less than the stamp would be on its own.<br/><br/>
+                We give you 3 to start, on us.
+              </div>
+              <div style="margin-top: 32px; display: flex; gap: 14px; align-items: center;">
+                <div style="font-size: 28px;">📮</div>
+                <div style="font-style: italic; color: var(--ink-muted); font-size: 13px; line-height: 1.5;">No feed. No algorithm.<br/>Just real mail to real people.</div>
+              </div>
+            </div>
+            <div style="position: absolute; bottom: 38px; left: 16px; right: 16px;">
+              <div class="btn-primary">Got it →</div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">Page 3 · Explanation</div>
+          <div class="label">"Mailroom mails real postcards"</div>
+          <div class="note">The pause page. Sets the mental model — this is real USPS mail, not a digital feed. The "3 free stamps" promise lands here, before you ask anything else.</div>
+        </div>
+      </div>
+
+      <!-- 4. Address -->
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content">
+            <div style="padding-top: 22px;">
+              <div class="step-dots"><div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot active"></div></div>
+              <div class="page-title-mega" style="margin-top: 22px; font-size: 30px;">Where do you<br/>mail from?</div>
+              <div class="helper" style="margin-top: 8px;">Friends will see "from Denver, CO" on the postcards you send. Address stays private.</div>
+              <div class="input-line active" style="font-size: 16px; margin-top: 22px;">5209 Dorset Av<span style="opacity:0.5;">|</span></div>
+              <div class="ac-dropdown">
+                <div class="ac-row hl">
+                  <div class="pin">📍</div>
+                  <div class="text"><strong>5209 Dorset Ave</strong><span class="second">Chevy Chase, MD 20815</span></div>
+                </div>
+                <div class="ac-row">
+                  <div class="pin">📍</div>
+                  <div class="text"><strong>5209 Dorset Pl</strong><span class="second">Boise, ID 83706</span></div>
+                </div>
+                <div class="ac-row">
+                  <div class="pin">📍</div>
+                  <div class="text"><strong>5209 Dorset Park</strong><span class="second">Charlotte, NC 28210</span></div>
+                </div>
+              </div>
+            </div>
+            <div style="position: absolute; bottom: 38px; left: 16px; right: 16px;">
+              <div class="btn-primary" style="opacity: 0.45;">Continue →</div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">Page 4 · Address</div>
+          <div class="label">Single-bar autocomplete</div>
+          <div class="note">Type a street, dropdown suggests full addresses. Tap one → fills city/state/zip automatically. No 4-field stack. Continue stays disabled until a real address resolves.</div>
+        </div>
+      </div>
+
+      <!-- 5. You're in -->
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content" style="text-align: center; padding-top: 60px;">
+            <div style="display: flex; justify-content: center; margin-bottom: 32px;">
+              <div style="aspect-ratio: 1; width: 180px; background-image: url('https://v3b.fal.media/files/b/0a99f88e/63sM0i7YTGQLWJlZfXOXG_image.webp'); background-size: cover; border-radius: 16px;"></div>
+            </div>
+            <div style="font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.14em; color: var(--red); font-weight: 700;">YOU'RE IN</div>
+            <div class="page-title-mega" style="margin-top: 8px; font-size: 32px;">3 stamps,<br/>on us.</div>
+            <div class="helper" style="margin-top: 14px; max-width: 240px; margin-left: auto; margin-right: auto;">Pick a photo, write a note, send it. Real postcards to anyone you know.</div>
+            <div style="position: absolute; bottom: 38px; left: 16px; right: 16px;">
+              <div class="btn-primary">Send my first card →</div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">Page 5 · You're in</div>
+          <div class="label">3-stamps confirmation</div>
+          <div class="note">Calm landing. Different art from page 1 (showing Option G as a default — the cafe writer). CTA goes straight to the send flow, not the home tab — first-card energy is the whole game.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="callout good">
+      <h4>Key differences from today</h4>
+      <ul>
+        <li><strong>Birthday is gone</strong> from signup. Friend birthdays still collected when you add a friend (the relevant context).</li>
+        <li><strong>Address is required</strong> instead of vague "city, state." Necessary anyway for the receive-mail loop (someone needs to be able to mail YOU a card).</li>
+        <li><strong>One decision per page.</strong> Today's WelcomeSheet has 5+ inputs stacked on one screen. New flow has at most one input per page.</li>
+        <li><strong>No "Skip" anywhere.</strong> Every field that exists is required. If we wouldn't gate on it, we don't ask.</li>
+        <li><strong>Total taps:</strong> 5 (Apple Sign In → name → Got it → address → Send my first card). Compared to 8+ today.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================== SECTION 03 — ADDRESS AUTOCOMPLETE =============================== -->
+  <section id="address-input">
+    <div class="section-head">
+      <h2><span class="num">03</span>Address autocomplete · single bar</h2>
+      <p class="lede">Same pattern as the Send flow's manual address entry. <em>Type, suggest, resolve.</em> Used here for the user's own mailing address during signup; reused on Add Friend and Send-flow address modes.</p>
+    </div>
+
+    <div class="grid cols-3">
+
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content">
+            <div style="padding-top: 22px;">
+              <div class="page-title-mega" style="font-size: 30px;">Where do you<br/>mail from?</div>
+              <div class="input-line" style="font-size: 16px; margin-top: 22px;"><span class="placeholder">Start typing an address...</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">State 1 · empty</div>
+          <div class="label">Idle</div>
+          <div class="note">Single field, italic placeholder. No labels stacked above. Whole page screams "type here."</div>
+        </div>
+      </div>
+
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content">
+            <div style="padding-top: 22px;">
+              <div class="page-title-mega" style="font-size: 30px;">Where do you<br/>mail from?</div>
+              <div class="input-line active" style="font-size: 16px; margin-top: 22px;">5209 Dor<span style="opacity:0.5;">|</span></div>
+              <div class="ac-dropdown">
+                <div class="ac-row hl">
+                  <div class="pin">📍</div>
+                  <div class="text"><strong>5209 Dorset Ave</strong><span class="second">Chevy Chase, MD 20815</span></div>
+                </div>
+                <div class="ac-row">
+                  <div class="pin">📍</div>
+                  <div class="text"><strong>5209 Dorset Pl</strong><span class="second">Boise, ID 83706</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">State 2 · typing</div>
+          <div class="label">Suggestions appear</div>
+          <div class="note">MKLocalSearchCompleter on iOS, debounced 200ms. Free, no API key, no Google Maps cost.</div>
+        </div>
+      </div>
+
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content">
+            <div style="padding-top: 22px;">
+              <div class="page-title-mega" style="font-size: 30px;">Where do you<br/>mail from?</div>
+              <div class="input-line" style="font-size: 16px; margin-top: 22px; background: #fff; border-color: var(--green);">
+                <div style="font-family: 'Cormorant Garamond', serif;">5209 Dorset Ave<br/><span class="helper" style="font-size: 13px;">Chevy Chase, MD 20815</span></div>
+              </div>
+              <div style="margin-top: 10px; display: flex; gap: 6px; align-items: center;">
+                <div style="color: var(--green); font-weight: 700;">✓</div>
+                <div class="helper" style="font-size: 13px;">USPS-deliverable</div>
+              </div>
+            </div>
+            <div style="position: absolute; bottom: 38px; left: 16px; right: 16px;">
+              <div class="btn-primary">Continue →</div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">State 3 · resolved</div>
+          <div class="label">Continue unlocked</div>
+          <div class="note">Green check + USPS-deliverable badge (Lob's address verification confirms before save). Continue button enables.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================== SECTION 04 — PEN-PAL =============================== -->
+  <section id="penpal">
+    <div class="section-head">
+      <h2><span class="num">04</span>Pen-pal · Mail a stranger. Get one back.</h2>
+      <p class="lede">Postcrossing's mechanic, applied to Mailroom. <em>You mail one. Someone in the network mails you one.</em> Not necessarily the same person — the matching engine handles it. Existing <code>sendIntoVoid</code> + <code>void_replies</code> infrastructure forms the foundation. No separate "Pen-pal mailbox" — when a card arrives at your physical mailbox and you scan the QR, it appears in your normal Received feed like any other card.</p>
+    </div>
+
+    <div class="callout" style="margin-bottom: 32px;">
+      <h4>How the get-one-back works under the hood</h4>
+      <p>Every pen-pal send earns the sender a <strong>pending receive</strong> credit on the server. The pen-pal pool is a queue of senders who haven't yet received a card. When someone else picks "Mail a stranger," their card routes to the next eligible sender. ~2 week SLA from send to arrival.</p>
+      <p style="margin-top: 10px;"><strong>Backfill:</strong> if a card doesn't reach its destination (return-to-sender, lost mail) within ~30 days, the next stranger send routes to that pending receiver. If the queue ever runs dry, Mailroom-managed staff cards fill the gap.</p>
+      <p style="margin-top: 10px;" class="helper">Implementation: new <code>penpal_queue</code> table (sender_id, sent_at, fulfilled_at, fulfilled_by_postcard_id). Cron-style edge function runs daily.</p>
+    </div>
+
+    <div class="callout warn" style="margin-bottom: 32px;">
+      <h4>No virtual cards — preserve the surprise</h4>
+      <p>The receiver's app NEVER tells them mail is on the way. No "pending" counter, no in-app pre-notification. The card appears in the Received feed only after it's PHYSICALLY DELIVERED and the recipient has scanned the QR on the back. Lob's delivery webhook flips a <code>delivered_at</code> timestamp on the postcard row; the receiver's <code>fetch_received_postcards</code> query filters to only show rows where <code>delivered_at IS NOT NULL</code> (or where the user has scanned, whichever comes first).</p>
+      <p style="margin-top: 10px;"><strong>Senders</strong> can see their own sent card's progress on their existing Sent list (queued → in-transit → delivered) since that's their own postcard, not a surprise to ruin.</p>
+    </div>
+
+    <div class="grid cols-3">
+
+      <!-- Send flow step 4 with stranger option -->
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content">
+            <div style="padding: 14px 0 8px;">
+              <div style="font-size: 12px; color: var(--ink-muted); letter-spacing: 0.1em;">Step 4 of 4 · <span style="color: var(--ink); font-weight: 600;">Delivery</span></div>
+            </div>
+            <div class="page-title-big">Delivery details</div>
+            <div class="helper" style="margin-top: 6px;">How does it get there?</div>
+
+            <div style="margin-top: 18px; gap: 10px; display: flex; flex-direction: column;">
+              <div style="background: #fff; border-color: var(--border-soft); border: 1.5px solid var(--border-soft); border-radius: 12px; padding: 14px;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <div style="font-size: 18px;">🔗</div>
+                  <div style="font-family: 'Cormorant Garamond', serif; font-size: 15px; color: var(--ink); font-weight: 600; flex: 1;">Text Marcus a private link</div>
+                </div>
+              </div>
+              <div style="background: #fff; border-color: var(--border-soft); border: 1.5px solid var(--border-soft); border-radius: 12px; padding: 14px;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <div style="font-size: 18px;">📍</div>
+                  <div style="font-family: 'Cormorant Garamond', serif; font-size: 15px; color: var(--ink); font-weight: 600; flex: 1;">I have their address</div>
+                </div>
+              </div>
+              <div style="background: rgba(122,139,110,0.10); border: 1.5px solid var(--green); border-radius: 12px; padding: 14px;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <div style="font-size: 18px;">🎲</div>
+                  <div style="flex: 1;">
+                    <div style="font-family: 'Cormorant Garamond', serif; font-size: 15px; color: var(--ink); font-weight: 600;">Mail a stranger</div>
+                    <div style="color: var(--ink-muted); font-style: italic; font-size: 12px; line-height: 1.4; margin-top: 2px;">Get one back.</div>
+                  </div>
+                  <div style="color: var(--green); font-size: 20px;">✓</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">Send flow · new delivery option</div>
+          <div class="label">"Mail it to a stranger"</div>
+          <div class="note">Fourth delivery mode in step 4. Selected here (highlighted). Mailroom picks an opted-in member, ships your card, they MIGHT write back. The "✦ New" badge highlights the feature on first introduction.</div>
+        </div>
+      </div>
+
+      <!-- Stranger reveal -->
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content">
+            <div style="padding-top: 22px;">
+              <div style="font-size: 11px; color: var(--red); letter-spacing: 0.14em; font-weight: 700;">PEN-PAL MATCH</div>
+              <div class="page-title-mega" style="margin-top: 8px; font-size: 30px;">Going to<br/>a stranger,<br/>somewhere.</div>
+              <div class="helper" style="margin-top: 14px;">We pick where, you don't see the destination. They won't see your address either. Privacy is the whole point.</div>
+              <div style="margin-top: 20px; padding: 14px; background: rgba(122,139,110,0.15); border-radius: 10px; border-left: 4px solid var(--green);">
+                <div style="font-family: 'Cormorant Garamond', serif; font-size: 14px; color: var(--ink); font-style: italic; line-height: 1.55;">Mail a stranger. Get one back. About 2 weeks.</div>
+              </div>
+              <div class="btn-primary" style="margin-top: 18px;">Send · 1 stamp</div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">Stranger reveal · before send</div>
+          <div class="label">"Going to a stranger, somewhere"</div>
+          <div class="note">After tapping the stranger option, we tell them WHERE the card will go (city only, never name/address). Sets expectation: ~30% response rate (we'll measure once data exists).</div>
+        </div>
+      </div>
+
+      <!-- After send -->
+      <div class="mock">
+        <div class="phone"><div class="phone-screen">
+          <div class="status-bar"><span>9:41</span><span>●●● ●●● ▮</span></div>
+          <div class="phone-content">
+            <div style="padding-top: 80px; text-align: center;">
+              <div style="font-size: 40px;">📮</div>
+              <div class="page-title-mega" style="margin-top: 14px; font-size: 28px;">On its way.</div>
+              <div class="helper" style="margin-top: 16px; max-width: 260px; margin-left: auto; margin-right: auto;">Heading out via USPS First Class Mail. We'll find someone for it.</div>
+              <div style="margin-top: 22px; color: var(--ink-muted); font-style: italic; font-size: 13px;">3 stamps left</div>
+              <div style="margin-top: 8px; color: var(--text-faint); font-size: 11px; font-style: italic;">(your return card surprises you, no spoilers)</div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption">
+          <div class="step">Success state</div>
+          <div class="label">"On its way to a stranger"</div>
+          <div class="note">Same success modal pattern as other sends, with the pen-pal-specific copy. Points the user to the Pen-pal mailbox on My Card where any reply will land.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ============================== SECTION 05 — DECISIONS =============================== -->
+  <section id="decisions">
+    <div class="section-head">
+      <h2><span class="num">05</span>Decisions for you</h2>
+      <p class="lede">Pick a column and I'll build it.</p>
+    </div>
+
+    <table class="decision-table">
+      <thead><tr><th>Decision</th><th>Options</th><th>Recommendation</th></tr></thead>
+      <tbody>
+        <tr style="background:rgba(122,139,110,0.08);">
+          <td class="decision">Page-1 hero art <span style="color:var(--green); font-size:11px;">✓ DECIDED</span></td>
+          <td class="options">A) Hands at mailbox · <strong style="color:var(--ink);">B) Cards across the map</strong> · C) Writing desk · D) Garden mailbox · E) Constellation · F-J: more colorful alternates</td>
+          <td class="rec-col" style="color:var(--green);">✓ B</td>
+        </tr>
+        <tr>
+          <td class="decision">Page-5 hero art (must differ from B)</td>
+          <td class="options">A) Hands at mailbox · C) Writing desk · D) Garden mailbox · E) Constellation · F) Folk map · G) Cafe writer · H) Triptych · I) Cluttered desk · J) Open card</td>
+          <td class="rec-col">★ G or I — pick one</td>
+        </tr>
+        <tr>
+          <td class="decision">Signup pages</td>
+          <td class="options">A) Keep single-page WelcomeSheet · B) 5 pages (Hero / Name / Explain / Address / In) · C) 4 pages (skip explainer)</td>
+          <td class="rec-col">★ B · 5 pages</td>
+        </tr>
+        <tr>
+          <td class="decision">Birthday in signup</td>
+          <td class="options">A) Keep optional birthday field · B) Drop entirely · C) Move to first-friend-add prompt</td>
+          <td class="rec-col">★ B · drop</td>
+        </tr>
+        <tr>
+          <td class="decision">Address collection</td>
+          <td class="options">A) City + state only · B) Single-bar autocomplete (full mailing address) · C) Defer to first send</td>
+          <td class="rec-col">★ B · full address</td>
+        </tr>
+        <tr style="background:rgba(122,139,110,0.08);">
+          <td class="decision">Pen-pal location <span style="color:var(--green); font-size:11px;">✓ DECIDED</span></td>
+          <td class="options">A) Separate mailbox on My Card · <strong style="color:var(--ink);">B) Surfaces in Map "Received" filter with other mail</strong></td>
+          <td class="rec-col" style="color:var(--green);">✓ B · same place as other mail</td>
+        </tr>
+        <tr>
+          <td class="decision">Pen-pal opt-in default</td>
+          <td class="options">A) Default ON during signup · B) Default OFF, settings toggle · C) Ask explicitly on signup page 5</td>
+          <td class="rec-col">★ B · default OFF</td>
+        </tr>
+        <tr style="background:rgba(122,139,110,0.08);">
+          <td class="decision">Stranger destination reveal <span style="color:var(--green); font-size:11px;">✓ DECIDED</span></td>
+          <td class="options">A) Show city · B) Show region · <strong style="color:var(--ink);">C) Show nothing — true blind both ways</strong></td>
+          <td class="rec-col" style="color:var(--green);">✓ C · blind</td>
+        </tr>
+        <tr style="background:rgba(122,139,110,0.08);">
+          <td class="decision">Pen-pal reply mechanic <span style="color:var(--green); font-size:11px;">✓ DECIDED</span></td>
+          <td class="options">A) Hope the recipient writes back · B) Guaranteed via queue · <strong style="color:var(--ink);">C) Guaranteed + Mailroom staff backfill</strong></td>
+          <td class="rec-col" style="color:var(--green);">✓ C · guaranteed + backfill</td>
+        </tr>
+        <tr style="background:rgba(122,139,110,0.08);">
+          <td class="decision">Pen-pal SLA copy <span style="color:var(--green); font-size:11px;">✓ DECIDED</span></td>
+          <td class="options">A) "~6 weeks" · <strong style="color:var(--ink);">B) "About 2 weeks"</strong> · C) "Within a few weeks"</td>
+          <td class="rec-col" style="color:var(--green);">✓ B · 2 weeks</td>
+        </tr>
+        <tr style="background:rgba(122,139,110,0.08);">
+          <td class="decision">Pre-arrival visibility <span style="color:var(--green); font-size:11px;">✓ DECIDED</span></td>
+          <td class="options">A) Show "pending receives" count to receiver · <strong style="color:var(--ink);">B) No spoilers — card only appears after physical delivery + QR scan</strong></td>
+          <td class="rec-col" style="color:var(--green);">✓ B · preserve surprise</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout good" style="margin-top: 32px;">
+      <h4>Build order once decided</h4>
+      <ul>
+        <li><strong>0.6.0</strong> · Signup flow rebuild (multi-page, drop birthday, address autocomplete, hero art baked into assets). ~3 days.</li>
+        <li><strong>0.6.1</strong> · Pen-pal feature wired back into send flow as the "Mail a stranger" delivery option. Settings opt-in toggle for receiving. Per-send pending-receive accounting on the server (not shown to user). ~2 days.</li>
+        <li><strong>0.6.2</strong> · Postcrossing-style routing engine. New <code>penpal_queue</code> table (sender_id, sent_at, fulfilled_at, fulfilled_by_postcard_id). Daily cron edge function routes new stranger sends to oldest pending receivers, handles 30-day stale backfill, falls back to Mailroom staff cards when queue runs dry. ~3 days.</li>
+        <li><strong>0.6.3</strong> · "No virtual mail" gating. Update <code>fetch_received_postcards</code> to filter where <code>delivered_at IS NOT NULL</code> OR receiver scanned QR. Lob delivery webhook writes <code>delivered_at</code>. Stranger mail only appears in receiver's Map "Received" after physical arrival. ~1 day.</li>
+        <li><strong>0.6.4</strong> · Pen-pal QR reply loop (recipient scans → writes back named, relationship upgrades from anonymous to known friend). Reuses Phase 3 reciprocation infrastructure with a <code>flavor: 'penpal'</code> token type. ~2 days.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer style="margin-top: 60px; padding-top: 32px; border-top: 1px solid var(--border-mid); display: flex; justify-content: space-between; color: var(--text-muted); font-size: 14px;">
+    <div>
+      <div style="font-family: 'Great Vibes', cursive; font-size: 32px; margin-bottom: 8px; color: var(--ink);">Mailroom</div>
+      <div>Signup + Pen-pal Gallery v1 · May 12, 2026</div>
+    </div>
+    <div style="text-align: right;">
+      Pick options in section 06.<br/>
+      Ship target: <strong style="color: var(--ink);">0.6.0 in next session.</strong>
+    </div>
+  </footer>
+
+</div>
+
+</body>
+</html>
