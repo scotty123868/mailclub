@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import { Image, StyleSheet, Text, View, ViewStyle } from "react-native";
+import QRCode from "react-native-qrcode-svg";
 import Svg, { Circle, Defs, G, Line, Path, Pattern, Rect } from "react-native-svg";
 import type { Friend } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
@@ -118,16 +119,28 @@ type BackProps = {
   width?: number;
   testID?: string;
   printScale?: boolean;
+  /**
+   * v0.5.0 Phase 3 — reciprocation QR. When provided, renders a small QR
+   * in the bottom-right of the back so the receiver can scan it to join
+   * Mailroom with the sender pre-loaded. Omit to keep the back clean
+   * (e.g. for preview-only contexts or until the token is minted).
+   */
+  reciprocationUrl?: string;
 };
 
 export const PostcardBackPreview = forwardRef<View, BackProps>(function PostcardBackPreview(
-  { message, recipient, sender, width = DEFAULT_WIDTH, testID },
+  { message, recipient, sender, width = DEFAULT_WIDTH, testID, reciprocationUrl },
   ref,
 ) {
   const height = width / ASPECT_RATIO;
   const messageSize = Math.max(13, width * 0.052);
   const addressSize = Math.max(10, width * 0.04);
   const labelSize = Math.max(8, width * 0.03);
+  // QR is sized as a fraction of card width so it stays readable at both
+  // preview (300px wide) and print (1875px) scales. ~9% of card width is
+  // big enough for a stable scan from arm's length, small enough not to
+  // crowd the recipient address block.
+  const qrSize = Math.max(48, width * 0.13);
 
   // Estimate how many lines fit on the left side so message doesn't overrun
   const messageLines = Math.max(4, Math.floor((height - 60) / (messageSize * 1.45)));
@@ -226,6 +239,31 @@ export const PostcardBackPreview = forwardRef<View, BackProps>(function Postcard
               <View key={i} style={backStyles.addressGuideLine} />
             ))}
           </View>
+
+          {/* Reciprocation QR — bottom-right corner of the back. Only rendered
+              when a URL is supplied so the visible preview stays clean on the
+              compose screens before a token is minted. The QR has a quiet zone
+              built in (the white padding) and a "Scan to reply free →" label
+              underneath so the receiver knows what to do. */}
+          {reciprocationUrl ? (
+            <View style={[backStyles.qrWrap, { width: qrSize + 6 }]}>
+              <View style={[backStyles.qrInner, { padding: Math.max(3, qrSize * 0.05) }]}>
+                <QRCode
+                  value={reciprocationUrl}
+                  size={qrSize}
+                  color={colors.ink}
+                  backgroundColor="#FFFDF7"
+                  ecl="M"
+                />
+              </View>
+              <Text
+                style={[backStyles.qrCaption, { fontSize: Math.max(7, width * 0.022) }]}
+                numberOfLines={1}
+              >
+                Scan to reply free →
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
     </View>
@@ -413,4 +451,11 @@ const backStyles = StyleSheet.create({
   addressLine: { color: colors.ink, fontFamily: fonts.serif, letterSpacing: 0.2 },
   addressLines: { bottom: 12, gap: 9, left: 14, position: "absolute", right: 14 },
   addressGuideLine: { backgroundColor: colors.line, height: StyleSheet.hairlineWidth, opacity: 0.55 },
+  // Reciprocation QR — bottom-right corner. Sits inside its own white card
+  // so contrast against the postal-paper background is high enough to scan
+  // cleanly even on cheap printers. The caption is a quiet italic so it
+  // reads as an invitation, not a coupon.
+  qrWrap: { alignItems: "center", bottom: 6, gap: 2, position: "absolute", right: 6 },
+  qrInner: { backgroundColor: "#FFFDF7", borderColor: colors.line, borderRadius: 2, borderWidth: StyleSheet.hairlineWidth },
+  qrCaption: { color: colors.mutedInk, fontFamily: fonts.serifItalic, marginTop: 2 },
 });

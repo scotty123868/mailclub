@@ -402,6 +402,124 @@ export async function sendPostcardViaLink(input: SendViaLinkInput): Promise<Send
   };
 }
 
+// ---------------------------------------------------------------------------
+// Reciprocation tokens (Phase 3 — QR on the printed postcard back).
+// Every direct-address postcard mints a reciprocation token at send time.
+// The token's URL is rendered as a QR on the back so the receiver can scan
+// and join Mailroom with the sender pre-loaded as a friend.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the public reciprocation URL for a token. Used to render the QR on
+ * the back of the postcard AND to construct fallback share links.
+ *
+ * Hosting strategy:
+ *   • Default: the Supabase Edge Function URL (no custom domain needed).
+ *     iOS Universal Links won't fire on functions.supabase.co — when the
+ *     user owns mailroom.app, swap the host and host AASA at
+ *     mailroom.app/.well-known/apple-app-site-association.
+ *   • When EXPO_PUBLIC_RECIPROCATION_HOST is set (e.g. https://mailroom.app),
+ *     prefix that instead. Universal Links work for any path under it that
+ *     matches the AASA entries.
+ */
+export function reciprocationUrl(token: string): string {
+  const host = (typeof process !== "undefined" &&
+    (process.env as any)?.EXPO_PUBLIC_RECIPROCATION_HOST) as string | undefined;
+  if (host && host.startsWith("http")) {
+    return `${host.replace(/\/$/, "")}/r/${encodeURIComponent(token)}`;
+  }
+  const supabaseUrl = (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_SUPABASE_URL)
+    || "https://nlwnmgwylmmnaemdnzlq.supabase.co";
+  const functionsBase = supabaseUrl.replace(".supabase.co", ".functions.supabase.co");
+  return `${functionsBase}/welcome-mail?t=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Mint a reciprocation token for a postcard we just created. Called by the
+ * send flow between sendPostcard (which writes the postcard row) and the
+ * offscreen Lob render (which draws the QR). Idempotent — returns the
+ * existing token if one was already minted for this postcard.
+ */
+export async function createReciprocationToken(postcardId: string): Promise<{
+  token: string;
+  reused: boolean;
+  url: string;
+}> {
+  const { data, error } = await supabase.rpc("create_reciprocation_token", {
+    p_postcard_id: postcardId,
+  });
+  if (error) throw error;
+  const row = data as { token: string; reused: boolean; claim_id?: string };
+  return {
+    token: row.token,
+    reused: row.reused ?? false,
+    url: reciprocationUrl(row.token),
+  };
+}
+
+export type ReciprocationLookup = {
+  ok: true;
+  flavor: "address_collection" | "reciprocation";
+  sender_name: string;
+  sender_city: string;
+  message_preview: string;
+  category: string;
+  photo_path?: string;
+  sent_at?: string;
+  lob_status?: string;
+  already_scanned: boolean;
+} | {
+  ok: false;
+  reason: "NOT_FOUND" | "EXPIRED" | string;
+};
+
+/**
+ * Public lookup: returns sender info + postcard preview for a scanned
+ * token. Anyone can call this (anon key); the welcome-mail edge function
+ * also uses it to render the HTML web fallback.
+ */
+export async function lookupReciprocation(token: string): Promise<ReciprocationLookup> {
+  const { data, error } = await supabase.rpc("lookup_reciprocation", {
+    p_token: token,
+  });
+  if (error) throw error;
+  return data as ReciprocationLookup;
+}
+
+export type ReciprocationScanResult = {
+  ok: true;
+  already_scanned: boolean;
+  friend_id: string;
+  sender_id?: string;
+  sender_name?: string;
+  sender_city?: string;
+  postcard?: {
+    id: string;
+    message: string;
+    category: string;
+    photo_path?: string;
+    sent_at?: string;
+  };
+} | {
+  ok: false;
+  reason: "NOT_FOUND" | "EXPIRED" | "OWN_CARD" | "ALREADY_SCANNED_BY_OTHER" | string;
+};
+
+/**
+ * Authenticated scan: marks the token consumed by the current user, inserts
+ * the sender into the user's friends rolodex, and returns the seed payload
+ * for the welcome hero screen. First scan wins per token.
+ */
+export async function recordReciprocationScan(
+  token: string,
+): Promise<ReciprocationScanResult> {
+  const { data, error } = await supabase.rpc("record_reciprocation_scan", {
+    p_token: token,
+  });
+  if (error) throw error;
+  return data as ReciprocationScanResult;
+}
+
 export async function sendIntoVoid(message: string): Promise<Postcard> {
   const { data, error } = await supabase.rpc("send_postcard", {
     p_to_kind: "void",

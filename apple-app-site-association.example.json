@@ -1,0 +1,43 @@
+{
+  "_comment": "Apple App Site Association — template for Universal Links.",
+  "_deploy_to": "https://mailroom.app/.well-known/apple-app-site-association",
+  "_critical": [
+    "Must be served as application/json, NOT application/json-www-association-or-similar.",
+    "Must NOT be served with the .json extension in the URL (Apple drops it).",
+    "Must be served over HTTPS with a valid (not self-signed) cert.",
+    "Must NOT be redirected (200 OK only, no 30x).",
+    "iOS caches this file aggressively — to force refresh, change the Team ID or",
+    "bundle ID briefly (or wait up to 24 hours).",
+    "Test the deployed file with: https://app-site-association.cdn-apple.com/a/v1/mailroom.app",
+    "and confirm Apple's CDN sees it. Without that, Universal Links won't fire."
+  ],
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "824QVPJ3B5.com.mailrooms.app"
+        ],
+        "components": [
+          {
+            "/": "/r/*",
+            "comment": "Reciprocation QR scans. /r/<token> → app's /welcome-mail/[token] route."
+          },
+          {
+            "/": "/welcome-mail/*",
+            "comment": "Direct app-deep-link form, also handled."
+          },
+          {
+            "/": "/claim",
+            "?": { "t": "*" },
+            "comment": "Magic-link address collection. /claim?t=<token> opens the address form OR the app if installed."
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "824QVPJ3B5.com.mailrooms.app"
+    ]
+  }
+}

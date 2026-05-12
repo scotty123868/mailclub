@@ -14,6 +14,7 @@ import {
   EMPTY_ADDRESS,
   isAddressComplete,
 } from "@/src/types/address";
+import { createReciprocationToken } from "@/src/services/api";
 import { SuccessModal } from "@/src/components/SuccessModal";
 import { CARD_COST_PHOTO } from "@/src/data/credits";
 import { capturePostcardForPrint, lobRenderDimensions, submitToLob } from "@/src/services/lob";
@@ -57,6 +58,14 @@ type PrintSnapshot = {
   message: string;
   recipient: PrintRecipient;
   sender: { name: string; city: string; state: string };
+  /**
+   * URL encoded into the QR on the back, minted right after sendPostcard
+   * returns the postcardId. Lives on the snapshot (not live state) so the
+   * offscreen Lob views capture the QR even if the user dismisses success
+   * and starts a new compose. Optional because token minting can fail
+   * gracefully (printed card without QR is still a card).
+   */
+  reciprocationUrl?: string;
 };
 
 export default function SendScreen() {
@@ -386,6 +395,21 @@ export default function SendScreen() {
       });
       if (!result.ok) return;
 
+      // Mint a reciprocation token for the QR on the back. Best-effort —
+      // if the migration hasn't been deployed yet or the RPC fails, we
+      // ship the postcard without the QR rather than blocking the send.
+      // (Phase 3.)
+      let reciprocationUrl: string | undefined;
+      if (result.postcardId) {
+        try {
+          const tk = await createReciprocationToken(result.postcardId);
+          reciprocationUrl = tk.url;
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("Couldn't mint reciprocation token (printing without QR):", err);
+        }
+      }
+
       setSuccess({
         visible: true,
         title: `Your postcard is on the way!`,
@@ -396,7 +420,8 @@ export default function SendScreen() {
       // state. The offscreen Lob views render from `printSnapshot` if set,
       // so capture works on stable frozen data even if the user dismisses
       // the success modal and starts a new postcard mid-flight.
-      // (codex P1, Phase 2.6 review.)
+      // (codex P1, Phase 2.6 review.) Also carries the reciprocation URL
+      // so the QR renders into the Lob-captured back PNG.
       setPrintSnapshot({
         photoUri: photoUri ?? "",
         message,
@@ -406,6 +431,7 @@ export default function SendScreen() {
           city: currentUser.city || "",
           state: currentUser.state || "",
         },
+        reciprocationUrl,
       });
 
       if (result.postcardId) {
@@ -618,6 +644,7 @@ export default function SendScreen() {
             }
           }
           width={PRINT_W}
+          reciprocationUrl={printSnapshot?.reciprocationUrl}
         />
       </View>
     </AppShell>
