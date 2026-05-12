@@ -16,7 +16,7 @@ export function PostmarkDecoration({ compact = false }: { compact?: boolean }) {
 
 export function CircularPostmark({
   size = 90,
-  topText = "MAIL CLUB",
+  topText = "MAILROOM",
   bottomText = "DELIVERING CONNECTIONS",
   centerYear = "EST · 2026",
   color = "#9A8D76",

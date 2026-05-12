@@ -16,8 +16,10 @@ export function OnboardingFreeCreditsBanner() {
         <Gift color={colors.postalRed} size={20} strokeWidth={1.7} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.title}>{freeCreditsRemaining} free credits to start</Text>
-        <Text style={styles.body}>Try the four categories. Send a card on the house.</Text>
+        <Text style={styles.title}>
+          {freeCreditsRemaining} free {freeCreditsRemaining === 1 ? "stamp" : "stamps"} to start
+        </Text>
+        <Text style={styles.body}>A photo, a note, a friend. Mail one on the house.</Text>
       </View>
       <Pressable
         onPress={() => markFreeCreditsIntroSeen()}

@@ -38,25 +38,31 @@ export default function FriendsScreen() {
     <AppShell>
       <Header title="Friends" />
 
-      <PostalCard style={styles.mailCard}>
-        <View style={styles.mailCardRow}>
-          <IdentityAvatar user={currentUser} size={56} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.mailCardName} numberOfLines={1}>{currentUser.name}</Text>
-            <Text style={styles.mailCardCity} numberOfLines={1}>⌖ {currentUser.city}{currentUser.state ? `, ${currentUser.state}` : ""}</Text>
+      <View style={styles.yourCardSection}>
+        <Text style={styles.yourCardLabel}>YOUR MAIL CARD</Text>
+        <Text style={styles.yourCardHint}>What other Mailroom members see when you share your code.</Text>
+        <PostalCard style={styles.mailCard}>
+          <View style={styles.mailCardRow}>
+            <IdentityAvatar user={currentUser} size={56} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.mailCardName} numberOfLines={1}>{currentUser.name}</Text>
+              <Text style={styles.mailCardCity} numberOfLines={1}>⌖ {currentUser.city}{currentUser.state ? `, ${currentUser.state}` : ""}</Text>
+            </View>
           </View>
-        </View>
-        <Pressable
-          onPress={() => setQrOpen(true)}
-          style={styles.qrBtn}
-          testID="show-qr-btn"
-          accessibilityRole="button"
-          accessibilityLabel="Show my QR code"
-        >
-          <QrCode color={colors.ink} size={18} strokeWidth={1.6} />
-          <Text style={styles.qrBtnText}>Show my code</Text>
-        </Pressable>
-      </PostalCard>
+          <Pressable
+            onPress={() => setQrOpen(true)}
+            style={styles.qrBtn}
+            testID="show-qr-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Show my QR code"
+          >
+            <QrCode color={colors.ink} size={18} strokeWidth={1.6} />
+            <Text style={styles.qrBtnText}>Show my code</Text>
+          </Pressable>
+        </PostalCard>
+      </View>
+
+      <View style={styles.sectionDivider} />
 
       <View style={styles.rolodexHeader}>
         <Text style={styles.rolodexTitle}>Your rolodex</Text>
@@ -76,6 +82,18 @@ export default function FriendsScreen() {
         <View style={styles.empty} testID="rolodex-empty">
           <Text style={styles.emptyTitle}>No friends yet.</Text>
           <Text style={styles.emptyBody}>Share your Mail Card to add your first one.</Text>
+          {/* v0.5.0: nudge that you don't need to add a friend first to send.
+              Magic-link delivery (Phase 3) makes the rolodex optional, but
+              even today users can pick "Address" mode on Send. */}
+          <Pressable
+            onPress={() => router.push({ pathname: "/send", params: { mode: "link" } })}
+            style={styles.emptySendBtn}
+            testID="rolodex-empty-send"
+            accessibilityRole="button"
+            accessibilityLabel="Send your first card, it's free"
+          >
+            <Text style={styles.emptySendBtnText}>Send your first card, it's free →</Text>
+          </Pressable>
         </View>
       ) : (
         <View style={styles.rolodex} testID="rolodex-stack">
@@ -114,6 +132,10 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
+  yourCardSection: { gap: 4 },
+  yourCardLabel: { color: colors.postalBlue, fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1.4, paddingHorizontal: 4 },
+  yourCardHint: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 16, marginBottom: 6, paddingHorizontal: 4 },
+  sectionDivider: { backgroundColor: colors.line, height: 1, marginVertical: 4, opacity: 0.6 },
   mailCard: { gap: 14, overflow: "hidden", padding: 16 },
   mailCardRow: { alignItems: "center", flexDirection: "row", gap: 12 },
   mailCardName: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 24 },
@@ -128,4 +150,6 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", backgroundColor: "rgba(155,175,155,0.12)", borderColor: colors.line, borderRadius: 8, borderWidth: 1, padding: 24 },
   emptyTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 19 },
   emptyBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 17, marginTop: 6, textAlign: "center" },
+  emptySendBtn: { backgroundColor: colors.ink, borderRadius: 10, marginTop: 14, paddingHorizontal: 18, paddingVertical: 11 },
+  emptySendBtnText: { color: colors.white, fontFamily: fonts.serifSemi, fontSize: 14, letterSpacing: 0.3 },
 });

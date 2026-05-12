@@ -99,7 +99,7 @@ export function PhoneConnectArt() {
           <Rect x={149} y={71} width={20} height={36} rx={2} fill="#F2EAD3" transform="rotate(12 159 89)" />
         </G>
 
-        {/* Mail Club logo radiating between */}
+        {/* Mailroom logo radiating between */}
         <G>
           <Path d="M 100 40 Q 120 22, 140 40" stroke="#B84A3A" strokeWidth={1.4} fill="none" strokeDasharray="4 4" opacity={0.85} />
           <Path d="M 100 96 Q 120 110, 140 96" stroke="#B84A3A" strokeWidth={1.4} fill="none" strokeDasharray="4 4" opacity={0.85} />

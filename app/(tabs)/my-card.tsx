@@ -1,12 +1,11 @@
 import { useRouter } from "expo-router";
-import { Building2, Cake, Camera, Globe2, Heart, Image as ImageIcon, LucideIcon, Mail, MapPinned, Pencil, Send, Signpost, Star, Tag, UserPlus, Users } from "lucide-react-native";
+import { Cake, Globe2, Image as ImageIcon, LucideIcon, Mail, MapPinned, Pencil, Send, Star, Tag, UserPlus, Users } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { AppShell } from "@/src/components/AppShell";
 import { PrimaryButton, SecondaryButton } from "@/src/components/Buttons";
 import { ConstellationPanel } from "@/src/components/ConstellationPanel";
-import { CreditsBalance } from "@/src/components/CreditsBalance";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { EditAboutMeSheet } from "@/src/components/EditAboutMeSheet";
 import { AboutAppSheet } from "@/src/components/AboutAppSheet";
@@ -19,25 +18,28 @@ import { NotificationsSheet } from "@/src/components/NotificationsSheet";
 import { OnboardingFreeCreditsBanner } from "@/src/components/OnboardingFreeCreditsBanner";
 import { PrivacySheet } from "@/src/components/PrivacySheet";
 import { PostalCard } from "@/src/components/PostalCard";
-import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { SettingsSheet } from "@/src/components/SettingsSheet";
-import { Stamp } from "@/src/components/Stamp";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
-type IdeaOccasion = "memory" | "travel" | "just-note" | "date";
-
-const cardIdeas: { title: string; icon: LucideIcon; tone: string; occasion: IdeaOccasion }[] = [
-  { title: "Send me the photo from tonight", icon: Camera, tone: "cream", occasion: "memory" },
-  { title: "Send me your favorite place in your city", icon: Building2, tone: "sage", occasion: "travel" },
-  { title: "Send me a weird sign", icon: Signpost, tone: "blue", occasion: "just-note" },
-  { title: "Invite me on a date?", icon: Heart, tone: "red", occasion: "date" },
-];
-
+/**
+ * My Card tab — v0.5.0.
+ *
+ * Cleanups per the send-flow gallery decisions:
+ *   • "First Card Ideas" 4-circle grid removed. The empty-state CTA in the
+ *     send flow (and the on-page Send/Add Friend buttons here) absorb that
+ *     intent.
+ *   • Inline `CreditsBalance` "3 credits · + Buy" row removed. The stamps
+ *     pill in the Header is now the only path into the Buy Stamps sheet.
+ *   • Header title shortened to "My Card" (was "My Mail Card"). Same screen,
+ *     less of a mouthful.
+ *   • The CreditsSheet stays mounted on this screen only so that opening
+ *     "Buy stamps" from the Settings sheet still works.
+ */
 export default function MyMailCardScreen() {
   const router = useRouter();
-  const { currentUser, friends, postcards, voidReplies, credits } = useMailClub();
+  const { currentUser, friends, postcards, voidReplies } = useMailClub();
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editAboutOpen, setEditAboutOpen] = useState(false);
@@ -51,13 +53,9 @@ export default function MyMailCardScreen() {
   const receivedCount = voidReplies.length;
   const citiesCount = new Set(friends.map((f) => f.city)).size;
 
-  function seedSend(occasion: IdeaOccasion) {
-    router.push({ pathname: "/send", params: { occasion } });
-  }
-
   return (
     <AppShell>
-      <Header title="My Mail Card" onPressSettings={() => setSettingsOpen(true)} />
+      <Header title="My Card" onPressSettings={() => setSettingsOpen(true)} />
 
       <OnboardingFreeCreditsBanner />
 
@@ -72,8 +70,6 @@ export default function MyMailCardScreen() {
       {currentUser.tagline ? (
         <Text style={styles.tagline}>{currentUser.tagline}</Text>
       ) : null}
-
-      <CreditsBalance count={credits} onPressBuy={() => setCreditsOpen(true)} />
 
       <MetricStrip metrics={[
         { icon: Users, value: friends.length, label: "Friends", onPress: () => router.push("/friends"), testID: "metric-friends" },
@@ -105,23 +101,6 @@ export default function MyMailCardScreen() {
           </View>
         </PostalCard>
       </Pressable>
-
-      <PostalCard style={styles.ideas}>
-        <Text style={styles.sectionTitle}>First Card Ideas</Text>
-        <View style={styles.ideaGrid}>
-          {cardIdeas.map((idea) => (
-            <Pressable
-              key={idea.title}
-              onPress={() => seedSend(idea.occasion)}
-              testID={`idea-pill-${idea.occasion}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Seed Send screen with ${idea.title}`}
-            >
-              <IdeaPill {...idea} />
-            </Pressable>
-          ))}
-        </View>
-      </PostalCard>
 
       <View style={styles.previewGrid}>
         <Pressable onPress={() => router.push("/constellation")} style={styles.previewPress} testID="preview-constellation">
@@ -192,17 +171,6 @@ function InfoLine({ icon: Icon, label, value, italic = false }: { icon: LucideIc
   );
 }
 
-function IdeaPill({ title, icon: Icon, tone }: { title: string; icon: LucideIcon; tone: string }) {
-  const backgroundColor = tone === "red" ? "rgba(184,74,58,0.08)" : tone === "blue" ? "rgba(60,110,143,0.1)" : tone === "sage" ? "rgba(155,175,155,0.18)" : "rgba(255,253,247,0.7)";
-  const borderColor = tone === "red" ? "rgba(184,74,58,0.35)" : colors.line;
-  return (
-    <View style={[styles.ideaPill, { backgroundColor, borderColor }]}>
-      <Icon color={tone === "red" ? colors.postalRed : colors.ink} size={20} strokeWidth={1.45} />
-      <Text style={styles.ideaText}>{title}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   hero: { alignItems: "center", flexDirection: "row", gap: 18, marginTop: 8 },
   heroCopy: { flex: 1 },
@@ -220,10 +188,6 @@ const styles = StyleSheet.create({
   infoText: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 16, lineHeight: 22 },
   infoLabel: { fontFamily: fonts.serifBold },
   italic: { color: "#607A55", fontFamily: fonts.serifItalic },
-  ideas: { padding: 18 },
-  ideaGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
-  ideaPill: { alignItems: "center", borderRadius: 28, borderWidth: 1, flexDirection: "row", gap: 9, minHeight: 55, paddingHorizontal: 14, width: "100%" },
-  ideaText: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 14, lineHeight: 18 },
   previewGrid: { flexDirection: "row", gap: 12 },
   previewPress: { flex: 1 },
   previewCard: { borderRadius: 8, height: 158, overflow: "hidden" },

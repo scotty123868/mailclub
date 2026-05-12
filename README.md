@@ -1,8 +1,8 @@
-# Mail Club
+# Mailroom
 
 Real mail for real friends.
 
-Mail Club is a private postcard club prototype built with Expo React Native, TypeScript, and Expo Router. This **v0.3 MVP** is designed to run in Expo Go and be buildable with EAS for iOS/TestFlight.
+Mailroom is a private postcard club prototype built with Expo React Native, TypeScript, and Expo Router. This **v0.3 MVP** is designed to run in Expo Go and be buildable with EAS for iOS/TestFlight.
 
 ## What's in v0.3 (MVP)
 
@@ -74,9 +74,9 @@ eas login
 
 # 2) First-time only: register the bundle ID in App Store Connect at
 #    https://appstoreconnect.apple.com/apps  →  + → New App
-#    Bundle ID: com.mailclub.app
+#    Bundle ID: com.mailroom.app
 #    Primary language: English (US)
-#    SKU: mailclub-001 (or anything unique to you)
+#    SKU: mailroom-001 (or anything unique to you)
 
 # 3) Configure EAS Build
 eas build:configure
@@ -97,7 +97,7 @@ eas submit --platform ios --latest
 ```
 
 **What you still need before App Review:**
-- Real StoreKit IAP (the credit Buy flow is intentionally gated off — Apple Guideline 3.1.1 would reject demo credits). When you wire IAP, register 4 consumable products in App Store Connect with IDs `mailclub.credits.{5,10,25,50}` at tiers `$4.99/$9.99/$24.99/$49.99`.
+- Real StoreKit IAP (the credit Buy flow is intentionally gated off — Apple Guideline 3.1.1 would reject demo credits). When you wire IAP, register 4 consumable products in App Store Connect with IDs `mailroom.credits.{5,10,25,50}` at tiers `$5/$10/$20/$35`.
 - Real QR encoding (currently a decorative grid — swap to `react-native-qrcode-svg`).
 - An App Privacy answers questionnaire in App Store Connect (no data collected → declare that).
 - Marketing screenshots in the required sizes.
@@ -163,7 +163,7 @@ eas build:configure
 eas build --platform ios
 ```
 
-The app config uses the placeholder bundle identifier `com.mailclub.app`. Replace it with the real Apple Developer Bundle ID before submitting to TestFlight.
+The app config uses the placeholder bundle identifier `com.mailroom.app`. Replace it with the real Apple Developer Bundle ID before submitting to TestFlight.
 
 ## Tests
 
@@ -191,11 +191,11 @@ Current status: **165 tests across 20 suites**, all green. Covers:
 
 ## Architecture notes
 
-- **State**: `src/state/MailClubContext.tsx`. AsyncStorage key `mail-club-v0-3-credits-state`. Clean break from v0.2.
+- **State**: `src/state/MailClubContext.tsx`. AsyncStorage key `mailroom-v0-3-credits-state`. Clean break from v0.2.
 - **Types**: `src/types/mail.ts`. `CardCategory = "handwritten" | "photo" | "place" | "custom"`. Postcard has `category`, `creditCost`, plus optional `placeName`, `photoUri`, `customDescription`, `customTone`, `referencePhotoUris`.
 - **Constants**: `src/data/credits.ts` — `CARD_COSTS`, `FREE_CREDITS`, `CREDIT_PACKS`, category labels/blurbs.
 - **send.tsx** reads a `?occasion=` URL param to seed the compose state when navigated from My Card idea pills.
-- **IAP service**: `src/services/iap.ts` defines the `IapService` interface that real StoreKit code will conform to. v0.3 ships a `DemoIapService` that mimics the connect/loadProducts/purchase flow. App Store Connect product IDs follow the `mailclub.credits.{N}` convention. CreditsSheet calls the active service via `getIap()` — swap-in for a real implementation is a one-file change.
+- **IAP service**: `src/services/iap.ts` defines the `IapService` interface that real StoreKit code will conform to. v0.3 ships a `DemoIapService` that mimics the connect/loadProducts/purchase flow. App Store Connect product IDs follow the `mailroom.credits.{N}` convention. CreditsSheet calls the active service via `getIap()` — swap-in for a real implementation is a one-file change.
 - **Privacy manifest**: `ios/MailClub/PrivacyInfo.xcprivacy` declares the four standard Apple-required-reason API categories (UserDefaults, FileTimestamp, DiskSpace, SystemBootTime) needed for AsyncStorage + RN. `NSPrivacyCollectedDataTypes` is empty since v0.3 collects nothing.
 
 ## App Store checklist
@@ -206,7 +206,7 @@ Pre-launch must-haves:
 - App Store icon + splash, plus screenshots for supported iPhone sizes.
 - Privacy Policy URL + App Privacy answers in App Store Connect.
 - TestFlight build.
-- **Real StoreKit IAP** wired for credit packs — Apple Review will reject "buy credits" without IAP. Interface scaffold is in `src/services/iap.ts` ready for swap-in. Requires installing `react-native-iap` (or successor) + creating the 4 consumable products in App Store Connect with IDs `mailclub.credits.{5,10,25,50}` and tier prices `$4.99/$9.99/$24.99/$49.99`.
+- **Real StoreKit IAP** wired for credit packs — Apple Review will reject "buy credits" without IAP. Interface scaffold is in `src/services/iap.ts` ready for swap-in. Requires installing `react-native-iap` (or successor) + creating the 4 consumable products in App Store Connect with IDs `mailroom.credits.{5,10,25,50}` and tier prices `$5/$10/$20/$35`.
 - iOS 17+ privacy manifest — scaffold present at `ios/MailClub/PrivacyInfo.xcprivacy`; add `NSPrivacyCollectedDataTypes` entries when real IAP + backend ship.
 - Postcard fulfillment vendor integration (Lob, PostGrid, etc.).
 - Address vault encryption once real addresses ship.

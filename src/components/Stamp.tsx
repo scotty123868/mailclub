@@ -160,7 +160,7 @@ export function Stamp({
             fontFamily="Inter_700Bold"
             letterSpacing={0.4}
           >
-            MAIL CLUB
+            MAILROOM
           </SvgText>
           <SvgText
             x={padding + 4}

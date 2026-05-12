@@ -51,7 +51,7 @@ export function PrivacySheet({ visible, onClose }: { visible: boolean; onClose: 
           <View style={styles.banner}>
             <Lock color={colors.postalBlue} size={18} strokeWidth={1.6} />
             <Text style={styles.bannerText}>
-              Your physical address is never shared with senders. They write to you via Mail Club's queue.
+              Your physical address is never shared with senders. They write to you via Mailroom's queue.
             </Text>
           </View>
 

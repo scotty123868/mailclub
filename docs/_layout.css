@@ -1,0 +1,138 @@
+/* Shared layout for Mailroom docs pages — matches the app's paper/ink palette. */
+:root {
+  --paper: #F8F1E3;
+  --paper-dark: #EFE2CC;
+  --ink: #17223B;
+  --muted-ink: #5E6472;
+  --postal-red: #B84A3A;
+  --postal-blue: #3C6E8F;
+  --sage: #9BAF9B;
+  --gold: #D9B46E;
+  --line: #D9C8AC;
+  --white: #FFFDF7;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Cormorant Garamond", "Hoefler Text", Georgia, serif;
+  font-size: 18px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  background-image:
+    radial-gradient(rgba(120, 90, 40, 0.05) 1px, transparent 1px),
+    radial-gradient(rgba(120, 90, 40, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px, 36px 36px;
+  background-position: 0 0, 12px 12px;
+}
+.wrap {
+  max-width: 740px;
+  margin: 0 auto;
+  padding: 56px 24px 96px;
+}
+.brand-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 18px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.brand {
+  font-family: "Allura", "Snell Roundhand", "Brush Script MT", cursive;
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+.nav { font-family: "Inter", system-ui, sans-serif; font-size: 13px; }
+.nav a {
+  color: var(--postal-blue);
+  text-decoration: none;
+  margin-left: 16px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.nav a:hover { text-decoration: underline; }
+h1 {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 600;
+  font-size: 38px;
+  margin: 0 0 8px;
+  letter-spacing: -0.3px;
+}
+.deck {
+  font-style: italic;
+  color: var(--muted-ink);
+  font-size: 17px;
+  margin: 0 0 28px;
+}
+h2 {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 600;
+  font-size: 24px;
+  margin: 40px 0 8px;
+  color: var(--ink);
+}
+h3 {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 600;
+  font-size: 18px;
+  margin: 24px 0 6px;
+}
+p { margin: 0 0 14px; }
+ul { padding-left: 22px; margin: 0 0 16px; }
+li { padding: 3px 0; }
+a { color: var(--postal-blue); }
+code {
+  background: var(--white);
+  border: 1px solid var(--line);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 14px;
+  color: var(--ink);
+}
+.muted {
+  color: var(--muted-ink);
+  font-style: italic;
+  font-size: 14px;
+}
+.stamp-strip {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.stamp-dot {
+  width: 14px;
+  height: 14px;
+  background: var(--postal-red);
+  border-radius: 50%;
+}
+.stamp-dot.blue { background: var(--postal-blue); }
+.stamp-dot.sage { background: var(--sage); }
+.stamp-dot.gold { background: var(--gold); }
+footer.foot {
+  border-top: 1px solid var(--line);
+  margin-top: 56px;
+  padding-top: 18px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--muted-ink);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.callout {
+  background: rgba(217, 180, 110, 0.18);
+  border: 1px solid rgba(217, 180, 110, 0.55);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin: 20px 0;
+}

@@ -147,5 +147,5 @@ export const VOID_REPLY_AUTHORS = [
   { from: "Someone in Reykjavík", message: "Hi back. The light here is strange today and I thought of you." },
   { from: "A friend you haven't met", message: "I read your note three times. Thank you for the kindness." },
   { from: "Across the ocean", message: "Mail from a stranger felt like a small miracle. Sending one back." },
-  { from: "Mail Club friend", message: "Yours arrived just when I needed it. I hope this finds you the same way." },
+  { from: "Mailroom friend", message: "Yours arrived just when I needed it. I hope this finds you the same way." },
 ];

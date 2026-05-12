@@ -15,12 +15,10 @@ describe("CategoryPicker", () => {
     expect(getByTestId("category-custom")).toBeTruthy();
   });
 
-  it("shows '1 credit' singular for handwritten and 'N credits' plural for others", () => {
-    const { getByText, getAllByText } = render(<CategoryPicker selected="handwritten" onSelect={() => {}} />);
-    expect(getByText("1 credit")).toBeTruthy();
-    expect(getByText("5 credits")).toBeTruthy();
-    // Photo + Place both cost 2 credits
-    expect(getAllByText("2 credits").length).toBe(2);
+  it("shows '1 credit' for every category (MVP unified pricing)", () => {
+    const { getAllByText } = render(<CategoryPicker selected="handwritten" onSelect={() => {}} />);
+    // All 4 categories now cost 1 credit each
+    expect(getAllByText("1 credit").length).toBe(4);
   });
 
   it("fires onSelect with the chosen category id", () => {
@@ -40,10 +38,10 @@ describe("CategoryPicker", () => {
 });
 
 describe("creditCostFor()", () => {
-  it("returns the canonical cost per category", () => {
+  it("returns 1 for every category (MVP unified pricing)", () => {
     expect(creditCostFor("handwritten")).toBe(1);
-    expect(creditCostFor("photo")).toBe(2);
-    expect(creditCostFor("place")).toBe(2);
-    expect(creditCostFor("custom")).toBe(5);
+    expect(creditCostFor("photo")).toBe(1);
+    expect(creditCostFor("place")).toBe(1);
+    expect(creditCostFor("custom")).toBe(1);
   });
 });

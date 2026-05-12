@@ -33,7 +33,7 @@ export function CustomRequestForm({
     if (!perm.granted) {
       Alert.alert(
         "Photos access denied",
-        "Mail Club needs Photos access to attach reference images. You can grant it in Settings.",
+        "Mailroom needs Photos access to attach reference images. You can grant it in Settings.",
         [
           { text: "Cancel", style: "cancel" },
           { text: "Open Settings", onPress: () => Linking.openSettings().catch(() => undefined) },

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { Heart, Moon, Sparkles, Star, Users } from "lucide-react-native";
-import { useState } from "react";
+import { Heart, Moon, Sparkles, Star } from "lucide-react-native";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { ConstellationPanel } from "@/src/components/ConstellationPanel";
@@ -13,52 +13,36 @@ import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
-const filters = [
-  { id: "All Friends", icon: Users },
-  { id: "Close Friends", icon: Heart },
-  { id: "New Connections", icon: Sparkles },
-];
-
+// v0.5.0: dropped the top filter chips (All Friends / Close Friends / New
+// Connections). Per the gallery cleanup pass — premature segmentation when
+// most users have 0–5 friends. The Insight cards below already surface the
+// useful slices (Warmest Thread / New Spark / Sleeping Stars).
 export default function ConstellationScreen() {
   const router = useRouter();
   const { friends } = useMailClub();
-  const [selected, setSelected] = useState("All Friends");
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const activeFriend = friends.find((f) => f.id === activeFriendId) ?? null;
 
-  // Derive insights from real state, not hardcoded names. If the user has no
-  // friends yet, render an inviting empty state instead of inventing names.
-  const sortedByCards = [...friends].sort((a, b) => (b.cardsSent + b.cardsReceived) - (a.cardsSent + a.cardsReceived));
-  const warmest = sortedByCards[0];
-  const sortedByRecent = [...friends].sort((a, b) => (b.lastInteractionAt > a.lastInteractionAt ? 1 : -1));
-  const newest = sortedByRecent[0];
-  // "Sleeping" = friends not interacted with in 60+ days
-  const sixtyDaysAgo = new Date();
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const sleeping = friends.filter((f) => new Date(f.lastInteractionAt) < sixtyDaysAgo);
+  // Derive insights from real state, not hardcoded names. Memoized so we
+  // don't resort on every render.
+  const { warmest, newest, sleeping } = useMemo(() => {
+    const byCards = [...friends].sort((a, b) => (b.cardsSent + b.cardsReceived) - (a.cardsSent + a.cardsReceived));
+    const byRecent = [...friends].sort((a, b) => {
+      if (a.lastInteractionAt === b.lastInteractionAt) return 0;
+      return b.lastInteractionAt > a.lastInteractionAt ? 1 : -1;
+    });
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    return {
+      warmest: byCards[0],
+      newest: byRecent[0],
+      sleeping: friends.filter((f) => new Date(f.lastInteractionAt) < sixtyDaysAgo),
+    };
+  }, [friends]);
 
   return (
     <AppShell>
       <Header title="Constellation" />
-      <View style={styles.chips}>
-        {filters.map((filter) => {
-          const active = selected === filter.id;
-          const Icon = filter.icon;
-          return (
-            <Pressable
-              key={filter.id}
-              onPress={() => setSelected(filter.id)}
-              style={[styles.chip, active && styles.activeChip]}
-              testID={`constellation-filter-${filter.id.toLowerCase().replace(/\s+/g, "-")}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-            >
-              <Icon color={active ? colors.white : colors.ink} size={16} strokeWidth={1.6} />
-              <Text style={[styles.chipText, active && styles.activeChipText]}>{filter.id}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
 
       <ConstellationPanel friends={friends} />
 
@@ -202,11 +186,6 @@ const styles = StyleSheet.create({
   emptyBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 18, textAlign: "center" },
   emptyBtn: { backgroundColor: colors.ink, borderRadius: 8, marginTop: 8, paddingHorizontal: 16, paddingVertical: 10 },
   emptyBtnText: { color: colors.white, fontFamily: fonts.serifSemi, fontSize: 14, letterSpacing: 0.3 },
-  chips: { flexDirection: "row", gap: 8 },
-  chip: { alignItems: "center", borderColor: colors.line, borderRadius: 24, borderWidth: 1, flex: 1, flexDirection: "row", gap: 6, justifyContent: "center", paddingVertical: 10 },
-  activeChip: { backgroundColor: colors.ink, borderColor: colors.ink },
-  chipText: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 14 },
-  activeChipText: { color: colors.white },
   insights: { gap: 12 },
   insight: { alignItems: "center", flexDirection: "row", gap: 14, minHeight: 124, overflow: "hidden", padding: 16, paddingRight: 70 },
   airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 7 },

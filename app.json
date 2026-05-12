@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "Mail Club",
-    "slug": "mail-club",
-    "version": "0.3.0",
-    "scheme": "mailclub",
+    "name": "Mailroom",
+    "slug": "mailroom",
+    "version": "0.5.0",
+    "scheme": "mailroom",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,10 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.mailclub.app",
-      "buildNumber": "1",
+      "bundleIdentifier": "com.mailrooms.app",
+      "buildNumber": "2",
+      "usesAppleSignIn": true,
+      "config": {
+        "googleMapsApiKey": ""
+      },
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Mail Club uses your photos so you can pick one for the postcard you're sending.",
+        "NSPhotoLibraryUsageDescription": "Mailroom uses your photos so you can pick one for the postcard you're sending.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -28,17 +32,26 @@
         "backgroundColor": "#F8F1E3"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.mailrooms.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.mailrooms.app",
+          "enableGooglePay": false
+        }
+      ]
     ],
     "extra": {
       "supabaseUrl": "https://nlwnmgwylmmnaemdnzlq.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sd25tZ3d5bG1tbmFlbWRuemxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDI1NjksImV4cCI6MjA5NDA3ODU2OX0.rZlWORqFLfFCBQQ4RPUOBtrqAX_Tc0Gf_sI5hPPENxM"
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sd25tZ3d5bG1tbmFlbWRuemxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDI1NjksImV4cCI6MjA5NDA3ODU2OX0.rZlWORqFLfFCBQQ4RPUOBtrqAX_Tc0Gf_sI5hPPENxM",
+      "stripePublishableKey": "pk_test_51TW13IAU9h7DBHxiS64s7cUteWS1MBoebEvFCSUClNr8NL6UqSK4ujKLzW7JPnZPHXXPCLabOI3yXO2GrVr7IIWX00vLpBWamf"
     }
   }
 }

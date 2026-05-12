@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Defs, Pattern, Rect } from "react-native-svg";
 import { IllustratedAvatar, AvatarLook } from "@/src/components/Avatar";
 import { CurrentUser, Friend } from "@/src/types/mail";
@@ -24,15 +24,48 @@ export function IdentityAvatar({
   size = 56,
   variant = "default",
 }: {
-  user: Pick<CurrentUser, "name" | "avatarInitials"> | Friend;
+  user: Pick<CurrentUser, "name" | "avatarInitials" | "photoUrl"> | Friend;
   size?: number;
   variant?: "default" | "hero";
 }) {
+  const isHero = variant === "hero";
+  const borderWidth = isHero ? 2 : 1.5;
+
+  // 1. Real photo wins, if one is set. Round-cropped, postal-blue rim.
+  if (user.photoUrl) {
+    return (
+      <View
+        style={[
+          styles.disc,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderWidth,
+            backgroundColor: colors.paperDark,
+          },
+        ]}
+        accessibilityLabel={`${user.name || "Mailroom member"} profile photo`}
+      >
+        <Image
+          source={{ uri: user.photoUrl }}
+          style={{ width: size - borderWidth * 2, height: size - borderWidth * 2, borderRadius: (size - borderWidth * 2) / 2 }}
+          accessible={false}
+        />
+        {isHero && (
+          <View style={[styles.heroRing, { width: size - 10, height: size - 10, borderRadius: (size - 10) / 2 }]} />
+        )}
+      </View>
+    );
+  }
+
+  // 2. Known illustrated identity? Show the portrait.
   const id = "id" in user ? user.id : undefined;
   if (id && isKnownLook(id)) {
     return <IllustratedAvatar look={id} size={size} />;
   }
 
+  // 3. Fallback: monogram on paper.
   const fromName = user.name
     .split(/\s+/)
     .map((p) => p[0] ?? "")
@@ -41,10 +74,7 @@ export function IdentityAvatar({
     .toUpperCase();
   const initials = ("avatarInitials" in user ? user.avatarInitials : "") || fromName || "?";
 
-  const isHero = variant === "hero";
-  // Hero variant is larger + a touch more decorated. Default is compact + flat.
   const fontSize = size * (isHero ? 0.32 : 0.36);
-  const borderWidth = isHero ? 2 : 1.5;
 
   return (
     <View
@@ -57,7 +87,7 @@ export function IdentityAvatar({
           borderWidth,
         },
       ]}
-      accessibilityLabel={`${user.name || "Mail Club member"} monogram`}
+      accessibilityLabel={`${user.name || "Mailroom member"} monogram`}
     >
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <Defs>

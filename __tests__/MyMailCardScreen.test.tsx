@@ -30,6 +30,9 @@ function renderMyCard() {
   );
 }
 
+// v0.5.0: First Card Ideas grid removed. Inline CreditsBalance row removed.
+// Buy Stamps is now reached only via the header CreditsPill. Header title is
+// "My Card" (was "My Mail Card").
 describe("MyMailCardScreen", () => {
   it("renders user identity (Scotty / Denver, CO)", () => {
     const { getByText } = renderMyCard();
@@ -62,13 +65,15 @@ describe("MyMailCardScreen", () => {
     expect(getByText(/Currently into/)).toBeTruthy();
   });
 
-  it("renders First Card Ideas with all 4 prompts", () => {
-    const { getByText } = renderMyCard();
-    expect(getByText("First Card Ideas")).toBeTruthy();
-    expect(getByText("Send me the photo from tonight")).toBeTruthy();
-    expect(getByText("Send me your favorite place in your city")).toBeTruthy();
-    expect(getByText("Send me a weird sign")).toBeTruthy();
-    expect(getByText("Invite me on a date?")).toBeTruthy();
+  it("does NOT render the removed First Card Ideas grid", () => {
+    const { queryByText, queryByTestId } = renderMyCard();
+    expect(queryByText("First Card Ideas")).toBeNull();
+    expect(queryByTestId("idea-pill-memory")).toBeNull();
+  });
+
+  it("does NOT render the inline CreditsBalance row (pill in header replaces it)", () => {
+    const { queryByTestId } = renderMyCard();
+    expect(queryByTestId("credits-buy-btn")).toBeNull();
   });
 
   it("renders Constellation + Mail Map preview cards", () => {
@@ -102,16 +107,10 @@ describe("MyMailCardScreen", () => {
     expect(getAllByText("About me").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("opens the CreditsSheet when the Buy button on the balance pill is tapped", () => {
+  it("opens the CreditsSheet when the header CreditsPill is tapped", () => {
     const { getByTestId, getByText } = renderMyCard();
-    fireEvent.press(getByTestId("credits-buy-btn"));
-    expect(getByText("Buy credits")).toBeTruthy();
-  });
-
-  it("idea pill seeds Send with the occasion param", () => {
-    const { getByTestId } = renderMyCard();
-    fireEvent.press(getByTestId("idea-pill-memory"));
-    expect(expoRouter.__mockPush).toHaveBeenCalledWith({ pathname: "/send", params: { occasion: "memory" } });
+    fireEvent.press(getByTestId("header-credits-pill"));
+    expect(getByText("Buy stamps")).toBeTruthy();
   });
 
   it("preview cards navigate to constellation + map", () => {

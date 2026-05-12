@@ -62,7 +62,7 @@ describe("Edge cases — adversarial state", () => {
 
   it("Concurrent sendPostcard calls both succeed without double-deducting via setter races", async () => {
     const { ref } = await readyHarness();
-    expect(ref.current!.credits).toBe(5);
+    expect(ref.current!.credits).toBe(3);
     // Fire two handwritten sends back-to-back (no await between)
     await act(async () => {
       await Promise.all([
@@ -72,16 +72,18 @@ describe("Edge cases — adversarial state", () => {
     });
     await waitFor(() => {
       // Both sends are 1 credit. setCredits uses functional updater → safe.
-      expect(ref.current!.credits).toBe(3);
+      expect(ref.current!.credits).toBe(1);
     });
   });
 
   it("Sending with no credits leaves balance at 0 and records no postcard", async () => {
     const { ref } = await readyHarness();
-    // Drain all 5 credits via custom send (5 cost)
-    await act(async () => {
-      await ref.current!.sendPostcard({ kind: "custom", friendId: "tatiana", description: "x", referencePhotoUris: [] });
-    });
+    // Drain all 3 starter credits at 1 credit per card
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        await ref.current!.sendPostcard({ kind: "handwritten", friendId: "tatiana", message: `drain ${i}` });
+      });
+    }
     await waitFor(() => expect(ref.current!.credits).toBe(0));
     const before = ref.current!.postcards.length;
     let blocked;
@@ -106,15 +108,18 @@ describe("Edge cases — adversarial state", () => {
     await AsyncStorage.setItem("mail-club-v0-3-credits-state", "{malformed");
     const { ref } = await readyHarness();
     // Default state — not a crash
-    expect(ref.current!.credits).toBe(5);
+    expect(ref.current!.credits).toBe(3);
     expect(ref.current!.hydrated).toBe(true);
   });
 
   it("sendIntoVoid with 0 credits returns ok:false and does not append a postcard", async () => {
     const { ref } = await readyHarness();
-    await act(async () => {
-      await ref.current!.sendPostcard({ kind: "custom", friendId: "tatiana", description: "x", referencePhotoUris: [] });
-    });
+    // Drain all 3 starter credits (1 each)
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        await ref.current!.sendPostcard({ kind: "handwritten", friendId: "tatiana", message: `drain ${i}` });
+      });
+    }
     await waitFor(() => expect(ref.current!.credits).toBe(0));
     const beforePostcards = ref.current!.postcards.length;
     let result;

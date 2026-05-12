@@ -5,10 +5,11 @@ import { Alert } from "react-native";
 import { CARD_COSTS, CREDIT_PACKS, FREE_CREDITS } from "@/src/data/credits";
 import { currentUser as defaultCurrentUser, friends as initialFriends, milestones, postcards as initialPostcards, routes } from "@/src/data/mock";
 import * as api from "@/src/services/api";
+import { signInWithApple as appleSignInService, type AppleAuthResult } from "@/src/services/apple-auth";
 import { SUPABASE_CONFIGURED, supabase } from "@/src/services/supabase";
 import type { CardCategory, CurrentUser, CustomTone, Friend, Postcard } from "@/src/types/mail";
 
-const STORE_KEY = "mail-club-v1-cache";
+const STORE_KEY = "mailroom-v1-cache";
 
 export type SendInput =
   | { kind: "handwritten"; friendId: string; message: string }
@@ -24,7 +25,13 @@ export type VoidReply = {
 };
 
 export type CreditsPurchaseResult = { ok: boolean; creditsAdded?: number };
-export type SendResult = { ok: boolean; friendName: string; creditsRemaining?: number };
+export type SendResult = { ok: boolean; friendName: string; creditsRemaining?: number; postcardId?: string };
+export type SendViaLinkResult = {
+  ok: boolean;
+  claimUrl?: string;
+  postcardId?: string;
+  error?: string;
+};
 export type AddFriendResult = { ok: boolean; friend?: Friend };
 
 export type NotificationPrefs = {
@@ -77,20 +84,38 @@ type MailClubState = {
   notifications: NotificationPrefs;
   privacy: PrivacyPrefs;
   sendPostcard: (input: SendInput) => Promise<SendResult>;
+  sendPostcardViaLink: (input: {
+    category: CardCategory;
+    message: string;
+    photoUri?: string;
+    placeName?: string;
+  }) => Promise<SendViaLinkResult>;
   sendIntoVoid: (message: string) => Promise<{ ok: boolean }>;
   purchaseCredits: (packId: string) => Promise<CreditsPurchaseResult>;
+  refreshProfile: () => Promise<void>;
   markFreeCreditsIntroSeen: () => Promise<void>;
   updateAboutMe: (patch: Partial<CurrentUser>) => Promise<void>;
   removeFriend: (id: string) => Promise<void>;
-  addFriendByAddress: (input: { name: string; city: string; state: string }) => Promise<AddFriendResult>;
+  addFriendByAddress: (input: {
+    name: string;
+    city: string;
+    state: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    addressCity?: string;
+    addressState?: string;
+    addressZip?: string;
+    addressCountry?: string;
+  }) => Promise<AddFriendResult>;
   queueInvitation: (name: string, street: string, cityLine: string) => Promise<boolean>;
   addMayaConnection: () => Promise<void>;
   updateNotifications: (patch: Partial<NotificationPrefs>) => Promise<void>;
   updatePrivacy: (patch: Partial<PrivacyPrefs>) => Promise<void>;
   signOut: () => Promise<void>;
-  completeSignup: (input: { name: string; city: string; state: string; email?: string; password?: string }) => Promise<void>;
+  completeSignup: (input: { name: string; city: string; state: string; birthday?: string; email?: string; password?: string }) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signUpWithEmail: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  signInWithApple: () => Promise<AppleAuthResult>;
   resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
   deleteAccount: () => Promise<{ ok: boolean; error?: string }>;
 };
@@ -255,8 +280,13 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       return sendPostcardLocal(input, cost, friend);
     }
 
-    // Optimistic local update
+    // Optimistic local update. We capture EVERY mutated piece of state so
+    // the catch handler can fully restore on failure. The previous version
+    // forgot `freeCreditsRemaining`, which silently burned a free credit
+    // every time Lob upload or the RPC failed mid-send. Fixed now: any
+    // throw below the deduct rolls all four pieces back to pre-send state.
     const prevCredits = credits;
+    const prevFreeCreditsRemaining = freeCreditsRemaining;
     const prevPostcards = postcards;
     const prevFriends = friends;
     setCredits((c) => c - cost);
@@ -290,16 +320,19 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       )));
       setCredits(creditsRemaining);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return { ok: true, friendName: friend.name, creditsRemaining };
+      return { ok: true, friendName: friend.name, creditsRemaining, postcardId: postcard.id };
     } catch (err: any) {
-      // Revert
+      // Revert ALL optimistic mutations. Critical: freeCreditsRemaining
+      // gets restored here too — without it, a Lob/RPC failure permanently
+      // burns the user's free credit even though no postcard was sent.
       setCredits(prevCredits);
+      setFreeCreditsRemaining(prevFreeCreditsRemaining);
       setPostcards(prevPostcards);
       setFriends(prevFriends);
       Alert.alert("Couldn't send", err?.message ?? "Try again in a moment.");
       return { ok: false, friendName: friend.name };
     }
-  }, [authedUserId, credits, friends, postcards]);
+  }, [authedUserId, credits, freeCreditsRemaining, friends, postcards]);
 
   function sendPostcardLocal(input: SendInput, cost: number, friend: Friend | undefined): SendResult {
     const category: CardCategory = input.kind;
@@ -310,7 +343,12 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     const next: Postcard = {
       id: `p-${Date.now()}`,
       toFriendId: friend?.id ?? "",
-      fromCity: userInfo.city || "Somewhere",
+      // Empty string when the user hasn't filled in their city. The old
+      // "Somewhere" fallback was printing literally on postcards as a
+      // fake placeholder city, which looked broken. Empty is cleaner —
+      // the back-of-card renderer hides the sender-city line entirely
+      // when this is empty.
+      fromCity: userInfo.city || "",
       toCity: friend?.city ?? "",
       category,
       creditCost: cost,
@@ -333,6 +371,50 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     return { ok: true, friendName: friend?.name ?? "", creditsRemaining: credits - cost };
   }
 
+  const sendPostcardViaLinkAction = useCallback(async (input: {
+    category: CardCategory;
+    message: string;
+    photoUri?: string;
+    placeName?: string;
+  }): Promise<SendViaLinkResult> => {
+    const cost = costForCategory(input.category);
+    if (credits < cost) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("Not enough credits", `This card costs ${cost} credit${cost === 1 ? "" : "s"}. Buy more to send it.`);
+      return { ok: false, error: "INSUFFICIENT_CREDITS" };
+    }
+
+    if (!SUPABASE_CONFIGURED || !authedUserId) {
+      Alert.alert("Sign in first", "You need an account to send a link postcard so we can deliver it.");
+      return { ok: false, error: "NOT_SIGNED_IN" };
+    }
+
+    try {
+      let photoPath: string | undefined;
+      if ((input.category === "photo" || input.category === "place") && input.photoUri) {
+        const path = await api.uploadPostcardPhoto(input.photoUri, `${input.category}.jpg`);
+        photoPath = path ?? undefined;
+      }
+      const result = await api.sendPostcardViaLink({
+        category: input.category,
+        message: input.message,
+        photoUri: photoPath,
+        placeName: input.placeName,
+      });
+      // Refresh credits + postcards from server so UI reflects the new state
+      setCredits(result.creditsRemaining);
+      try {
+        const fresh = await api.fetchPostcards();
+        setPostcards(fresh);
+      } catch { /* non-fatal */ }
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return { ok: true, claimUrl: result.claimUrl, postcardId: result.postcardId };
+    } catch (err: any) {
+      Alert.alert("Couldn't create the link", err?.message ?? "Try again in a moment.");
+      return { ok: false, error: err?.message ?? "Unknown error" };
+    }
+  }, [authedUserId, credits]);
+
   const sendIntoVoidAction = useCallback(async (message: string) => {
     if (credits < 1) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -346,7 +428,9 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       const next: Postcard = {
         id: `void-${Date.now()}`,
         toFriendId: "void",
-        fromCity: userInfo.city || "Somewhere",
+        // Empty when user hasn't set a city. Don't fall back to a fake
+        // placeholder — see the same rationale at the local-path version.
+        fromCity: userInfo.city || "",
         toCity: "Anywhere",
         category: "handwritten",
         creditCost: 1,
@@ -359,6 +443,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       return { ok: true };
     }
     const prevCredits = credits;
+    const prevFreeCreditsRemaining = freeCreditsRemaining;
     const prevPostcards = postcards;
     setCredits((c) => c - 1);
     setFreeCreditsRemaining((b) => Math.max(0, b - 1));
@@ -368,12 +453,15 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true };
     } catch (err: any) {
+      // Restore both credit counters — the previous version reverted
+      // setCredits but left freeCreditsRemaining drained.
       setCredits(prevCredits);
+      setFreeCreditsRemaining(prevFreeCreditsRemaining);
       setPostcards(prevPostcards);
       Alert.alert("Couldn't send", err?.message ?? "Try again.");
       return { ok: false };
     }
-  }, [authedUserId, credits, postcards, userInfo.city]);
+  }, [authedUserId, credits, freeCreditsRemaining, postcards, userInfo.city]);
 
   const purchaseCreditsAction = useCallback(async (packId: string): Promise<CreditsPurchaseResult> => {
     const pack = CREDIT_PACKS.find((p) => p.id === packId);
@@ -394,6 +482,21 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
   }, [authedUserId]);
 
+  const refreshProfileAction = useCallback(async () => {
+    if (!SUPABASE_CONFIGURED || !authedUserId) return;
+    try {
+      const profile = await api.fetchProfile();
+      if (profile) {
+        setCredits(profile.credits);
+        setFreeCreditsRemaining(profile.freeCreditsRemaining);
+        setUserInfo(profile.currentUser);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("refreshProfile failed", err);
+    }
+  }, [authedUserId]);
+
   const markFreeCreditsIntroSeenAction = useCallback(async () => {
     setHasSeenFreeCreditsIntro(true);
     if (SUPABASE_CONFIGURED && authedUserId) {
@@ -403,13 +506,29 @@ export function MailClubProvider({ children }: PropsWithChildren) {
 
   const updateAboutMeAction = useCallback(async (patch: Partial<CurrentUser>) => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Local update happens immediately so the UI feels instant.
     setUserInfo((u) => ({ ...u, ...patch }));
-    if (SUPABASE_CONFIGURED && authedUserId) {
-      api.updateProfile(patch).catch((err) => {
+    if (!SUPABASE_CONFIGURED || !authedUserId) return;
+    // If the photo is a local file:// URI, upload it to Storage first and
+    // swap the local URI for the remote one before syncing to the profile.
+    let resolvedPatch = patch;
+    if (typeof patch.photoUrl === "string" && patch.photoUrl.startsWith("file://")) {
+      try {
+        const remoteUrl = await api.uploadProfilePhoto(patch.photoUrl);
+        resolvedPatch = { ...patch, photoUrl: remoteUrl };
+        setUserInfo((u) => ({ ...u, photoUrl: remoteUrl }));
+      } catch (err) {
         // eslint-disable-next-line no-console
-        console.warn("updateProfile sync failed", err);
-      });
+        console.warn("uploadProfilePhoto failed", err);
+        // Keep the local URI in client state so the user still sees their pick;
+        // we just won't sync this field server-side this round.
+        resolvedPatch = { ...patch, photoUrl: undefined };
+      }
     }
+    api.updateProfile(resolvedPatch).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn("updateProfile sync failed", err);
+    });
   }, [authedUserId]);
 
   const removeFriendAction = useCallback(async (id: string) => {
@@ -426,7 +545,17 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
   }, [authedUserId, friends]);
 
-  const addFriendByAddressAction = useCallback(async (input: { name: string; city: string; state: string }): Promise<AddFriendResult> => {
+  const addFriendByAddressAction = useCallback(async (input: {
+    name: string;
+    city: string;
+    state: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    addressCity?: string;
+    addressState?: string;
+    addressZip?: string;
+    addressCountry?: string;
+  }): Promise<AddFriendResult> => {
     const name = input.name.trim();
     const city = input.city.trim();
     const state = input.state.trim();
@@ -434,6 +563,14 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return { ok: false };
     }
+    const addressFields = {
+      addressLine1: input.addressLine1?.trim() || undefined,
+      addressLine2: input.addressLine2?.trim() || undefined,
+      addressCity: input.addressCity?.trim() || undefined,
+      addressState: input.addressState?.trim() || undefined,
+      addressZip: input.addressZip?.trim() || undefined,
+      addressCountry: input.addressCountry?.trim() || undefined,
+    };
     if (!SUPABASE_CONFIGURED || !authedUserId) {
       const id = `friend-${Date.now()}`;
       const friend: Friend = {
@@ -448,13 +585,14 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         lastInteractionAt: new Date().toISOString(),
         relationshipSignal: "Just added",
         signalTone: "blue",
+        ...addressFields,
       };
       setFriends((items) => [friend, ...items]);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true, friend };
     }
     try {
-      const friend = await api.addFriend({ name, city, state });
+      const friend = await api.addFriend({ name, city, state, ...addressFields });
       setFriends((items) => [friend, ...items]);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true, friend };
@@ -528,11 +666,13 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const completeSignupAction = useCallback(async (input: { name: string; city: string; state: string; email?: string; password?: string }) => {
+  const completeSignupAction = useCallback(async (input: { name: string; city: string; state: string; birthday?: string; email?: string; password?: string }) => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const trimmedName = input.name.trim() || "Mail Club member";
-    const trimmedCity = input.city.trim() || "Somewhere";
+    const trimmedName = input.name.trim() || "Mailroom member";
+    // Empty when not provided — don't fake "Somewhere" into the user profile.
+    const trimmedCity = input.city.trim();
     const trimmedState = input.state.trim();
+    const trimmedBirthday = (input.birthday ?? "").trim();
     const initials = trimmedName.split(/\s+/).map((p) => p[0] ?? "").join("").slice(0, 2).toUpperCase() || trimmedName.slice(0, 2).toUpperCase();
 
     // Optimistic local set first
@@ -541,6 +681,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       name: trimmedName,
       city: trimmedCity,
       state: trimmedState,
+      birthday: trimmedBirthday,
       since: String(new Date().getFullYear()),
       avatarInitials: initials,
     });
@@ -571,7 +712,17 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     // After auth (or if already authed), call the server RPC
     try {
       const profile = await api.completeSignup({ name: trimmedName, city: trimmedCity, state: trimmedState });
-      setUserInfo(profile.currentUser);
+      // The complete_signup RPC doesn't take birthday — patch it on after.
+      // The column already exists in profiles; updateProfile handles it.
+      if (trimmedBirthday) {
+        try {
+          await api.updateProfile({ birthday: trimmedBirthday });
+        } catch (err: any) {
+          // eslint-disable-next-line no-console
+          console.warn("Failed to save birthday on signup:", err?.message);
+        }
+      }
+      setUserInfo({ ...profile.currentUser, birthday: trimmedBirthday || profile.currentUser.birthday });
       setCredits(profile.credits);
       setFreeCreditsRemaining(profile.freeCreditsRemaining);
       setHasSeenFreeCreditsIntro(profile.hasSeenFreeCreditsIntro);
@@ -600,6 +751,23 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     } catch (err: any) {
       return { ok: false, error: err?.message ?? "Sign up failed" };
     }
+  }, []);
+
+  /**
+   * Trigger the Apple sign-in sheet, then reconcile the resulting session
+   * with local state. If Apple gave us a display name (only on first sign-in),
+   * it's already been persisted to the profile by the service. The WelcomeSheet
+   * advances to the identity step when `isNewUser: true` so the user can
+   * complete city + state.
+   */
+  const signInWithAppleAction = useCallback(async (): Promise<AppleAuthResult> => {
+    const result = await appleSignInService();
+    if (result.ok && result.fullName) {
+      // Optimistic mirror into local userInfo so the next render reflects
+      // Apple's name immediately, even before the profile fetch returns.
+      setUserInfo((u) => ({ ...u, name: result.fullName ?? u.name }));
+    }
+    return result;
   }, []);
 
   const resetPasswordAction = useCallback(async (email: string) => {
@@ -640,8 +808,10 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     notifications,
     privacy,
     sendPostcard: sendPostcardAction,
+    sendPostcardViaLink: sendPostcardViaLinkAction,
     sendIntoVoid: sendIntoVoidAction,
     purchaseCredits: purchaseCreditsAction,
+    refreshProfile: refreshProfileAction,
     markFreeCreditsIntroSeen: markFreeCreditsIntroSeenAction,
     updateAboutMe: updateAboutMeAction,
     removeFriend: removeFriendAction,
@@ -654,15 +824,16 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     completeSignup: completeSignupAction,
     signInWithEmail: signInWithEmailAction,
     signUpWithEmail: signUpWithEmailAction,
+    signInWithApple: signInWithAppleAction,
     resetPassword: resetPasswordAction,
     deleteAccount: deleteAccountAction,
   }), [
     userInfo, friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup,
     hydrated, authedUserId, voidReplies, notifications, privacy,
-    sendPostcardAction, sendIntoVoidAction, purchaseCreditsAction, markFreeCreditsIntroSeenAction,
+    sendPostcardAction, sendPostcardViaLinkAction, sendIntoVoidAction, purchaseCreditsAction, refreshProfileAction, markFreeCreditsIntroSeenAction,
     updateAboutMeAction, removeFriendAction, addFriendByAddressAction, queueInvitationAction,
     addMayaConnectionAction, updateNotificationsAction, updatePrivacyAction, signOutAction,
-    completeSignupAction, signInWithEmailAction, signUpWithEmailAction,
+    completeSignupAction, signInWithEmailAction, signUpWithEmailAction, signInWithAppleAction,
     resetPasswordAction, deleteAccountAction,
   ]);
 

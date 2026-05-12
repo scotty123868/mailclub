@@ -23,7 +23,7 @@ describe("WelcomeSheet", () => {
         <WelcomeSheet visible={true} onComplete={() => {}} />
       </AllProviders>
     );
-    expect(getByText(/Welcome to Mail Club/i)).toBeTruthy();
+    expect(getByText(/Welcome to Mailroom/i)).toBeTruthy();
     expect(getByTestId("welcome-name")).toBeTruthy();
     expect(getByTestId("welcome-city")).toBeTruthy();
     expect(getByTestId("welcome-state")).toBeTruthy();
@@ -35,7 +35,7 @@ describe("WelcomeSheet", () => {
         <WelcomeSheet visible={false} onComplete={() => {}} />
       </AllProviders>
     );
-    expect(queryByText(/Welcome to Mail Club/i)).toBeNull();
+    expect(queryByText(/Welcome to Mailroom/i)).toBeNull();
   });
 
   it("submit persists name+city+state and marks intro seen", async () => {
@@ -80,7 +80,7 @@ describe("WelcomeSheet", () => {
       expect(onComplete).toHaveBeenCalled();
     });
     // Skip routes through completeSignup with empty name → placeholder identity.
-    expect(ref.current!.currentUser.name).toBe("Mail Club member");
+    expect(ref.current!.currentUser.name).toBe("Mailroom member");
     // Mock fixtures wiped so the new user doesn't inherit Tatiana/Maya/etc.
     expect(ref.current!.friends).toEqual([]);
     expect(ref.current!.postcards).toEqual([]);

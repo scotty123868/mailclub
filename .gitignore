@@ -40,3 +40,7 @@ expo-start.log
 # generated native folders
 /ios
 /android
+.gstack/
+
+# supabase CLI transient cache (project linkage, version pins)
+supabase/.temp/

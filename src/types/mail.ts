@@ -14,6 +14,24 @@ export type Friend = {
   lastInteractionAt: string;
   relationshipSignal?: string;
   signalTone?: "red" | "green" | "blue";
+  photoUrl?: string;
+  /** Mailing address — required for Lob to ship a card. */
+  addressLine1?: string;
+  addressLine2?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressZip?: string;
+  addressCountry?: string;
+};
+
+/** Subset of Friend fields that capture a deliverable US mailing address. */
+export type FriendAddressInput = {
+  addressLine1?: string;
+  addressLine2?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressZip?: string;
+  addressCountry?: string;
 };
 
 export type Postcard = {
@@ -59,4 +77,5 @@ export type CurrentUser = {
   sendMe: string;
   birthday: string;
   currentlyInto: string;
+  photoUrl?: string;
 };

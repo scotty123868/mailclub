@@ -23,7 +23,7 @@ begin
     v_initials := upper(substr(v_clean, 1, 2));
   end if;
   update public.profiles set
-    name = coalesce(nullif(v_clean, ''), 'Mail Club member'),
+    name = coalesce(nullif(v_clean, ''), 'Mailroom member'),
     city = coalesce(nullif(trim(p_city), ''), 'Somewhere'),
     state = coalesce(nullif(trim(p_state), ''), ''),
     since = to_char(now(), 'YYYY'),

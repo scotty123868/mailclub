@@ -6,7 +6,7 @@ import { fonts } from "@/src/theme/typography";
 
 export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   function openMail() {
-    Linking.openURL("mailto:hello@mailclub.app?subject=Mail%20Club%20feedback").catch(() => undefined);
+    Linking.openURL("mailto:scotty@lasolasvc.com?subject=Mailroom%20feedback").catch(() => undefined);
   }
 
   return (
@@ -14,7 +14,7 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
       <View style={styles.root}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>About Mail Club</Text>
+            <Text style={styles.title}>About Mailroom</Text>
             <Text style={styles.subtitle}>The small print, lovingly written.</Text>
           </View>
           <Pressable
@@ -30,7 +30,7 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <View style={styles.hero}>
-            <Text style={styles.brand}>Mail Club</Text>
+            <Text style={styles.brand}>Mailroom</Text>
             <View style={styles.stamp}>
               <Stamp motif="dove" tone="red" cents="1¢" rotate={-7} size="sm" />
             </View>
@@ -42,7 +42,7 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
               Every card you send is a small act of attention in an attention-starved world.
             </Para>
             <Para>
-              Mail Club is in beta. Send queueing is local, fulfillment is being wired with a real printer
+              Mailroom is in beta. Send queueing is local, fulfillment is being wired with a real printer
               partner, and Apple In-App Purchase replaces the demo credit grants in the next release.
             </Para>
           </Section>
@@ -59,11 +59,11 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
 
           <Section icon={FileText} title="Terms">
             <Para>
-              By using Mail Club you agree to be kind. Cards that harass, threaten, or violate someone's
+              By using Mailroom you agree to be kind. Cards that harass, threaten, or violate someone's
               dignity will be refused at the print queue. We'll show you the refusal so you can revise.
             </Para>
             <Para>
-              Mail Club is a hobby project today. Use at your own risk and write things that would make your
+              Mailroom is a hobby project today. Use at your own risk and write things that would make your
               grandmother proud.
             </Para>
           </Section>
@@ -77,14 +77,14 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
               style={styles.mailBtn}
               testID="about-app-mail"
               accessibilityRole="button"
-              accessibilityLabel="Email Mail Club"
+              accessibilityLabel="Email Mailroom"
             >
               <Mail color={colors.white} size={16} strokeWidth={1.6} />
-              <Text style={styles.mailBtnText}>hello@mailclub.app</Text>
+              <Text style={styles.mailBtnText}>scotty@lasolasvc.com</Text>
             </Pressable>
           </Section>
 
-          <Text style={styles.version}>Mail Club · beta · made with paper, ink, and code.</Text>
+          <Text style={styles.version}>Mailroom · beta · made with paper, ink, and code.</Text>
         </ScrollView>
       </View>
     </Modal>

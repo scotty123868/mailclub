@@ -1,0 +1,1579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mailroom — UI/UX gallery</title>
+<style>
+  :root {
+    --paper: #F8F1E3;
+    --paper-dark: #EFE2CC;
+    --ink: #17223B;
+    --muted-ink: #5E6472;
+    --postal-red: #B84A3A;
+    --postal-blue: #3C6E8F;
+    --sage: #9BAF9B;
+    --gold: #D9B46E;
+    --night: #111A33;
+    --line: #D9C8AC;
+    --white: #FFFDF7;
+    --shadow: #2B2115;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Cormorant Garamond", "Hoefler Text", Georgia, serif;
+    font-size: 17px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-image:
+      radial-gradient(rgba(120, 90, 40, 0.05) 1px, transparent 1px),
+      radial-gradient(rgba(120, 90, 40, 0.04) 1px, transparent 1px);
+    background-size: 24px 24px, 36px 36px;
+    background-position: 0 0, 12px 12px;
+  }
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+  }
+  header.hero {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 36px;
+    margin-bottom: 48px;
+  }
+  .brand {
+    font-family: "Allura", "Snell Roundhand", "Brush Script MT", cursive;
+    font-size: 76px;
+    line-height: 0.9;
+    color: var(--ink);
+    margin: 0 0 6px 0;
+    letter-spacing: -0.5px;
+  }
+  .deck {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-style: italic;
+    color: var(--muted-ink);
+    font-size: 19px;
+    max-width: 720px;
+    margin: 12px 0 0;
+  }
+  .meta-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+    align-items: center;
+  }
+  .pill {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-family: "Inter", -apple-system, system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    color: var(--ink);
+  }
+  .pill.red { background: var(--postal-red); color: var(--white); border-color: var(--postal-red); }
+  .pill.blue { background: var(--postal-blue); color: var(--white); border-color: var(--postal-blue); }
+  .pill.muted { color: var(--muted-ink); }
+
+  section {
+    margin-top: 56px;
+  }
+  h2.section-title {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-weight: 600;
+    font-size: 34px;
+    margin: 0 0 6px;
+    color: var(--ink);
+  }
+  .section-sub {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-style: italic;
+    font-size: 16px;
+    color: var(--muted-ink);
+    margin: 0 0 28px;
+  }
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--line), transparent);
+    margin: 0 0 32px;
+  }
+
+  /* screens grid */
+  .screens {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 28px;
+  }
+  .screen-card {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(43, 33, 21, 0.04), 0 8px 24px rgba(43, 33, 21, 0.06);
+    display: flex;
+    flex-direction: column;
+  }
+  .screen-image {
+    background: var(--paper-dark);
+    aspect-ratio: 9 / 19.5;
+    overflow: hidden;
+    display: block;
+    border-bottom: 1px solid var(--line);
+  }
+  .screen-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    display: block;
+  }
+  .screen-body { padding: 16px 18px 18px; }
+  .screen-tag {
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--postal-red);
+    margin-bottom: 6px;
+  }
+  .screen-title {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-weight: 600;
+    font-size: 21px;
+    line-height: 1.15;
+    color: var(--ink);
+    margin: 0 0 8px;
+  }
+  .screen-desc {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted-ink);
+    margin: 0 0 12px;
+  }
+  .screen-notes {
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--ink);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .screen-notes li {
+    border-top: 1px dashed var(--line);
+    padding: 7px 0;
+    display: flex;
+    gap: 8px;
+  }
+  .screen-notes li::before {
+    content: "✱";
+    color: var(--postal-red);
+    flex-shrink: 0;
+  }
+
+  /* palette */
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px;
+  }
+  .swatch {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--white);
+  }
+  .swatch-color { height: 80px; }
+  .swatch-meta { padding: 10px 12px; font-family: "Inter", system-ui, sans-serif; }
+  .swatch-name { font-size: 12px; font-weight: 600; letter-spacing: 0.4px; }
+  .swatch-hex { font-size: 11px; color: var(--muted-ink); margin-top: 2px; }
+
+  /* typography */
+  .type-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .type-card {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px 26px;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  .type-meta { font-family: "Inter", system-ui, sans-serif; }
+  .type-name { font-size: 13px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--postal-blue); }
+  .type-stack { font-size: 11px; color: var(--muted-ink); margin-top: 4px; }
+  .type-usage { font-size: 12px; color: var(--ink); margin-top: 12px; line-height: 1.5; }
+  .sample-script { font-family: "Allura", "Snell Roundhand", cursive; font-size: 56px; line-height: 1; color: var(--ink); }
+  .sample-serif-bold { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 700; font-size: 28px; color: var(--ink); }
+  .sample-serif-italic { font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; font-size: 21px; color: var(--ink); }
+  .sample-sans { font-family: "Inter", system-ui, sans-serif; font-size: 14px; color: var(--ink); }
+  .sample-caveat { font-family: "Caveat", "Patrick Hand", cursive; font-size: 30px; color: var(--ink); }
+
+  /* component cards */
+  .components {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 22px;
+  }
+  .component {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px;
+  }
+  .component-h {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-weight: 600;
+    font-size: 19px;
+    margin: 0 0 4px;
+  }
+  .component-sub {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--muted-ink);
+    margin: 0 0 14px;
+  }
+  .component-preview {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px;
+    min-height: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .component-notes {
+    margin: 12px 0 0;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--muted-ink);
+    line-height: 1.5;
+  }
+
+  /* category picker mock */
+  .catpicker {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    width: 100%;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .catpicker .cat {
+    padding: 14px 6px;
+    text-align: center;
+    border-left: 1px solid var(--line);
+    position: relative;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+  .catpicker .cat:first-child { border-left: 0; }
+  .catpicker .cat.active { background: rgba(184, 74, 58, 0.07); }
+  .catpicker .cat.active::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--postal-red);
+  }
+  .catpicker .cat-icon { font-size: 20px; }
+  .catpicker .cat-title { font-family: "Cormorant Garamond", Georgia, serif; font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--ink); }
+  .catpicker .cat.active .cat-title { color: var(--postal-red); font-weight: 700; }
+  .catpicker .cat-cost { font-size: 10px; color: var(--muted-ink); margin-top: 2px; letter-spacing: 0.3px; }
+  .catpicker .cat.active .cat-cost { color: var(--postal-red); font-weight: 700; }
+
+  /* stamp mock */
+  .stamp-mock {
+    width: 90px;
+    height: 110px;
+    background: var(--postal-red);
+    border: 4px solid var(--white);
+    box-shadow: 0 0 0 1px var(--line), 0 2px 8px rgba(43, 33, 21, 0.18);
+    border-radius: 2px;
+    transform: rotate(-6deg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    font-family: "Inter", system-ui, sans-serif;
+    position: relative;
+  }
+  .stamp-mock::before, .stamp-mock::after {
+    content: "";
+    position: absolute;
+    left: -4px; right: -4px;
+    height: 4px;
+    background-image: radial-gradient(circle, var(--paper) 2px, transparent 2.5px);
+    background-size: 8px 8px;
+  }
+  .stamp-mock::before { top: -8px; }
+  .stamp-mock::after { bottom: -8px; }
+  .stamp-mock .motif { font-size: 36px; line-height: 1; }
+  .stamp-mock .cents { font-size: 11px; letter-spacing: 1.5px; margin-top: 4px; font-weight: 700; }
+
+  /* postmark */
+  .postmark {
+    width: 110px;
+    height: 110px;
+    border: 1.5px solid var(--postal-red);
+    border-radius: 50%;
+    color: var(--postal-red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    transform: rotate(-3deg);
+    opacity: 0.7;
+    position: relative;
+    text-align: center;
+  }
+  .postmark::before {
+    content: "2026";
+    position: absolute;
+    font-size: 14px;
+    letter-spacing: 1px;
+  }
+  .postmark::after {
+    content: "HAND CARRIED";
+    position: absolute;
+    top: 6px;
+    font-size: 8px;
+  }
+
+  /* identity avatar */
+  .avatar-mock {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #FFF8E9, var(--paper));
+    border: 2px solid var(--postal-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-weight: 700;
+    font-size: 32px;
+    color: var(--ink);
+    box-shadow: 0 4px 14px rgba(43, 33, 21, 0.1);
+    position: relative;
+  }
+
+  /* rolodex */
+  .rolodex {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    box-shadow: 0 2px 0 rgba(43, 33, 21, 0.04);
+  }
+  .rolo-name {
+    flex: 1;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--ink);
+  }
+  .rolo-sub {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--muted-ink);
+    display: block;
+    font-weight: 400;
+    margin-top: 2px;
+  }
+  .rolo-pill {
+    background: rgba(155, 175, 155, 0.2);
+    color: #4A5A38;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+
+  /* credit badge */
+  .credit-badge {
+    background: var(--gold);
+    color: var(--ink);
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 999px;
+    letter-spacing: 0.4px;
+    box-shadow: inset 0 0 0 1px rgba(43, 33, 21, 0.15);
+  }
+
+  /* flow / open questions */
+  .flow {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 26px 28px;
+    margin-top: 20px;
+  }
+  .flow ol { padding-left: 22px; margin: 0; }
+  .flow ol li {
+    padding: 6px 0;
+    line-height: 1.55;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 17px;
+  }
+  .flow ol li b { font-weight: 600; color: var(--postal-red); }
+
+  .questions {
+    background: rgba(217, 180, 110, 0.16);
+    border: 1px dashed var(--gold);
+    border-radius: 10px;
+    padding: 22px 26px;
+    margin-top: 24px;
+  }
+  .questions h3 {
+    margin: 0 0 10px;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-weight: 600;
+    font-size: 20px;
+  }
+  .questions ul { margin: 0; padding-left: 22px; }
+  .questions ul li {
+    padding: 5px 0;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 16px;
+  }
+
+  /* feedback */
+  .feedback-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
+  }
+  .fb {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    min-height: 110px;
+  }
+  .fb h4 {
+    margin: 0 0 8px;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 16px;
+    color: var(--postal-blue);
+  }
+  .fb textarea {
+    width: 100%;
+    min-height: 70px;
+    border: 1px dashed var(--line);
+    background: transparent;
+    font-family: "Caveat", "Patrick Hand", cursive;
+    font-size: 18px;
+    padding: 8px;
+    border-radius: 6px;
+    color: var(--ink);
+    resize: vertical;
+  }
+
+  footer.foot {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--muted-ink);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  /* responsive */
+  @media (max-width: 700px) {
+    .type-card { grid-template-columns: 1fr; }
+    .brand { font-size: 56px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1 class="brand">Mailroom</h1>
+    <p class="deck">A private postcard club. Send real handwritten notes and photo postcards to your people. This page is a snapshot of every surface in the app for review.</p>
+    <div class="meta-row">
+      <span class="pill red">v0.6 · beta</span>
+      <span class="pill blue">5 free credits</span>
+      <span class="pill">Expo SDK 54</span>
+      <span class="pill">Supabase backend</span>
+      <span class="pill muted">216 tests · 29 suites</span>
+    </div>
+    <div style="background: rgba(184,74,58,0.06); border-left: 3px solid var(--postal-red); padding: 14px 18px; margin-top: 22px; border-radius: 0 6px 6px 0;">
+      <div style="font-family: 'Inter'; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; color: var(--postal-red); margin-bottom: 4px;">RENAMED · MAY 11, 2026</div>
+      <div style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.45; color: var(--ink);">The app was called <strong>Mail Club</strong>. It's now <strong>Mailroom</strong>. New brand name, new bundle ID (<code>com.mailroom.app</code>), new app slug, new URI scheme (<code>mailroom://</code>), new IAP product IDs (<code>mailroom.credits.5/10/25/50</code>). <a href="#renamed" style="color: var(--postal-blue);">See the full rename impact below.</a></div>
+    </div>
+  </header>
+
+  <section>
+    <h2 class="section-title">The five tabs</h2>
+    <p class="section-sub">Bottom-tab navigation, no headers, paper background throughout. My Card is the home tab.</p>
+    <div class="divider"></div>
+
+    <div style="background: rgba(155,175,155,0.16); border: 1px solid rgba(155,175,155,0.6); border-radius: 10px; padding: 14px 18px; margin: -8px 0 22px;">
+      <div style="font-family: 'Inter'; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; color: #4A5A38; margin-bottom: 4px;">✓ FRESH FROM THE SIM · MAY 11, 2026</div>
+      <div style="font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.5; color: var(--ink);">All 5 tab screenshots below were captured today from a live iOS 26.4 / iPhone 17 Pro simulator running the Mailroom build with the rename + react-native-maps + updated prices. The user is in "Skip for now" mode (no signup), so most counters are 0 — design intent is what we're reviewing.</div>
+    </div>
+
+    <div class="screens">
+      <article class="screen-card">
+        <div class="screen-image"><img src="../.screenshots/14-mycard-mailroom.jpg" alt="My Card tab"/></div>
+        <div class="screen-body">
+          <div class="screen-tag">Home · My Card</div>
+          <h3 class="screen-title">Your identity is the front door</h3>
+          <p class="screen-desc">The first thing you see. A paper monogram avatar with a postal-blue rim, your name set in a serif, and your tagline. Stamp in the top corner.</p>
+          <ul class="screen-notes">
+            <li>Hero IdentityAvatar (paper, monogram, ring)</li>
+            <li>About Me editor entry (pencil icon)</li>
+            <li>QR card for "send to me"</li>
+            <li>Credits balance row</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="screen-image"><img src="../.screenshots/13-friends-mailroom.jpg" alt="Friends tab"/></div>
+        <div class="screen-body">
+          <div class="screen-tag">Tab · Friends</div>
+          <h3 class="screen-title">The rolodex deck</h3>
+          <p class="screen-desc">A stack of calm single-line cards, one per friend, with an inline color-coded signal pill ("close", "recent", "sleeping"). Compact mail card up top. No tap-to-connect.</p>
+          <ul class="screen-notes">
+            <li>RolodexCard · single line + pill</li>
+            <li>Add friend by QR scan (entry point)</li>
+            <li>FriendDetailSheet on tap</li>
+            <li>No fake "social graph" noise</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="screen-image"><img src="../.screenshots/12-send-mailroom.jpg" alt="Send tab"/></div>
+        <div class="screen-body">
+          <div class="screen-tag">Tab · Send</div>
+          <h3 class="screen-title">Pick a category, write, send</h3>
+          <p class="screen-desc">Four tiles for the four card types (Note 1cr, Photo 2cr, Place 2cr, Custom 5cr). Active tile gets a red top bar and bold red text. Compose flows live below.</p>
+          <ul class="screen-notes">
+            <li>CategoryPicker · 4 tiles, credit cost visible</li>
+            <li>CategoryCompose · per-type form</li>
+            <li>AIPromptCard · optional tone helper</li>
+            <li>OccasionGrid · birthday, just-because, etc.</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="screen-image"><img src="../.screenshots/11-constellation-mailroom.jpg" alt="Constellation tab"/></div>
+        <div class="screen-body">
+          <div class="screen-tag">Tab · Constellation</div>
+          <h3 class="screen-title">Who's in your orbit</h3>
+          <p class="screen-desc">A circular constellation of named friends around "You". Insight cards derive from real state: Warmest Thread (most cards), Sleeping Stars (60+ days), monthly cadence.</p>
+          <ul class="screen-notes">
+            <li>SVG starfield · friend names on circle</li>
+            <li>Decorative non-label stars in background</li>
+            <li>Derived insights, no fake data</li>
+            <li>Calm, observatory feel</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="screen-image"><img src="../.screenshots/10-map-real-tiles-apple-fallback.jpg" alt="Map tab — react-native-maps with Apple Maps fallback"/></div>
+        <div class="screen-body">
+          <div class="screen-tag" style="color: var(--postal-red);">TAB · MAP · LIVE BUILD</div>
+          <h3 class="screen-title">Where mail travels</h3>
+          <p class="screen-desc">Real US map via <code>react-native-maps</code>, sepia tint overlay, custom paper-pin markers with serif uppercase labels, dashed geodesic routes. This is from a working iOS sim build. With a Google Maps API key set, the Apple labels (NORTH AMERICA, Toronto, Maps) disappear.</p>
+          <ul class="screen-notes">
+            <li>MapPanel · react-native-maps + sepia style</li>
+            <li>Geodesic Polylines between cities</li>
+            <li>Custom paper-pin Markers with halos</li>
+            <li>SVG compass + MAILROOM cartouche overlays</li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Map — design + how it scales</h2>
+    <p class="section-sub">Real Apple Maps tiles under a sepia tint, custom paper-pin markers with serif uppercase city names, geodesic dashed routes. One source of truth; see the screenshot in "The five tabs" section above.</p>
+    <div class="divider"></div>
+
+    <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 8px 0 6px;">Why Apple Maps (not Google, not a static asset)</h3>
+    <ul style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.6; padding-left: 22px; margin: 0 0 22px;">
+      <li><strong>Privacy-aligned</strong> with Mailroom's "addresses stay private" stance — no third-party map opens leaking the user's IP to Google per session.</li>
+      <li><strong>No API keys, no billing</strong> — works for any user instantly.</li>
+      <li><strong>Real geography beats hand-drawn approximation.</strong> A real US coastline rendered by Apple looks better than my best SVG version of it.</li>
+      <li><strong>Tradeoff accepted:</strong> Apple's labels ("NORTH AMERICA", "Toronto", "Maps Legal") bleed through the sepia tint. We mitigate with overlay decorations and a heavier tint. Acceptable for postcard-style decoration.</li>
+    </ul>
+
+    <h3 id="map-scales" style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 28px 0 6px; color: var(--postal-red);">How this scales when you have lots of mail</h3>
+    <p style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.55; margin: 0 0 16px;">The current screen is tuned for the first 5–10 friends and the first 20 cards. As Mailroom grows, here's what breaks and the plan for each:</p>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 4px;">MAP · BREAKS AT ~15 ROUTES</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Routes overlap into spaghetti</div>
+        <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">Right now we draw 8 polylines and they sit pleasantly. At 15+ they cross each other constantly; at 50+ the dashed pattern becomes visual noise.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> show only the N most-recent or most-active routes (top 12 by send count), aggregate the rest into a "+ 38 more" pill. Optionally fade older routes by recency so the visual hierarchy mirrors emotional hierarchy.</p>
+      </div>
+
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 4px;">MAP · BREAKS AT ~25 CITIES</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">City label collisions</div>
+        <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">Two friends in NYC area = labels stack. Five friends in California = labels become unreadable. Currently we just render every label.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> cluster nearby pins (Apple's <code>MKClusterAnnotation</code> equivalent in react-native-maps), show count on the cluster ("3"), tap to expand. Top tier of friends (most-active) keeps individual pin + label.</p>
+      </div>
+
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 4px;">CONSTELLATION · BREAKS AT ~12 FRIENDS</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Stars crowd the orbit ring</div>
+        <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">Current design places friends on a single 130pt circle. Six friends look balanced. Twelve start touching. Fifty would be illegible.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> two orbital rings — inner ring for "close friends" (top 6 by send/receive count), outer ring for the next 12. Anyone beyond is a faint anonymous star in the background. The "Warmest Thread / Sleeping Stars" insight cards already surface specific friends; the constellation is decoration, not navigation.</p>
+      </div>
+
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 4px;">SEND · BREAKS AT ~15 FRIENDS</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Recipient cycler stops being fun</div>
+        <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">Right now you tap the recipient row to cycle to the next friend. Charming with 6 friends. Annoying with 30.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> switch to a recipient sheet — tap → modal with search + recent contacts. Keep "cycler" affordance for users with ≤8 friends as a delightful detail.</p>
+      </div>
+
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-blue); margin-bottom: 4px;">FRIENDS · SCALES FINE</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Rolodex is a list — handles any count</div>
+        <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">200 friends would scroll. Same UX. Maybe add a search bar at the top when count &gt; 12. Maybe pin "recent contacts" to the top.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> SectionList grouped by recency ("This month / Earlier"). Search bar above 12 friends. Optional: tap-to-sort.</p>
+      </div>
+
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-blue); margin-bottom: 4px;">MAIL HISTORY · SCALES FINE</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Sheet is a paginated list — handles any count</div>
+        <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">200 sent cards = 200 list rows. Loads fine, scrolls fine. Eventually wants pagination (load 20 at a time) and filter by recipient/status/date.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> already a FlatList with stable keys. Add a filter chip row + paging when count &gt; 50.</p>
+      </div>
+
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 4px;">MY CARD STATS · COSMETIC</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Numbers get wide</div>
+        <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">"1,234" friends will overflow the 4-column row. We already have <code>adjustsFontSizeToFit</code> on the Map summary; same trick works here.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> add the same <code>numberOfLines={1}, adjustsFontSizeToFit</code> pattern to MetricStrip. Cosmetic, not architectural.</p>
+      </div>
+
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 4px;">CONTEXT CACHE · BREAKS AT ~500 ITEMS</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">AsyncStorage write-through gets slow</div>
+        <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">Every state change serializes the whole cache to AsyncStorage. At 500 postcards × 200 friends, JSON.stringify on every keystroke becomes laggy.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> swap the bulk JSON cache for SQLite (via <code>expo-sqlite</code>), index by ID, only write what changed. Major architectural change but the right path at scale.</p>
+      </div>
+
+    </div>
+
+    <div class="callout" style="background: rgba(155,175,155,0.16); border: 1px solid rgba(155,175,155,0.6); border-radius: 10px; padding: 18px 22px; margin-top: 24px;">
+      <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px; margin-bottom: 6px;">When to actually do this work</div>
+      <p style="font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.6; margin: 0;">None of these matter for TestFlight beta. With 5–20 users and 10–50 sent cards across all of them, the current design works as-is. <strong>The right time to revisit scaling is when one specific user gets to 25+ friends</strong> — they'll be the first to feel the friction. Build the fix then. Premature scaling is the same trap as premature optimization.</p>
+    </div>
+  </section>
+
+
+  <section>
+    <h2 class="section-title">Onboarding</h2>
+    <p class="section-sub">First-launch flow. Step 1 collects identity; step 2 collects email + password (or signs you in).</p>
+    <div class="divider"></div>
+
+    <div class="screens">
+      <article class="screen-card">
+        <div class="screen-image"><img src="../.screenshots/03-welcome-sheet.jpg" alt="Welcome sheet, first version"/></div>
+        <div class="screen-body">
+          <div class="screen-tag">v1 · early</div>
+          <h3 class="screen-title">Welcome — identity step (v1)</h3>
+          <p class="screen-desc">Initial onboarding: name + city + state, with the 5-free-credits banner and a tiny dove stamp. Reference for what we started from.</p>
+          <ul class="screen-notes">
+            <li>1¢ dove stamp</li>
+            <li>HAND CARRIED postmark</li>
+            <li>5-credit gift callout</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="screen-image"><img src="../.screenshots/04-welcome-after-codex-fixes.jpg" alt="Welcome sheet after codex fixes"/></div>
+        <div class="screen-body">
+          <div class="screen-tag">v2 · current</div>
+          <h3 class="screen-title">Welcome — after the codex pass</h3>
+          <p class="screen-desc">Same flow, tightened copy, fixed font scaling, KeyboardAvoidingView wraps the form. Continues to step 2 (email + password) when Supabase is wired.</p>
+          <ul class="screen-notes">
+            <li>"Where you're writing from" label</li>
+            <li>Auto-focus on name field</li>
+            <li>Skip-for-now still available</li>
+            <li>Step 2: signup ↔ signin toggle + forgot password</li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Sheets &amp; modals</h2>
+    <p class="section-sub">Slide-up sheets, mostly. Each one is a focused single-task surface.</p>
+    <div class="divider"></div>
+
+    <div class="components">
+      <div class="component">
+        <h3 class="component-h">SettingsSheet (every row — see full mockup below)</h3>
+        <p class="component-sub">Account · Mail · Privacy &amp; support · Sign out · Delete account</p>
+        <div class="component-preview" style="flex-direction: column; align-items: stretch; padding: 0;">
+          <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--muted-ink);">ACCOUNT</div>
+          <div style="padding: 12px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line);">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center; color: var(--ink);">💳</div>
+            <div style="flex:1"><div style="font-family: 'Cormorant Garamond'; font-weight: 600;">Credits</div><div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink);">5 credits</div></div>
+            <div style="color: var(--muted-ink)">›</div>
+          </div>
+          <div style="padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center; color: var(--postal-red);">🗑</div>
+            <div style="flex:1; color: var(--postal-red); font-family: 'Cormorant Garamond'; font-weight: 600;">Delete account</div>
+            <div style="color: var(--muted-ink)">›</div>
+          </div>
+        </div>
+        <p class="component-notes"><b>Apple-required:</b> deletion uses a double-confirm Alert. Backend RPC <code>delete_my_account()</code> wipes auth.users → cascades to profile/friends/postcards.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">EditAboutMeSheet</h3>
+        <p class="component-sub">Update name, tagline, interests — what your mail card says about you.</p>
+        <div class="component-preview" style="flex-direction: column; align-items: stretch; padding: 16px;">
+          <input style="background: var(--white); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-family: 'Cormorant Garamond'; font-size: 16px; color: var(--ink);" value="Scotty Lefkowitz" disabled />
+          <input style="background: var(--white); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--ink); margin-top: 8px;" value="builds things, mostly slowly" disabled />
+        </div>
+        <p class="component-notes">Live preview of how the mail card will look. Saves on tap, optimistic update against Supabase.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">MailHistorySheet</h3>
+        <p class="component-sub">Every card you've sent. Date, recipient, category, status.</p>
+        <div class="component-preview" style="flex-direction: column; align-items: stretch; padding: 0;">
+          <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: center;">
+            <div style="font-family: 'Cormorant Garamond'; font-weight: 600;">Photo · to Maya</div>
+            <div style="flex:1; text-align: right; font-family: 'Inter'; font-size: 11px; color: var(--muted-ink); letter-spacing: 0.4px;">MAY 10</div>
+          </div>
+          <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: center;">
+            <div style="font-family: 'Cormorant Garamond'; font-weight: 600;">Note · to Dad</div>
+            <div style="flex:1; text-align: right; font-family: 'Inter'; font-size: 11px; color: var(--muted-ink); letter-spacing: 0.4px;">APR 28</div>
+          </div>
+          <div style="padding: 12px 16px;display: flex; gap: 10px; align-items: center;">
+            <div style="font-family: 'Cormorant Garamond'; font-weight: 600;">Place · to Sam</div>
+            <div style="flex:1; text-align: right; font-family: 'Inter'; font-size: 11px; color: var(--muted-ink); letter-spacing: 0.4px;">APR 12</div>
+          </div>
+        </div>
+        <p class="component-notes">Sourced from <code>postcards</code> table. Status will flip to "delivered" once Lob fulfillment is wired.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">CreditsSheet</h3>
+        <p class="component-sub">Buy more credits. Four packs. IAP scaffolded, not yet StoreKit-wired.</p>
+        <div class="component-preview" style="flex-direction: column; align-items: stretch; padding: 0;">
+          <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: center;">
+            <div style="flex:1"><div style="font-family: 'Cormorant Garamond'; font-weight: 600;">5 credit pack</div><div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink);">$4.99 · two photo cards or five notes</div></div>
+            <span class="pill blue">Buy</span>
+          </div>
+          <div style="padding: 12px 16px; display: flex; gap: 10px; align-items: center;">
+            <div style="flex:1"><div style="font-family: 'Cormorant Garamond'; font-weight: 600;">25 credit pack</div><div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink);">$24.99 · best value</div></div>
+            <span class="pill blue">Buy</span>
+          </div>
+        </div>
+        <p class="component-notes"><b>Apple Guideline 3.1.1:</b> all four packs need to be configured in App Store Connect as Consumable IAPs.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">NotificationsSheet</h3>
+        <p class="component-sub">Three toggles: card delivered, reply received, weekly digest.</p>
+        <div class="component-preview" style="flex-direction: column; align-items: stretch; padding: 0;">
+          <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center;">
+            <div style="flex:1; font-family: 'Cormorant Garamond'; font-weight: 600;">Card delivered</div>
+            <div style="width: 40px; height: 22px; background: var(--sage); border-radius: 999px; position: relative;"><div style="position: absolute; right: 2px; top: 2px; width: 18px; height: 18px; background: var(--white); border-radius: 50%;"></div></div>
+          </div>
+          <div style="padding: 12px 16px; display: flex; align-items: center;">
+            <div style="flex:1; font-family: 'Cormorant Garamond'; font-weight: 600;">Reply received</div>
+            <div style="width: 40px; height: 22px; background: var(--sage); border-radius: 999px; position: relative;"><div style="position: absolute; right: 2px; top: 2px; width: 18px; height: 18px; background: var(--white); border-radius: 50%;"></div></div>
+          </div>
+        </div>
+        <p class="component-notes">Push wired through Supabase (when configured). Local defaults stored in AsyncStorage.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">PrivacySheet</h3>
+        <p class="component-sub">Who can write to me: Anyone with QR · Only friends · Paused.</p>
+        <div class="component-preview" style="flex-direction: column; align-items: stretch; padding: 0;">
+          <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center;">
+            <div style="flex:1; font-family: 'Cormorant Garamond'; font-weight: 600;">Anyone with QR</div>
+            <div style="color: var(--postal-red); font-size: 18px;">●</div>
+          </div>
+          <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center;">
+            <div style="flex:1; font-family: 'Cormorant Garamond'; font-weight: 600;">Only friends</div>
+            <div style="color: var(--muted-ink); font-size: 18px;">○</div>
+          </div>
+          <div style="padding: 12px 16px; display: flex; align-items: center;">
+            <div style="flex:1; font-family: 'Cormorant Garamond'; font-weight: 600;">Paused</div>
+            <div style="color: var(--muted-ink); font-size: 18px;">○</div>
+          </div>
+        </div>
+        <p class="component-notes">Three-way radio. Setting stored on profile, enforced on the backend RPC for incoming mail.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Postcard preview — front &amp; back</h2>
+    <p class="section-sub">This is what gets printed at 4×6, wired into the Send flow. Live screenshot from the sim is below; design spec details in <code>POSTCARD_DESIGN_SPEC.md</code>.</p>
+    <div class="divider"></div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; margin-bottom: 32px;">
+      <div>
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; color: var(--postal-red); margin-bottom: 8px;">LIVE FROM THE SIM · MAY 11, 2026</div>
+        <img src="../.screenshots/17-postcard-preview-mailroom.jpg"
+             alt="Postcard preview, live from the sim — front + back, void mode"
+             style="width: 100%; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(43,33,21,0.14); display: block;" />
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 12px 0 0;">From the Send flow in void mode — the user sees both sides before sending. The new <code>PostcardPreview</code> renders with:</p>
+        <ul style="margin: 8px 0 0; padding-left: 22px; font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.55;">
+          <li>Slight -0.5° rotation per card so they feel like physical objects</li>
+          <li>Real perforated stamp (12 cut-out circles around perimeter) with the Mailroom dove motif</li>
+          <li>Postmark applied at -8° (off-register, like a real ink stamp)</li>
+          <li>Handwritten message in Caveat with fitted line wrapping</li>
+          <li>FROM: return address in uppercase sans, address-block on the right in serif</li>
+          <li>5 USPS guide lines at the bottom right</li>
+          <li>Hand-drawn slight off-vertical center divider</li>
+          <li>Drop shadow + paper grain texture</li>
+          <li>Forwards a <code>ref</code> so <code>react-native-view-shot</code> can capture it at 1875×1250 PNG for Lob</li>
+        </ul>
+      </div>
+
+      <div>
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; color: var(--postal-blue); margin-bottom: 8px;">LOB WIRING · STATUS</div>
+        <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px;">
+          <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px; margin-bottom: 10px;">What ships in code today</div>
+          <ul style="margin: 0 0 16px; padding-left: 20px; font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.55;">
+            <li><code>react-native-view-shot</code> installed + native module linked</li>
+            <li><code>src/services/lob.ts</code> with <code>capturePostcardForPrint</code> + <code>submitToLob</code> helpers</li>
+            <li><code>supabase/functions/lob-send-postcard/index.ts</code> Edge Function (Deno) — receives front/back URLs, forwards to Lob's <code>/v1/postcards</code> API, writes lob_id back</li>
+            <li><code>supabase/migrations/2026051205_lob_integration.sql</code> — adds lob_id, lob_status, lob_expected_delivery, lob_error to postcards; adds mailing address fields to friends + profiles</li>
+            <li>PostcardPreview components now <code>forwardRef</code> so a hidden 1875px wrapper can capture them at print scale</li>
+          </ul>
+          <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px; margin-bottom: 10px; color: var(--postal-red);">What you need to do</div>
+          <ol style="margin: 0; padding-left: 20px; font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.55;">
+            <li>Sign up at <a href="https://lob.com" style="color: var(--postal-blue);">lob.com</a>, grab your <strong>Test Secret Key</strong> (~5 min)</li>
+            <li><code>supabase secrets set LOB_API_KEY=test_xxxxxxxx</code></li>
+            <li>Apply the migration: <code>supabase db push</code></li>
+            <li>Create the <code>postcard-renders</code> Storage bucket in Supabase dashboard (RLS policies in the migration comments)</li>
+            <li>Deploy the Edge Function: <code>supabase functions deploy lob-send-postcard --no-verify-jwt</code></li>
+            <li>Add a mailing-address form to the Add Friend flow so friends have <code>address_line1</code>, <code>address_city</code>, <code>address_state</code>, <code>address_zip</code></li>
+            <li>Send yourself 5 test cards in Lob sandbox to verify the print spec before flipping to live mode</li>
+          </ol>
+          <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 13px; color: var(--muted-ink); margin: 12px 0 0;">Full walkthrough in <code>LOB_INTEGRATION.md</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start;">
+
+      <div>
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 8px;">FRONT</div>
+        <div style="aspect-ratio: 1.5 / 1; background: linear-gradient(135deg, #6a8da3, #3C6E8F, #2c5673); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; position: relative; box-shadow: 0 6px 18px rgba(43,33,21,0.15);">
+          <div style="position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,0.18) 1.5px, transparent 1.5px); background-size: 18px 18px; opacity: 0.4;"></div>
+          <div style="position: absolute; bottom: 12px; left: 14px; right: 14px;">
+            <div style="background: linear-gradient(transparent, rgba(0,0,0,0.55)); padding: 20px 4px 6px; border-radius: 4px;">
+              <div style="color: #FFFDF7; font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 18px; letter-spacing: 0.3px;">Wish you were here.</div>
+            </div>
+          </div>
+          <div style="position: absolute; bottom: 6px; right: 10px; color: rgba(255,255,255,0.78); font-family: 'Inter'; font-size: 10px; font-weight: 700; letter-spacing: 1.8px;">MAILROOM</div>
+        </div>
+        <div style="margin-top: 10px; color: var(--muted-ink); font-family: 'Cormorant Garamond'; font-style: italic; font-size: 13px;">Full-bleed photo, optional caption with dark gradient scrim, Mailroom mark in the corner. When no photo, the front is a paper-textured fallback with the same stamp + postmark layout as the back.</div>
+      </div>
+
+      <div>
+        <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 8px;">BACK</div>
+        <div style="aspect-ratio: 1.5 / 1; background: #FBF4DE; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; position: relative; box-shadow: 0 6px 18px rgba(43,33,21,0.15);">
+          <div style="position: absolute; inset: 0; background-image: radial-gradient(rgba(120,90,40,0.07) 1px, transparent 1px); background-size: 6px 6px;"></div>
+          <div style="position: absolute; left: 50%; top: 16px; bottom: 16px; width: 1px; background: var(--line); opacity: 0.7;"></div>
+
+          <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 50%; padding: 14px;">
+            <div style="font-family: 'Inter'; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; color: var(--muted-ink); text-transform: uppercase; margin-bottom: 8px;">FROM: SCOTTY, DENVER CO</div>
+            <div style="font-family: 'Caveat', cursive; font-size: 17px; line-height: 1.45; color: var(--ink); letter-spacing: 0.3px;">Thinking of you. I went back to that coffee shop we found in Brooklyn — it's still terrible. Love, Scotty</div>
+          </div>
+
+          <div style="position: absolute; right: 0; top: 0; bottom: 0; width: 50%; padding: 14px;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+              <div style="width: 32px; height: 40px; background: var(--postal-red); transform: rotate(-4deg); border: 2px solid #FFFDF7; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #FFFDF7;">
+                <div style="font-size: 14px;">🕊</div>
+                <div style="font-family: 'Inter'; font-size: 7px; font-weight: 700; letter-spacing: 0.6px;">1¢</div>
+              </div>
+              <div style="width: 38px; height: 38px; border: 1px solid var(--postal-red); border-radius: 50%; opacity: 0.55; display: flex; align-items: center; justify-content: center; color: var(--postal-red); font-family: 'Inter'; font-size: 8px; font-weight: 700;">2026</div>
+            </div>
+            <div style="margin-top: 30px;">
+              <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 13px; color: var(--ink);">Maya Ramirez</div>
+              <div style="font-family: 'Cormorant Garamond'; font-size: 11px; color: var(--ink);">123 Main Street</div>
+              <div style="font-family: 'Cormorant Garamond'; font-size: 11px; color: var(--ink);">Brooklyn, NY  11201</div>
+            </div>
+            <div style="position: absolute; bottom: 14px; left: 14px; right: 14px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="height: 1px; background: var(--line); opacity: 0.6;"></div>
+              <div style="height: 1px; background: var(--line); opacity: 0.6;"></div>
+              <div style="height: 1px; background: var(--line); opacity: 0.6;"></div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 10px; color: var(--muted-ink); font-family: 'Cormorant Garamond'; font-style: italic; font-size: 13px;">USPS-style: vertical divider, handwritten message left, stamp + postmark + address right. Lob applies the real postage indicia over the stamp area; the stamp shown is decorative.</div>
+      </div>
+
+    </div>
+
+    <div class="callout" style="background: rgba(60,110,143,0.08); border: 1px dashed rgba(60,110,143,0.4); border-radius: 10px; padding: 18px 22px; margin-top: 24px;">
+      <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px; margin-bottom: 6px;">What's wired up already</div>
+      <ul style="margin: 6px 0 0; padding-left: 22px; font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.6;">
+        <li><code>PostcardFrontPreview</code> + <code>PostcardBackPreview</code> components exist (<code>src/components/PostcardPreview.tsx</code>) and render to scale at any width.</li>
+        <li>Send screen shows both sides as a live preview before you tap Send.</li>
+        <li>Postcard design spec written: 4×6 sizes, 300 DPI, bleed, USPS address rules, color profile drift — all in <code>POSTCARD_DESIGN_SPEC.md</code>.</li>
+        <li>Lob integration plan written: <code>LOB_INTEGRATION.md</code> with the Edge Function pattern, schema migration, webhook setup, unit economics.</li>
+      </ul>
+      <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px; margin: 14px 0 6px;">Still to wire</div>
+      <ul style="margin: 0; padding-left: 22px; font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.6;">
+        <li><code>react-native-view-shot</code> to capture the preview to a 1275×1875 PNG on Send.</li>
+        <li>Supabase Edge Function <code>lob-send-postcard</code> to POST the PNGs to Lob.</li>
+        <li>Lob webhook → updates <code>lob_status</code> + fires push notification on delivery.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Settings sheet — full mockup</h2>
+    <p class="section-sub">Every row from <code>SettingsSheet.tsx</code>, rendered to scale. Slides up from the My Card / Friends tab. Pixel-accurate against the React Native source.</p>
+    <div class="divider"></div>
+
+    <div style="display: grid; grid-template-columns: 380px 1fr; gap: 36px; align-items: start;">
+
+      <div style="background: var(--paper); border: 1px solid var(--line); border-radius: 18px; padding: 20px 18px 24px; box-shadow: 0 8px 32px rgba(43,33,21,0.1);">
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <div style="flex: 1;">
+            <div style="color: var(--ink); font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 28px;">Settings</div>
+            <div style="color: var(--muted-ink); font-family: 'Cormorant Garamond'; font-style: italic; font-size: 13px; margin-top: 4px;">Signed in as Scotty.</div>
+          </div>
+          <div style="background: rgba(155,175,155,0.2); border-radius: 18px; padding: 8px; line-height: 0;">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M5 5 L17 17 M17 5 L5 17" stroke="#17223B" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px;">
+
+          <div style="color: var(--muted-ink); font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; padding: 0 4px 6px;">ACCOUNT</div>
+          <div style="background: var(--white); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
+            <div style="padding: 12px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line);">
+              <div style="width: 36px; height: 36px; border-radius: 18px; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#17223B" stroke-width="1.5"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px; color: var(--ink);">Credits</div>
+                <div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink); margin-top: 1px;">5 credits</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6472" stroke-width="1.5"><path d="M9 6 L15 12 L9 18"/></svg>
+            </div>
+            <div style="padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+              <div style="width: 36px; height: 36px; border-radius: 18px; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#17223B" stroke-width="1.5"><path d="M4 4 H20 V20 H4 Z"/><path d="M4 4 L12 13 L20 4"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px; color: var(--ink);">Edit Mail Card</div>
+                <div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink); margin-top: 1px;">Update name, tagline, interests</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6472" stroke-width="1.5"><path d="M9 6 L15 12 L9 18"/></svg>
+            </div>
+          </div>
+
+          <div style="color: var(--muted-ink); font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; padding: 14px 4px 6px;">MAIL</div>
+          <div style="background: var(--white); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
+            <div style="padding: 12px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line);">
+              <div style="width: 36px; height: 36px; border-radius: 18px; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#17223B" stroke-width="1.5"><rect x="6" y="3" width="12" height="18" rx="1"/><path d="M9 7 H15"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px; color: var(--ink);">Address book</div>
+                <div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink); margin-top: 1px;">Manage friends</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6472" stroke-width="1.5"><path d="M9 6 L15 12 L9 18"/></svg>
+            </div>
+            <div style="padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+              <div style="width: 36px; height: 36px; border-radius: 18px; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#17223B" stroke-width="1.5"><path d="M6 8 a6 6 0 0 1 12 0 v5 l2 3 H4 l2 -3 Z"/><circle cx="12" cy="20" r="2"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px; color: var(--ink);">Notifications</div>
+                <div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink); margin-top: 1px;">3 of 3 on</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6472" stroke-width="1.5"><path d="M9 6 L15 12 L9 18"/></svg>
+            </div>
+          </div>
+
+          <div style="color: var(--muted-ink); font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; padding: 14px 4px 6px;">PRIVACY &amp; SUPPORT</div>
+          <div style="background: var(--white); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
+            <div style="padding: 12px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line);">
+              <div style="width: 36px; height: 36px; border-radius: 18px; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#17223B" stroke-width="1.5"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11 V7 a4 4 0 0 1 8 0 V11"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px; color: var(--ink);">Privacy</div>
+                <div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink); margin-top: 1px;">Who can write to me: Anyone with QR</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6472" stroke-width="1.5"><path d="M9 6 L15 12 L9 18"/></svg>
+            </div>
+            <div style="padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+              <div style="width: 36px; height: 36px; border-radius: 18px; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#17223B" stroke-width="1.5"><path d="M6 3 H18 V21 H6 Z"/><path d="M9 8 H15 M9 12 H15 M9 16 H13"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px; color: var(--ink);">About, terms, &amp; feedback</div>
+                <div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink); margin-top: 1px;">What this is, how it works, how to reach us</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6472" stroke-width="1.5"><path d="M9 6 L15 12 L9 18"/></svg>
+            </div>
+          </div>
+
+          <div style="margin-top: 14px;">
+            <div style="background: var(--white); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
+              <div style="padding: 12px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line);">
+                <div style="width: 36px; height: 36px; border-radius: 18px; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B84A3A" stroke-width="1.5"><path d="M9 4 H5 V20 H9 M14 8 L18 12 L14 16 M18 12 H10"/></svg>
+                </div>
+                <div style="flex:1; color: var(--postal-red); font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px;">Sign out</div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6472" stroke-width="1.5"><path d="M9 6 L15 12 L9 18"/></svg>
+              </div>
+              <div style="padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+                <div style="width: 36px; height: 36px; border-radius: 18px; background: rgba(60,110,143,0.06); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B84A3A" stroke-width="1.5"><path d="M5 6 H19 M9 6 V4 H15 V6 M7 6 L8 21 H16 L17 6"/></svg>
+                </div>
+                <div style="flex:1">
+                  <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px; color: var(--postal-red);">Delete account</div>
+                  <div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 12px; color: var(--muted-ink); margin-top: 1px;">Permanently remove all your data</div>
+                </div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6472" stroke-width="1.5"><path d="M9 6 L15 12 L9 18"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div style="text-align: center; color: var(--muted-ink); font-family: 'Inter'; font-size: 11px; margin-top: 16px;">Mailroom · beta</div>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 0 0 12px;">What each row does</h3>
+        <table style="width: 100%; border-collapse: collapse; font-family: 'Cormorant Garamond'; font-size: 15px;">
+          <tbody>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 4px; width: 30%; font-weight: 600;">Credits</td><td style="padding: 10px 4px; color: var(--muted-ink); font-style: italic;">Opens CreditsSheet · 4 IAP packs · current balance shown inline.</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 4px; font-weight: 600;">Edit Mail Card</td><td style="padding: 10px 4px; color: var(--muted-ink); font-style: italic;">Opens EditAboutMeSheet · now includes the new photo picker at the top.</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 4px; font-weight: 600;">Address book</td><td style="padding: 10px 4px; color: var(--muted-ink); font-style: italic;">Manage friends and their mailing addresses (FriendsScreen entry).</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 4px; font-weight: 600;">Notifications</td><td style="padding: 10px 4px; color: var(--muted-ink); font-style: italic;">Three switches: card delivered · reply received · weekly digest.</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 4px; font-weight: 600;">Privacy</td><td style="padding: 10px 4px; color: var(--muted-ink); font-style: italic;">Who can write to me: Anyone with QR · Only friends · Paused.</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 4px; font-weight: 600;">About</td><td style="padding: 10px 4px; color: var(--muted-ink); font-style: italic;">What Mailroom is, terms, support email, app version.</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 4px; font-weight: 600; color: var(--postal-red);">Sign out</td><td style="padding: 10px 4px; color: var(--muted-ink); font-style: italic;">Single confirm Alert → clears local cache, returns to Welcome.</td></tr>
+            <tr><td style="padding: 10px 4px; font-weight: 600; color: var(--postal-red);">Delete account</td><td style="padding: 10px 4px; color: var(--muted-ink); font-style: italic;"><b>Double-confirm Alert</b>. Calls <code>delete_my_account()</code> RPC. Cascades all rows. Apple-required (Guideline 5.1.1(v)).</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout" style="background: rgba(155,175,155,0.16); border: 1px solid rgba(155,175,155,0.6); border-radius: 10px; padding: 18px 20px; margin-top: 20px;">
+          <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Real screenshot from the sim — confirms the mockup is accurate</div>
+          <div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; line-height: 1.5; color: var(--muted-ink); margin-bottom: 12px;">Captured today after the rename + build. The HTML mockup to the left is pixel-traced from <code>SettingsSheet.tsx</code>; this is the actual rendered output. Compare row by row.</div>
+          <img src="../.screenshots/15-settings-mailroom.jpg" alt="Settings sheet — live sim screenshot" style="width: 100%; max-width: 340px; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(43,33,21,0.12);" />
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Design system</h2>
+    <p class="section-sub">Paper, ink, and two postal accents. Serif for soul, sans for chrome.</p>
+    <div class="divider"></div>
+
+    <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 8px 0 14px;">Palette</h3>
+    <div class="palette">
+      <div class="swatch"><div class="swatch-color" style="background: #F8F1E3;"></div><div class="swatch-meta"><div class="swatch-name">Paper</div><div class="swatch-hex">#F8F1E3 · base canvas</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background: #EFE2CC;"></div><div class="swatch-meta"><div class="swatch-name">Paper Dark</div><div class="swatch-hex">#EFE2CC · cards, depth</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background: #FFFDF7;"></div><div class="swatch-meta"><div class="swatch-name">White</div><div class="swatch-hex">#FFFDF7 · cards, fields</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background: #17223B;"></div><div class="swatch-meta"><div class="swatch-name">Ink</div><div class="swatch-hex">#17223B · text, anchors</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background: #5E6472;"></div><div class="swatch-meta"><div class="swatch-name">Muted Ink</div><div class="swatch-hex">#5E6472 · secondary text</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background: #B84A3A;"></div><div class="swatch-meta"><div class="swatch-name">Postal Red</div><div class="swatch-hex">#B84A3A · stamps, actions</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background: #3C6E8F;"></div><div class="swatch-meta"><div class="swatch-name">Postal Blue</div><div class="swatch-hex">#3C6E8F · trust accent</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background: #9BAF9B;"></div><div class="swatch-meta"><div class="swatch-name">Sage</div><div class="swatch-hex">#9BAF9B · success, toggles</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background: #D9B46E;"></div><div class="swatch-meta"><div class="swatch-name">Gold</div><div class="swatch-hex">#D9B46E · credits, gift</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background: #D9C8AC;"></div><div class="swatch-meta"><div class="swatch-name">Line</div><div class="swatch-hex">#D9C8AC · dividers</div></div></div>
+    </div>
+
+    <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 32px 0 14px;">Typography</h3>
+    <div class="type-row">
+      <div class="type-card">
+        <div class="type-meta">
+          <div class="type-name">Script · Allura</div>
+          <div class="type-stack">Allura · Snell Roundhand · cursive</div>
+          <div class="type-usage">Used once. The Mailroom wordmark. Nowhere else.</div>
+        </div>
+        <div class="sample-script">Mailroom</div>
+      </div>
+      <div class="type-card">
+        <div class="type-meta">
+          <div class="type-name">Serif Bold · Cormorant Garamond 700</div>
+          <div class="type-stack">Cormorant Garamond · Georgia · serif</div>
+          <div class="type-usage">Headings, screen titles, recipient names. The soul of the type system.</div>
+        </div>
+        <div class="sample-serif-bold">A handwritten note for Maya.</div>
+      </div>
+      <div class="type-card">
+        <div class="type-meta">
+          <div class="type-name">Serif Italic · Cormorant Garamond 400 italic</div>
+          <div class="type-stack">Cormorant Garamond · Georgia · serif</div>
+          <div class="type-usage">Subtitles, helper copy, "from a quiet corner of Denver" energy.</div>
+        </div>
+        <div class="sample-serif-italic">"With care, from a quiet corner of Denver."</div>
+      </div>
+      <div class="type-card">
+        <div class="type-meta">
+          <div class="type-name">Sans · Inter</div>
+          <div class="type-stack">Inter · -apple-system · system-ui</div>
+          <div class="type-usage">Chrome: tab labels, pills, postmark text, dates. Never headings.</div>
+        </div>
+        <div class="sample-sans">HAND CARRIED · WITH CARE · 1¢ · APR 28</div>
+      </div>
+      <div class="type-card">
+        <div class="type-meta">
+          <div class="type-name">Hand · Caveat</div>
+          <div class="type-stack">Caveat · Patrick Hand · cursive</div>
+          <div class="type-usage">The user's handwriting. Card bodies. Not interface chrome.</div>
+        </div>
+        <div class="sample-caveat">Thinking about that summer we drove the coast — wild.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Component library</h2>
+    <p class="section-sub">The pieces every screen is built from. Live mockups, not screenshots.</p>
+    <div class="divider"></div>
+
+    <div class="components">
+      <div class="component">
+        <h3 class="component-h">CategoryPicker</h3>
+        <p class="component-sub">Four card types. Active state is a top-bar + bold red, not a check badge.</p>
+        <div class="component-preview" style="padding: 0;">
+          <div class="catpicker">
+            <div class="cat"><div class="cat-icon">✎</div><div class="cat-title">Note</div><div class="cat-cost">1 credit</div></div>
+            <div class="cat active"><div class="cat-icon" style="color: var(--postal-red);">📷</div><div class="cat-title">Photo</div><div class="cat-cost">2 credits</div></div>
+            <div class="cat"><div class="cat-icon">📍</div><div class="cat-title">Place</div><div class="cat-cost">2 credits</div></div>
+            <div class="cat"><div class="cat-icon">🎨</div><div class="cat-title">Custom</div><div class="cat-cost">5 credits</div></div>
+          </div>
+        </div>
+        <p class="component-notes">Credit cost is always visible. Avoids the design-pass-1 mistake of clipping the "2 credits" text behind an overlay.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">Stamp</h3>
+        <p class="component-sub">Motif + denomination + tilt. Postmark crosses it on used cards.</p>
+        <div class="component-preview">
+          <div class="stamp-mock"><div class="motif">🕊</div><div class="cents">1¢</div></div>
+          <div class="stamp-mock" style="background: var(--postal-blue); transform: rotate(4deg);"><div class="motif">🗺</div><div class="cents">2¢</div></div>
+          <div class="stamp-mock" style="background: var(--sage); transform: rotate(-2deg);"><div class="motif">✿</div><div class="cents">5¢</div></div>
+        </div>
+        <p class="component-notes">SVG perforations, rotation prop, motif library: dove, map, flower, ship, mountain, star. Tone matches category.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">CircularPostmark</h3>
+        <p class="component-sub">Curved top/bottom text + year in the center. Decorative only.</p>
+        <div class="component-preview">
+          <div class="postmark"></div>
+        </div>
+        <p class="component-notes">Configurable: topText, bottomText, centerYear, size. Used on Welcome and on the photo postcard back.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">IdentityAvatar</h3>
+        <p class="component-sub">Paper monogram disc. Two variants: default and hero (with inner ring).</p>
+        <div class="component-preview">
+          <div class="avatar-mock">SL</div>
+          <div class="avatar-mock" style="width: 56px; height: 56px; font-size: 20px;">MR</div>
+          <div class="avatar-mock" style="width: 44px; height: 44px; font-size: 15px; border-width: 1.5px;">SC</div>
+        </div>
+        <p class="component-notes">Initials drawn from the first letters of the first two name words. Single-word names get the first two letters ("Pat" → PA).</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">RolodexCard</h3>
+        <p class="component-sub">One row per friend. Name + city, signal pill on the right.</p>
+        <div class="component-preview" style="flex-direction: column; align-items: stretch;">
+          <div class="rolodex">
+            <div class="avatar-mock" style="width: 40px; height: 40px; font-size: 14px;">MA</div>
+            <div class="rolo-name">Maya Ramirez<span class="rolo-sub">Brooklyn · 4 sent</span></div>
+            <div class="rolo-pill">close</div>
+          </div>
+          <div class="rolodex" style="margin-top: 8px;">
+            <div class="avatar-mock" style="width: 40px; height: 40px; font-size: 14px;">JT</div>
+            <div class="rolo-name">Jamie Tran<span class="rolo-sub">Portland · 71 days</span></div>
+            <div class="rolo-pill" style="background: rgba(217, 180, 110, 0.25); color: #6E4B1A;">sleeping</div>
+          </div>
+        </div>
+        <p class="component-notes">Calm, scannable, single-line. Tap → FriendDetailSheet. No tap-to-connect, no extra noise.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">CreditsBalance</h3>
+        <p class="component-sub">Gold pill, ink text. Always visible on My Card and Send.</p>
+        <div class="component-preview">
+          <div class="credit-badge">✦ 5 credits</div>
+          <div class="credit-badge" style="background: var(--paper); border: 1px solid var(--line); color: var(--muted-ink); font-weight: 500;">0 credits · top up</div>
+        </div>
+        <p class="component-notes">Tap opens CreditsSheet. Subtle gold = inviting; outline empty state = neutral nudge to top up.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">PrimaryButton</h3>
+        <p class="component-sub">Ink fill, paper text. Disabled state at 45% opacity.</p>
+        <div class="component-preview" style="gap: 10px;">
+          <div style="background: var(--ink); color: var(--paper); padding: 12px 22px; border-radius: 8px; font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px;">Send postcard</div>
+          <div style="background: var(--ink); color: var(--paper); padding: 12px 22px; border-radius: 8px; font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 15px; opacity: 0.45;">Continue</div>
+        </div>
+        <p class="component-notes">Pressed state slightly darker, disabled state half opaque and onPress gated.</p>
+      </div>
+
+      <div class="component">
+        <h3 class="component-h">Free-credits banner</h3>
+        <p class="component-sub">One-shot gift callout shown until tapped or after first send.</p>
+        <div class="component-preview" style="padding: 14px;">
+          <div style="background: rgba(217, 180, 110, 0.18); border: 1px solid rgba(217, 180, 110, 0.6); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; gap: 10px;">
+            <div style="color: var(--postal-red); font-size: 18px;">✦</div>
+            <div style="flex:1; font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--ink);">5 free credits on us. Two photo cards or five notes.</div>
+          </div>
+        </div>
+        <p class="component-notes">Stored as a "seen" flag on the profile. Dismisses on first credit spend.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">The happy path</h2>
+    <p class="section-sub">First-time user → first postcard sent.</p>
+    <div class="divider"></div>
+    <div class="flow">
+      <ol>
+        <li><b>Welcome — step 1.</b> Name + city + state. Skip-for-now available.</li>
+        <li><b>Welcome — step 2.</b> Email + password. Or "I already have an account" toggle to sign in. Forgot password link in sign-in mode.</li>
+        <li><b>Free credits banner</b> appears on My Card with the 5-credit gift. Subtle.</li>
+        <li><b>My Card.</b> Shows your monogram, tagline, QR for friends to scan, mail history entry.</li>
+        <li><b>Send tab.</b> Pick category (Note / Photo / Place / Custom). Compose. Pick recipient from rolodex. Tap Send.</li>
+        <li><b>Cost is deducted</b> server-side via the <code>send_postcard</code> RPC. Cache updates optimistically; rolls back on error.</li>
+        <li><b>Success modal.</b> Honest copy: "Sits in the queue until our printing partner is live." (Becomes real on Lob wire-up.)</li>
+        <li><b>Mail history</b> shows the new entry with status. Push notification fires when delivered.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="renamed">
+    <h2 class="section-title">Renamed: Mail Club → Mailroom</h2>
+    <p class="section-sub">As of today, the app is "Mailroom". Every surface has been updated. This section is the diff.</p>
+    <div class="divider"></div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start;">
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;">
+        <div style="padding: 12px 18px; background: rgba(184,74,58,0.08); border-bottom: 1px solid var(--line); font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; color: var(--postal-red); text-transform: uppercase;">Before</div>
+        <table style="width: 100%; border-collapse: collapse; font-family: 'Cormorant Garamond'; font-size: 15px;">
+          <tbody>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">App name</td><td style="padding: 10px 18px; font-weight: 600;">Mail Club</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">Bundle ID</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">com.mailclub.app</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">URI scheme</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">mailclub://</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">Expo slug</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">mail-club</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">IAP product IDs</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;">mailclub.credits.5<br/>mailclub.credits.10<br/>mailclub.credits.25<br/>mailclub.credits.50</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">AsyncStorage key</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">mail-club-v1-cache</td></tr>
+            <tr><td style="padding: 10px 18px; color: var(--muted-ink);">Support email</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">hello@mailclub.app</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="background: var(--white); border: 1px solid var(--sage); border-radius: 10px; overflow: hidden;">
+        <div style="padding: 12px 18px; background: rgba(155,175,155,0.18); border-bottom: 1px solid var(--sage); font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; color: #4A5A38; text-transform: uppercase;">After</div>
+        <table style="width: 100%; border-collapse: collapse; font-family: 'Cormorant Garamond'; font-size: 15px;">
+          <tbody>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">App name</td><td style="padding: 10px 18px; font-weight: 600;">Mailroom</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">Bundle ID</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">com.mailroom.app</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">URI scheme</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">mailroom://</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">Expo slug</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">mailroom</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">IAP product IDs</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;">mailroom.credits.5<br/>mailroom.credits.10<br/>mailroom.credits.25<br/>mailroom.credits.50</td></tr>
+            <tr style="border-bottom: 1px solid var(--line);"><td style="padding: 10px 18px; color: var(--muted-ink);">AsyncStorage key</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">mailroom-v1-cache</td></tr>
+            <tr><td style="padding: 10px 18px; color: var(--muted-ink);">Support email</td><td style="padding: 10px 18px; font-family: ui-monospace, Menlo, monospace; font-size: 13px;">scotty@lasolasvc.com</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 28px 0 10px;">What stayed the same on purpose</h3>
+    <ul style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.7; padding-left: 22px;">
+      <li><strong>"Mail Card"</strong> as a product noun — that's the artifact inside Mailroom, like Tweets in Twitter. The card stays; the app is the room it lives in.</li>
+      <li>The Supabase project (<code>nlwnmgwylmmnaemdnzlq.supabase.co</code>) — same DB, same auth, same tables.</li>
+      <li>Internal code symbols (<code>MailClubContext</code>, <code>useMailClub</code>, file paths) — renaming these touches ~50 imports across 30 files and risks breakage. Safe to defer or land as a follow-up PR.</li>
+      <li>The project directory on disk (<code>~/Downloads/mailclub-app</code>) — Xcode worktree path. You can <code>mv</code> it whenever you want; just update your shell shortcuts.</li>
+    </ul>
+
+    <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 28px 0 10px;">What you need to do next</h3>
+    <div style="background: rgba(217,180,110,0.16); border: 1px dashed var(--gold); border-radius: 10px; padding: 18px 22px;">
+      <ol style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.75; padding-left: 22px; margin: 0;">
+        <li><strong>Regenerate the iOS folder.</strong> The native project at <code>ios/MailClub/</code> still has the old name baked into Xcode files. Run <code>npx expo prebuild --clean</code> after freeing disk space — Expo regenerates <code>ios/Mailroom/</code> from <code>app.json</code>.</li>
+        <li><strong>Register the new App ID</strong> at <a href="https://developer.apple.com/account/resources/identifiers/list" style="color: var(--postal-blue);">developer.apple.com</a> using <code>com.mailroom.app</code>. Enable In-App Purchase + Push Notifications + Sign in with Apple capabilities.</li>
+        <li><strong>Create the App Store Connect record</strong> at <a href="https://appstoreconnect.apple.com/apps" style="color: var(--postal-blue);">appstoreconnect.apple.com/apps</a> using the new Bundle ID. Display name: "Mailroom".</li>
+        <li><strong>Re-do the IAP products</strong> with the new IDs (<code>mailroom.credits.5</code> etc.) once the App Store Connect record exists.</li>
+        <li><strong>Update your domain</strong> — if you bought <code>mailclub.app</code>, you may want <code>mailroom.app</code> too (or scotty.lasolasvc.com/mailroom). Privacy + support URLs in the App Store record point to whatever you pick.</li>
+      </ol>
+      <p style="font-family: 'Cormorant Garamond'; font-size: 14px; font-style: italic; color: var(--muted-ink); margin: 12px 0 0;">Full step-by-step in <code>MAILROOM_SETUP.md</code> — covers Apple Developer, App Store Connect, EAS, Supabase, Lob, GitHub Pages.</p>
+    </div>
+  </section>
+
+  <section id="send-a-link">
+    <h2 class="section-title">New feature — Send a Link</h2>
+    <p class="section-sub">The killer growth loop. Sender doesn't need to know the recipient's address. They share a magic link via iMessage, and the recipient self-serves their address on a private mobile-friendly web page. <em>Sender never sees the address. Recipient never sees the sender's address.</em></p>
+    <div class="divider"></div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 28px; align-items: start;">
+
+      <!-- LEFT: in-app sender flow -->
+      <div>
+        <div style="font-family: 'Inter'; font-size: 11px; letter-spacing: 1.4px; font-weight: 700; color: var(--postal-red); text-transform: uppercase; margin-bottom: 14px;">1. Sender taps the new CTA in the Send tab</div>
+
+        <!-- Phone frame -->
+        <div style="background: #222; border-radius: 38px; padding: 14px; box-shadow: 0 12px 28px rgba(0,0,0,0.18); max-width: 360px; margin: 0 auto;">
+          <div style="background: var(--paper); border-radius: 26px; padding: 22px 18px 30px; min-height: 480px;">
+            <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 0 0 14px;">To</div>
+
+            <!-- Friend card (selected) -->
+            <div style="background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+              <div style="width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #D9B46E, #B84A3A); display: flex; align-items: center; justify-content: center; color: white; font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 18px;">N</div>
+              <div style="flex: 1;">
+                <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 18px;">Nora</div>
+                <div style="font-family: 'Inter'; font-size: 10px; letter-spacing: 0.4px; color: var(--muted-ink); margin-top: 2px;">5 CREDITS · THIS CARD COSTS 1</div>
+              </div>
+              <div style="color: var(--muted-ink);">▾</div>
+            </div>
+
+            <!-- NEW: Send-a-link CTA -->
+            <div style="display: flex; align-items: center; justify-content: center; gap: 7px; margin: 14px 0 6px; padding: 8px;">
+              <span style="color: var(--postal-red); font-size: 16px;">🔗</span>
+              <span style="font-family: 'Cormorant Garamond'; font-size: 13px; color: var(--muted-ink);">Don't know their address? <strong style="color: var(--postal-red); font-weight: 600;">Send a link instead</strong></span>
+            </div>
+
+            <div style="font-family: 'Inter'; font-size: 9px; color: var(--muted-ink); letter-spacing: 1.2px; margin: 22px 0 6px;">PREVIEW · WHAT YOUR FRIEND RECEIVES</div>
+            <div style="background: var(--white); border: 1px solid var(--line); height: 100px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 13px;">postcard preview</div>
+
+            <button style="margin-top: 18px; width: 100%; background: var(--ink); color: white; border: none; border-radius: 8px; padding: 14px; font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px;">Send Postcard →</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 14px; text-align: center;">
+          <strong style="color: var(--postal-red); font-style: normal;">"Send a link instead"</strong> sits right below the recipient card. It's an inline CTA, not a separate menu — so the option is always visible.
+        </div>
+
+        <div style="font-family: 'Inter'; font-size: 11px; letter-spacing: 1.4px; font-weight: 700; color: var(--postal-red); text-transform: uppercase; margin: 32px 0 14px;">2. Tap → recipient card turns into "Send a link"</div>
+
+        <!-- Phone frame state 2 -->
+        <div style="background: #222; border-radius: 38px; padding: 14px; box-shadow: 0 12px 28px rgba(0,0,0,0.18); max-width: 360px; margin: 0 auto;">
+          <div style="background: var(--paper); border-radius: 26px; padding: 22px 18px 30px; min-height: 220px;">
+            <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 0 0 14px;">To</div>
+
+            <div style="background: rgba(184,74,58,0.06); border: 1px solid rgba(184,74,58,0.35); border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 12px;">
+              <div style="width: 44px; height: 44px; border-radius: 22px; background: rgba(184,74,58,0.12); display: flex; align-items: center; justify-content: center; color: var(--postal-red); font-size: 18px;">🔗</div>
+              <div style="flex: 1;">
+                <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px;">Send a link instead</div>
+                <div style="font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 12px; margin-top: 3px;">They'll fill in their address — you never see it</div>
+              </div>
+              <div style="border: 1px solid rgba(184,74,58,0.45); border-radius: 6px; padding: 5px 9px; color: var(--postal-red); font-family: 'Inter'; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;">CANCEL</div>
+            </div>
+
+            <button style="margin-top: 18px; width: 100%; background: var(--ink); color: white; border: none; border-radius: 8px; padding: 14px; font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px;">🔗 Share a link</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 14px; text-align: center;">
+          The Send button label changes to <strong style="color: var(--ink); font-style: normal;">"Share a link"</strong>. Tap it → iOS Share Sheet opens with the URL pre-filled and a friendly intro message.
+        </div>
+      </div>
+
+      <!-- RIGHT: recipient claim page -->
+      <div>
+        <div style="font-family: 'Inter'; font-size: 11px; letter-spacing: 1.4px; font-weight: 700; color: var(--postal-blue); text-transform: uppercase; margin-bottom: 14px;">3. Recipient gets iMessage with the link</div>
+
+        <!-- iMessage bubble -->
+        <div style="background: #E5E5EA; border-radius: 18px; padding: 14px 16px; max-width: 320px; margin: 0 auto 28px; font-family: -apple-system, system-ui, sans-serif; font-size: 14px; color: #1c1c1e; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+          Scotty sent you a postcard via Mailroom. Open this link to share your address so it can be delivered:<br /><br />
+          <a style="color: var(--postal-blue); text-decoration: underline; word-break: break-all;">https://nlwnmgwylmmnaemdnzlq.functions.supabase.co/claim?t=K7M2R8XQ</a>
+        </div>
+
+        <div style="font-family: 'Inter'; font-size: 11px; letter-spacing: 1.4px; font-weight: 700; color: var(--postal-blue); text-transform: uppercase; margin-bottom: 14px;">4. Tap link → claim page opens</div>
+
+        <!-- Phone frame: claim page -->
+        <div style="background: #222; border-radius: 38px; padding: 14px; box-shadow: 0 12px 28px rgba(0,0,0,0.18); max-width: 360px; margin: 0 auto;">
+          <div style="background: var(--paper); border-radius: 26px; padding: 28px 22px 30px; min-height: 580px;">
+
+            <div style="text-align: center;">
+              <span style="display: inline-block; font-family: 'Inter'; font-size: 10px; letter-spacing: 2px; color: var(--postal-red); font-weight: 700; padding: 4px 10px; border: 1px solid var(--postal-red); border-radius: 2px; margin-bottom: 14px; transform: rotate(-2deg);">✉ MAILROOM</span>
+              <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 24px; line-height: 1.15; margin: 0 0 6px;">Scotty wants to send you a postcard.</h3>
+              <p style="font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 14px; margin: 0 0 20px;">From Scotty in Brooklyn</p>
+            </div>
+
+            <!-- Message preview (handwritten style) -->
+            <div style="background: white; border: 1px solid var(--line); border-radius: 3px; padding: 16px 14px; font-family: 'Caveat', 'Bradley Hand', cursive; font-size: 16px; color: var(--ink); margin-bottom: 18px; transform: rotate(-0.5deg); box-shadow: 2px 2px 6px rgba(0,0,0,0.06); line-height: 1.4;">
+              Hey! Saw this and thought of you. Sending good vibes from the cold side of Brooklyn 🌨️
+            </div>
+
+            <p style="font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 12px; text-align: center; margin: 0 0 16px;">
+              Tell us where to send it. Your address stays private — Scotty will never see it.
+            </p>
+
+            <!-- Form (visual mock) -->
+            <div style="background: white; border-radius: 8px; padding: 14px;">
+              <div style="font-family: 'Inter'; font-size: 9px; letter-spacing: 0.8px; color: var(--muted-ink); font-weight: 700; margin: 0 0 4px;">YOUR NAME</div>
+              <div style="background: #FAFAF8; border: 1px solid #DDD5C2; border-radius: 6px; padding: 9px 12px; font-family: -apple-system; font-size: 13px; color: var(--ink); margin-bottom: 10px;">Lori Lefkowitz</div>
+
+              <div style="font-family: 'Inter'; font-size: 9px; letter-spacing: 0.8px; color: var(--muted-ink); font-weight: 700; margin: 0 0 4px;">STREET ADDRESS</div>
+              <div style="background: #FAFAF8; border: 1px solid #DDD5C2; border-radius: 6px; padding: 9px 12px; font-family: -apple-system; font-size: 13px; color: var(--ink); margin-bottom: 10px;">42 Wallaby Way</div>
+
+              <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                <div style="flex: 1;">
+                  <div style="font-family: 'Inter'; font-size: 9px; letter-spacing: 0.8px; color: var(--muted-ink); font-weight: 700; margin: 0 0 4px;">CITY</div>
+                  <div style="background: #FAFAF8; border: 1px solid #DDD5C2; border-radius: 6px; padding: 9px 12px; font-family: -apple-system; font-size: 13px; color: var(--ink);">Sydney</div>
+                </div>
+                <div style="width: 70px;">
+                  <div style="font-family: 'Inter'; font-size: 9px; letter-spacing: 0.8px; color: var(--muted-ink); font-weight: 700; margin: 0 0 4px;">STATE</div>
+                  <div style="background: #FAFAF8; border: 1px solid #DDD5C2; border-radius: 6px; padding: 9px 12px; font-family: -apple-system; font-size: 13px; color: var(--ink);">NY</div>
+                </div>
+              </div>
+
+              <button style="width: 100%; padding: 13px; background: var(--ink); color: white; border: none; border-radius: 8px; font-family: -apple-system; font-weight: 600; font-size: 14px;">Send my postcard →</button>
+            </div>
+
+            <p style="font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 11px; text-align: center; margin: 14px 4px 0;">
+              Your address is used once to ship this card. Never shared with the sender. Never used for marketing.
+            </p>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 14px; text-align: center;">
+          A real HTML page served by a Supabase Edge Function. No app install required. Mobile-friendly. Sender's address is <strong style="color: var(--postal-red); font-style: normal;">never returned</strong> in the response — only their name + city, snapshotted at send time.
+        </div>
+      </div>
+    </div>
+
+    <!-- Privacy model breakdown -->
+    <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 26px; margin: 48px 0 16px;">Privacy model</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px;">
+        <div style="font-family: 'Inter'; font-size: 10px; letter-spacing: 1.4px; font-weight: 700; color: var(--postal-red); text-transform: uppercase; margin-bottom: 8px;">Sender sees</div>
+        <ul style="margin: 0; padding-left: 18px; font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.55;">
+          <li>The status of their card: <code style="font-size: 13px;">awaiting_address</code> → <code style="font-size: 13px;">queued</code> → <code style="font-size: 13px;">shipped</code> → <code style="font-size: 13px;">delivered</code></li>
+          <li>Whether the link has been opened</li>
+          <li>A push notification when the recipient claims</li>
+          <li><strong style="color: var(--postal-red);">Never the recipient's address.</strong> RLS blocks it server-side.</li>
+        </ul>
+      </div>
+      <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px;">
+        <div style="font-family: 'Inter'; font-size: 10px; letter-spacing: 1.4px; font-weight: 700; color: var(--postal-blue); text-transform: uppercase; margin-bottom: 8px;">Recipient sees</div>
+        <ul style="margin: 0; padding-left: 18px; font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.55;">
+          <li>Sender's display name + city (frozen snapshot — survives sender's profile changes)</li>
+          <li>The postcard's handwritten message (preview)</li>
+          <li>A privacy-first address form</li>
+          <li><strong style="color: var(--postal-blue);">Never the sender's mailing address.</strong> It isn't returned by the API.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 26px; margin: 36px 0 16px;">Under the hood</h3>
+    <div style="background: rgba(60,110,143,0.05); border: 1px solid var(--line); border-radius: 10px; padding: 20px 24px;">
+      <ol style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.75; padding-left: 22px; margin: 0;">
+        <li><code>send_postcard_via_claim()</code> RPC — creates a row in <code>postcard_claims</code> with an 8-char base32 token (≈1.1T combinations, 30-day expiry, single-use) + a <code>postcards</code> row in <code>awaiting_address</code> status. Credits deducted atomically.</li>
+        <li>Mobile app opens iOS <code>Share.share()</code> with the URL <code>https://&lt;project&gt;.functions.supabase.co/claim?t=TOKEN</code> + a pre-filled introductory message.</li>
+        <li><code>GET /claim?t=TOKEN</code> — Edge Function calls <code>claim_lookup()</code> RPC (service-role only). Renders mobile-friendly HTML with sender's name + city snapshot + message preview + address form.</li>
+        <li><code>POST /claim?t=TOKEN</code> — accepts JSON address. Calls <code>redeem_postcard_claim()</code> RPC. Marks claim claimed (single-use), flips postcard to <code>queued</code>.</li>
+        <li><strong>Next sprint:</strong> push notification to sender's phone → app captures postcard at print scale via <code>react-native-view-shot</code> → uploads + invokes <code>lob-send-postcard</code>. Card mails.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Things to look at first</h2>
+    <p class="section-sub">A short list of design and copy decisions I'd love a second opinion on.</p>
+    <div class="divider"></div>
+    <div class="questions">
+      <h3>Open questions for review</h3>
+      <ul>
+        <li>Does <b>My Card</b> feel like a "front door"? Or is the QR card competing too hard with the avatar for attention?</li>
+        <li>The <b>CategoryPicker</b> has 4 tiles with credit costs. Does the active state (red top bar + bold red) read clearly enough? Anything you'd change about hierarchy?</li>
+        <li><b>Constellation tab</b> — does the metaphor land, or does it feel like decoration without information?</li>
+        <li><b>Welcome step 2</b> — is "I already have an account" toggle the right pattern, or should we split into two distinct entry CTAs upfront?</li>
+        <li><b>Sign in with Apple</b> — added as third option, or replaces the email/password path entirely?</li>
+        <li>Settings → Privacy: <b>"Who can write to me"</b> — is this the right framing? Alternatives: "Mail privacy" / "Receiving" / "Who can send".</li>
+        <li>Mail history copy: currently says "sits in the queue until our printing partner is live". Honest, but should we hide the row entirely pre-Lob to reduce confusion?</li>
+        <li>Color: do we lean further into <b>postal blue</b> for primary CTAs, or keep the calmer <b>ink</b> fill?</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Leave feedback</h2>
+    <p class="section-sub">Scribble here — these textareas don't save anywhere; just for jotting before you message me back.</p>
+    <div class="divider"></div>
+    <div class="feedback-grid">
+      <div class="fb"><h4>My Card</h4><textarea placeholder="What works, what doesn't…"></textarea></div>
+      <div class="fb"><h4>Friends rolodex</h4><textarea placeholder=""></textarea></div>
+      <div class="fb"><h4>Send flow</h4><textarea placeholder=""></textarea></div>
+      <div class="fb"><h4>Constellation</h4><textarea placeholder=""></textarea></div>
+      <div class="fb"><h4>Map</h4><textarea placeholder=""></textarea></div>
+      <div class="fb"><h4>Onboarding</h4><textarea placeholder=""></textarea></div>
+      <div class="fb"><h4>Settings &amp; sheets</h4><textarea placeholder=""></textarea></div>
+      <div class="fb"><h4>Typography / palette</h4><textarea placeholder=""></textarea></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div>Mailroom · beta · gallery generated May 11, 2026</div>
+    <div>Open with: <code>open /Users/scottylefkowitz/Downloads/mailroom-app/.gallery/index.html</code></div>
+  </footer>
+
+</div>
+</body>
+</html>

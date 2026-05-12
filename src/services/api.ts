@@ -34,6 +34,7 @@ type ProfileRow = {
   has_completed_signup: boolean;
   notifications: NotificationPrefs;
   privacy: PrivacyPrefs;
+  photo_url: string | null;
 };
 
 function profileFromRow(row: ProfileRow): {
@@ -57,6 +58,7 @@ function profileFromRow(row: ProfileRow): {
       sendMe: row.send_me,
       birthday: row.birthday,
       currentlyInto: row.currently_into,
+      photoUrl: row.photo_url ?? undefined,
     },
     credits: row.credits,
     freeCreditsRemaining: row.free_credits_remaining,
@@ -85,9 +87,44 @@ export async function updateProfile(patch: Partial<CurrentUser>) {
   if (patch.birthday !== undefined) dbPatch.birthday = patch.birthday;
   if (patch.currentlyInto !== undefined) dbPatch.currently_into = patch.currentlyInto;
   if (patch.avatarInitials !== undefined) dbPatch.avatar_initials = patch.avatarInitials;
+  // Only sync remote URLs. Local file:// URIs stay client-side until they're
+  // uploaded via uploadProfilePhoto() and the caller replaces them with a
+  // signed URL.
+  if (patch.photoUrl !== undefined) {
+    const url = patch.photoUrl;
+    if (url === "" || url === null) {
+      dbPatch.photo_url = null;
+    } else if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+      dbPatch.photo_url = url;
+    }
+  }
   if (Object.keys(dbPatch).length === 0) return;
   const { error } = await supabase.from("profiles").update(dbPatch).eq("id", (await supabase.auth.getUser()).data.user?.id);
   if (error) throw error;
+}
+
+/**
+ * Upload a local image file to the `profile-photos` Storage bucket and return
+ * its public URL. The caller is responsible for then calling updateProfile
+ * with the returned URL to persist it.
+ *
+ * Requires the `profile-photos` bucket to exist in Supabase Storage (see
+ * `supabase/migrations/2026051204_profile_photo.sql` for the bucket setup).
+ */
+export async function uploadProfilePhoto(localUri: string): Promise<string> {
+  const userId = (await supabase.auth.getUser()).data.user?.id;
+  if (!userId) throw new Error("Not signed in.");
+  // Read the local file as a blob via fetch — works on RN.
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const ext = (localUri.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const path = `${userId}/avatar-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from("profile-photos")
+    .upload(path, blob, { upsert: true, contentType: blob.type || `image/${ext}` });
+  if (error) throw error;
+  const { data } = supabase.storage.from("profile-photos").getPublicUrl(path);
+  return data.publicUrl;
 }
 
 export async function updateNotificationPrefs(prefs: NotificationPrefs) {
@@ -137,6 +174,12 @@ type FriendRow = {
   last_interaction_at: string;
   relationship_signal: string | null;
   signal_tone: "red" | "green" | "blue" | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  address_country: string | null;
 };
 
 function friendFromRow(row: FriendRow): Friend {
@@ -152,6 +195,12 @@ function friendFromRow(row: FriendRow): Friend {
     lastInteractionAt: row.last_interaction_at,
     relationshipSignal: row.relationship_signal ?? undefined,
     signalTone: row.signal_tone ?? undefined,
+    addressLine1: row.address_line1 ?? undefined,
+    addressLine2: row.address_line2 ?? undefined,
+    addressCity: row.address_city ?? undefined,
+    addressState: row.address_state ?? undefined,
+    addressZip: row.address_zip ?? undefined,
+    addressCountry: row.address_country ?? undefined,
   };
 }
 
@@ -164,24 +213,46 @@ export async function fetchFriends(): Promise<Friend[]> {
   return (data as FriendRow[]).map(friendFromRow);
 }
 
-export async function addFriend(input: { name: string; city: string; state: string }): Promise<Friend> {
+export type AddFriendInput = {
+  name: string;
+  city: string;
+  state: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressZip?: string;
+  addressCountry?: string;
+};
+
+export async function addFriend(input: AddFriendInput): Promise<Friend> {
   const userId = (await supabase.auth.getUser()).data.user?.id;
   if (!userId) throw new Error("not authenticated");
   const name = input.name.trim();
   if (!name) throw new Error("name required");
   const initials = name.split(/\s+/).map((p) => p[0] ?? "").join("").slice(0, 2).toUpperCase() || name.slice(0, 2).toUpperCase();
+  const row: Record<string, unknown> = {
+    owner_id: userId,
+    name,
+    city: input.city.trim(),
+    state: input.state.trim(),
+    avatar_initials: initials,
+    connection_type: "postcard-invite",
+    relationship_signal: "Just added",
+    signal_tone: "blue",
+  };
+  // Optional mailing address — only set non-blank fields so we don't write
+  // empty strings (which would still count as "address present" and confuse
+  // the can-send check).
+  if (input.addressLine1?.trim()) row.address_line1 = input.addressLine1.trim();
+  if (input.addressLine2?.trim()) row.address_line2 = input.addressLine2.trim();
+  if (input.addressCity?.trim()) row.address_city = input.addressCity.trim();
+  if (input.addressState?.trim()) row.address_state = input.addressState.trim();
+  if (input.addressZip?.trim()) row.address_zip = input.addressZip.trim();
+  row.address_country = (input.addressCountry?.trim() || "US").toUpperCase();
   const { data, error } = await supabase
     .from("friends")
-    .insert({
-      owner_id: userId,
-      name,
-      city: input.city.trim(),
-      state: input.state.trim(),
-      avatar_initials: initials,
-      connection_type: "postcard-invite",
-      relationship_signal: "Just added",
-      signal_tone: "blue",
-    })
+    .insert(row)
     .select()
     .single();
   if (error) throw error;
@@ -267,6 +338,52 @@ export async function sendPostcard(input: SendPostcardInput): Promise<{ postcard
   const postcard = postcardFromRow(data as PostcardRow);
   const profile = await fetchProfile();
   return { postcard, creditsRemaining: profile?.credits ?? 0 };
+}
+
+/**
+ * "Send a Link" flow — sender doesn't know the recipient's address. We
+ * create a postcard in awaiting_address status with a magic-link claim;
+ * sender shares the URL with the recipient who then fills in their address
+ * via the claim Edge Function page.
+ */
+export type SendViaLinkInput = {
+  category: CardCategory;
+  message: string;
+  photoUri?: string;
+  placeName?: string;
+};
+
+export type SendViaLinkResult = {
+  postcardId: string;
+  claimToken: string;
+  claimUrl: string;
+  creditsRemaining: number;
+};
+
+export async function sendPostcardViaLink(input: SendViaLinkInput): Promise<SendViaLinkResult> {
+  const { data, error } = await supabase.rpc("send_postcard_via_claim", {
+    p_category: input.category,
+    p_message: input.message,
+    p_photo_path: input.photoUri ?? null,
+    p_place_name: input.placeName ?? null,
+  });
+  if (error) throw error;
+  const row = data as {
+    postcard_id: string;
+    claim_id: string;
+    claim_token: string;
+    credits_remaining: number;
+  };
+  const supabaseUrl = (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_SUPABASE_URL)
+    || "https://nlwnmgwylmmnaemdnzlq.supabase.co";
+  // The Functions URL is the same project ref under .functions.supabase.co
+  const functionsBase = supabaseUrl.replace(".supabase.co", ".functions.supabase.co");
+  return {
+    postcardId: row.postcard_id,
+    claimToken: row.claim_token,
+    claimUrl: `${functionsBase}/claim?t=${row.claim_token}`,
+    creditsRemaining: row.credits_remaining,
+  };
 }
 
 export async function sendIntoVoid(message: string): Promise<Postcard> {
@@ -377,7 +494,7 @@ export async function signOut() {
 
 export async function resetPassword(email: string) {
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: "mailclub://auth/reset",
+    redirectTo: "mailroom://auth/reset",
   });
   if (error) throw error;
 }

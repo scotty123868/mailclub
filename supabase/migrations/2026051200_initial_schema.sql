@@ -1,4 +1,4 @@
--- Mail Club v1 schema
+-- Mailroom v1 schema
 -- Run via Supabase Management API on project nlwnmgwylmmnaemdnzlq.
 -- Idempotent: safe to re-run.
 
@@ -181,7 +181,7 @@ begin
   end if;
 
   update public.profiles set
-    name = coalesce(nullif(trim(p_name), ''), 'Mail Club member'),
+    name = coalesce(nullif(trim(p_name), ''), 'Mailroom member'),
     city = coalesce(nullif(trim(p_city), ''), 'Somewhere'),
     state = coalesce(nullif(trim(p_state), ''), ''),
     since = to_char(now(), 'YYYY'),

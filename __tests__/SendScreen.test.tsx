@@ -1,4 +1,4 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import React from "react";
@@ -12,79 +12,89 @@ beforeEach(() => {
   ALERT_SPY.mockClear();
   (Haptics.notificationAsync as jest.Mock).mockClear();
   (ImagePicker.launchImageLibraryAsync as jest.Mock).mockClear();
+  (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
 });
 
 function renderSend() {
   return render(
     <AllProviders>
       <SendScreen />
-    </AllProviders>
+    </AllProviders>,
   );
 }
 
-describe("SendScreen", () => {
-  it("renders header + stepper + composer + format selector + recipient + templates + send button", () => {
-    const { getByText, getAllByText } = renderSend();
-    expect(getByText("Send Mail")).toBeTruthy();
-    // Photo, Note, Send appear in both stepper and format selector
-    expect(getAllByText("Photo").length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText("Note").length).toBeGreaterThanOrEqual(1);
-    expect(getByText("Recipient")).toBeTruthy();
-    expect(getAllByText("Send").length).toBeGreaterThanOrEqual(1);
-    expect(getByText("Tonight's photo")).toBeTruthy();
-    expect(getByText("Send Postcard")).toBeTruthy();
-  });
-
-  it("starts with the date-invite default message", () => {
-    const { getByDisplayValue } = renderSend();
-    expect(getByDisplayValue(/coffee next week/i)).toBeTruthy();
-  });
-
-  it("renders the 'Date invite' occasion tile", () => {
-    const { getByText } = renderSend();
-    expect(getByText("Date invite")).toBeTruthy();
-  });
-
-  it("changes category when a Category pill is tapped", () => {
-    const { getByTestId } = renderSend();
-    fireEvent.press(getByTestId("category-photo"));
-  });
-
-  it("changes message + format when an occasion tile is tapped", () => {
-    const { getByTestId, getByDisplayValue } = renderSend();
-    fireEvent.press(getByTestId("occasion-birthday"));
-    expect(getByDisplayValue(/happy birthday/i)).toBeTruthy();
-    fireEvent.press(getByTestId("occasion-memory"));
-    expect(getByDisplayValue(/Remember this/i)).toBeTruthy();
-  });
-
-  it("cycles recipient when the recipient row is pressed", () => {
+describe("SendScreen — simplified MVP flow", () => {
+  it("renders the flip card, photo + note buttons, recipient picker, and send button", () => {
     const { getByText, getByTestId } = renderSend();
-    expect(getByText("Nora")).toBeTruthy();
-    fireEvent.press(getByTestId("recipient-cycler"));
-    expect(getByText("Ben")).toBeTruthy();
+    expect(getByText("Send Mail")).toBeTruthy();
+    expect(getByTestId("postcard-flip")).toBeTruthy();
+    expect(getByTestId("compose-photo-btn")).toBeTruthy();
+    expect(getByTestId("compose-note-btn")).toBeTruthy();
+    expect(getByTestId("recipient-segment-friend")).toBeTruthy();
+    expect(getByTestId("recipient-segment-ask")).toBeTruthy();
+    expect(getByTestId("recipient-segment-address")).toBeTruthy();
+    expect(getByText("Send postcard")).toBeTruthy();
   });
 
-  it("triggers haptic + success modal when Send Postcard is pressed", async () => {
-    const { getByText } = renderSend();
-    await act(async () => {
-      fireEvent.press(getByText("Send Postcard"));
+  it("opens the photo library when the Photo button is pressed", async () => {
+    const { getByTestId } = renderSend();
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValueOnce({
+      canceled: false,
+      assets: [{ uri: "file://chosen.jpg" }],
     });
+    fireEvent.press(getByTestId("compose-photo-btn"));
     await waitFor(() => {
-      expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
+      expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled();
     });
   });
 
-  it("opens image picker when photo placeholder is pressed", async () => {
-    const { getByText } = renderSend();
-    await act(async () => {
-      fireEvent.press(getByText("Tonight's photo"));
-    });
-    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled();
+  it("opens the message editor sheet when the Note button is pressed", () => {
+    const { getByTestId, queryByTestId } = renderSend();
+    expect(queryByTestId("msg-input")).toBeNull();
+    fireEvent.press(getByTestId("compose-note-btn"));
+    expect(getByTestId("msg-input")).toBeTruthy();
   });
 
-  it("shows current credits + cost-for-choice in the recipient row", () => {
+  it("switches recipient mode when a different segment is pressed", () => {
+    const { getByTestId, queryByTestId } = renderSend();
+    expect(queryByTestId("recipient-link")).toBeNull();
+    fireEvent.press(getByTestId("recipient-segment-ask"));
+    expect(getByTestId("recipient-link")).toBeTruthy();
+    fireEvent.press(getByTestId("recipient-segment-address"));
+    expect(getByTestId("recipient-address")).toBeTruthy();
+  });
+
+  it("blocks sending when there is no photo and prompts to choose one", () => {
     const { getByText } = renderSend();
-    expect(getByText(/5 credits · this card costs 2/i)).toBeTruthy();
+    fireEvent.press(getByText("Send postcard"));
+    expect(ALERT_SPY).toHaveBeenCalledWith("Not quite ready", expect.stringContaining("photo"));
+  });
+
+  it("blocks sending when the address fields are incomplete", async () => {
+    const { getByTestId, getByText, queryByTestId } = renderSend();
+    // Add a photo
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValueOnce({
+      canceled: false,
+      assets: [{ uri: "file://chosen.jpg" }],
+    });
+    fireEvent.press(getByTestId("compose-photo-btn"));
+    await waitFor(() => expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled());
+    // Add a note
+    fireEvent.press(getByTestId("compose-note-btn"));
+    fireEvent.changeText(getByTestId("msg-input"), "Hi friend");
+    fireEvent.press(getByTestId("msg-save"));
+    await waitFor(() => expect(queryByTestId("msg-input")).toBeNull());
+    // Switch to address mode with empty form
+    fireEvent.press(getByTestId("recipient-segment-address"));
+    fireEvent.press(getByText("Send postcard"));
+    expect(ALERT_SPY).toHaveBeenCalledWith("Not quite ready", expect.stringContaining("address"));
+  });
+
+  it("cycles through saved friends when the friend card is tapped", () => {
+    // The default mock-friends list starts with Tatiana. Tap to cycle → Alex.
+    const { getByTestId, getAllByText } = renderSend();
+    expect(getAllByText("Tatiana").length).toBeGreaterThan(0);
+    fireEvent.press(getByTestId("recipient-friend-cycler"));
+    expect(getAllByText("Alex").length).toBeGreaterThan(0);
   });
 });

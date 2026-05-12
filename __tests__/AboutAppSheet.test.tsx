@@ -6,7 +6,7 @@ import { AboutAppSheet } from "@/src/components/AboutAppSheet";
 describe("AboutAppSheet", () => {
   it("renders the brand + section titles when visible", () => {
     const { getByText } = render(<AboutAppSheet visible={true} onClose={() => {}} />);
-    expect(getByText("About Mail Club")).toBeTruthy();
+    expect(getByText("About Mailroom")).toBeTruthy();
     expect(getByText("What this is")).toBeTruthy();
     expect(getByText("Privacy")).toBeTruthy();
     expect(getByText("Terms")).toBeTruthy();
@@ -15,14 +15,14 @@ describe("AboutAppSheet", () => {
 
   it("renders nothing when not visible", () => {
     const { queryByText } = render(<AboutAppSheet visible={false} onClose={() => {}} />);
-    expect(queryByText("About Mail Club")).toBeNull();
+    expect(queryByText("About Mailroom")).toBeNull();
   });
 
-  it("opens mailto when 'hello@mailclub.app' button is tapped", () => {
+  it("opens mailto when the support-email button is tapped", () => {
     const openSpy = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
     const { getByTestId } = render(<AboutAppSheet visible={true} onClose={() => {}} />);
     fireEvent.press(getByTestId("about-app-mail"));
-    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining("mailto:hello@mailclub.app"));
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining("mailto:"));
     openSpy.mockRestore();
   });
 

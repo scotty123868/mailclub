@@ -125,18 +125,6 @@ export function ConstellationPanel({ compact = false, friends = [] }: { compact?
       )}
 
       {!compact && (
-        <View style={styles.bottomWrap} pointerEvents="none">
-          <Svg width={20} height={26} viewBox="0 0 20 26">
-            <Path d="M 6 24 Q 0 18, 4 8 Q 8 4, 10 12 Q 12 4, 16 8 Q 20 18, 14 24" stroke="#D9B46E" strokeWidth={1} fill="none" opacity={0.7} />
-          </Svg>
-          <Text style={styles.earned}>Every star was earned{"\n"}by a real send.</Text>
-          <Svg width={20} height={26} viewBox="0 0 20 26">
-            <Path d="M 14 24 Q 20 18, 16 8 Q 12 4, 10 12 Q 8 4, 4 8 Q 0 18, 6 24" stroke="#D9B46E" strokeWidth={1} fill="none" opacity={0.7} />
-          </Svg>
-        </View>
-      )}
-
-      {!compact && (
         <View style={styles.postmarkWrap} pointerEvents="none">
           <CircularPostmark size={86} color="#D9B46E" opacity={0.45} />
         </View>
@@ -145,12 +133,13 @@ export function ConstellationPanel({ compact = false, friends = [] }: { compact?
   );
 }
 
+// v0.5.0: dropped the bottom hearts row (`bottomWrap` + `earned` styles) per
+// the send-flow gallery cleanup pass. The visualization speaks for itself; we
+// don't need the "Every star was earned by a real send" tag-line.
 const styles = StyleSheet.create({
   panel: { borderRadius: 8, overflow: "hidden", paddingTop: 26 },
   titleWrap: { alignItems: "center", paddingTop: 6 },
   poem: { color: "#FFFFFF", fontFamily: fonts.serif, fontSize: 30, lineHeight: 38, textAlign: "center", letterSpacing: 0.3 },
   flourish: { marginTop: 8 },
-  bottomWrap: { alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "center", left: 0, position: "absolute", bottom: 24, right: 0 },
-  earned: { color: "rgba(255,255,255,0.92)", fontFamily: fonts.serifItalic, fontSize: 16, lineHeight: 22, textAlign: "center" },
   postmarkWrap: { position: "absolute", right: 12, top: 12 },
 });

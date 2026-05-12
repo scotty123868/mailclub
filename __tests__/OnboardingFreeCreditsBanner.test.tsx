@@ -19,7 +19,7 @@ describe("OnboardingFreeCreditsBanner", () => {
 
   it("shows the correct free-credit count in the title", async () => {
     const { findByText } = renderBanner();
-    expect(await findByText(/5 free credits to start/i)).toBeTruthy();
+    expect(await findByText(/3 free stamps to start/i)).toBeTruthy();
   });
 
   it("dismisses on tap of the close button", async () => {

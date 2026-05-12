@@ -36,8 +36,8 @@ describe("Stamp", () => {
     expect(getByText("20¢")).toBeTruthy();
   });
 
-  it("includes 'MAIL CLUB' microtext", () => {
+  it("includes 'MAILROOM' microtext", () => {
     const { getByText } = render(<Stamp />);
-    expect(getByText("MAIL CLUB")).toBeTruthy();
+    expect(getByText("MAILROOM")).toBeTruthy();
   });
 });

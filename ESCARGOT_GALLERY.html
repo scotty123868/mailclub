@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mailroom — Product direction, May 11, 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=Caveat:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:        #F5F0E6;
+    --paper-soft:   #EFE8DA;
+    --paper-warm:   #FAF5E9;
+    --ink:          #2C2620;
+    --ink-soft:     #5A4F44;
+    --ink-mute:     #8A7E70;
+    --line:         #D6CBB5;
+    --line-soft:    #E5DCC8;
+    --red:          #B84A3A;
+    --red-soft:     rgba(184,74,58,0.10);
+    --red-line:     rgba(184,74,58,0.30);
+    --gold:         #C8A36A;
+    --gold-soft:    rgba(200,163,106,0.18);
+    --blue:         #3D5A6E;
+    --green:        #607A55;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'EB Garamond', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.55;
+    padding: 60px 28px 200px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  /* ---- HEADER ----------------------------------------------------- */
+  .eyebrow {
+    color: var(--red);
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 64px;
+    line-height: 1.05;
+    margin: 0 0 18px;
+    letter-spacing: -0.01em;
+  }
+  h1 em { font-style: italic; color: var(--red); font-weight: 500; }
+  .lede {
+    max-width: 760px;
+    color: var(--ink-soft);
+    font-size: 19px;
+    line-height: 1.6;
+    font-style: italic;
+  }
+  .stamp-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 24px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .stamp-row .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+
+  /* ---- SECTIONS --------------------------------------------------- */
+  section { margin-top: 84px; padding-top: 52px; border-top: 1px solid var(--line); }
+  .sec-tag {
+    color: var(--red);
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 42px;
+    line-height: 1.1;
+    margin: 0 0 14px;
+    letter-spacing: -0.005em;
+  }
+  h2 em { font-style: italic; color: var(--red); font-weight: 500; }
+  h3 {
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 26px;
+    line-height: 1.25;
+    margin: 36px 0 10px;
+  }
+  p { font-size: 17px; max-width: 760px; }
+  p.dim { color: var(--ink-soft); }
+
+  /* ---- KILL / KEEP LISTS ----------------------------------------- */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 28px; }
+  @media (max-width: 880px) { .grid-2 { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--paper-warm);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 24px 26px;
+  }
+  .card.kill { background: rgba(184,74,58,0.06); border-color: var(--red-line); }
+  .card.keep { background: rgba(96,122,85,0.07); border-color: rgba(96,122,85,0.30); }
+  .card .label {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .card.kill .label { color: var(--red); }
+  .card.keep .label { color: var(--green); }
+  .card h4 {
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 19px;
+    margin: 0 0 6px;
+  }
+  .card ul { margin: 12px 0 0 18px; padding: 0; }
+  .card li { margin-bottom: 8px; font-size: 16px; color: var(--ink-soft); }
+  .card li strong { color: var(--ink); }
+  .card li em { color: var(--ink); font-style: italic; }
+
+  /* ---- BRAND LINE PROPOSALS -------------------------------------- */
+  .lines { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 28px; }
+  @media (max-width: 880px) { .lines { grid-template-columns: 1fr; } }
+  .line {
+    background: var(--paper-warm);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 22px 24px;
+    position: relative;
+  }
+  .line.featured { background: var(--paper); border-color: var(--red-line); }
+  .line .meta {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 8px;
+  }
+  .line.featured .meta { color: var(--red); }
+  .line .text {
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 28px;
+    line-height: 1.2;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .line .text em { font-style: italic; color: var(--red); font-weight: 500; }
+  .line .note { font-size: 14px; color: var(--ink-soft); font-style: italic; }
+
+  /* ---- MOCKUP STAGE ---------------------------------------------- */
+  .mockup-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    margin: 44px 0 24px;
+    align-items: start;
+  }
+  @media (max-width: 980px) { .mockup-row { grid-template-columns: 1fr; max-width: 420px; margin-left: auto; margin-right: auto; } }
+  .phone {
+    background: #0F0F0F;
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow: 0 24px 48px -16px rgba(50,40,28,0.30), 0 0 0 1px rgba(0,0,0,0.05);
+  }
+  .screen {
+    background: var(--paper);
+    border-radius: 34px;
+    overflow: hidden;
+    aspect-ratio: 9 / 19.5;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .notch {
+    position: absolute;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 100px; height: 22px;
+    background: #0F0F0F;
+    border-radius: 14px;
+    z-index: 10;
+  }
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 26px 8px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .mockup-caption {
+    margin-top: 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    text-align: center;
+  }
+  .mockup-caption strong { color: var(--ink); font-weight: 700; }
+
+  /* ---- MAIL CARDS GALLERY MOCKUP -------------------------------- */
+  .mc-header {
+    padding: 8px 22px 14px;
+  }
+  .mc-title {
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .mc-sub {
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+  .mc-stats {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--paper-warm);
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
+  }
+  .mc-stat { flex: 1; text-align: center; }
+  .mc-stat .n {
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 20px;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .mc-stat .l {
+    font-family: 'Inter', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-top: 4px;
+  }
+  .mc-divider {
+    height: 1px; background: var(--line-soft); margin: 0 22px;
+  }
+  .mc-week {
+    padding: 18px 22px 8px;
+  }
+  .mc-week-label {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 10px;
+  }
+  .mc-week-label em { font-style: italic; color: var(--red); font-weight: 500; text-transform: none; letter-spacing: 0; font-family: 'EB Garamond', serif; font-size: 12px; margin-left: 6px; }
+  .mc-cards {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 0 22px 4px;
+    margin: 0 -22px;
+    scrollbar-width: none;
+  }
+  .mc-cards::-webkit-scrollbar { display: none; }
+  .mc-card {
+    flex: 0 0 142px;
+    background: var(--paper-warm);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+  }
+  .mc-photo {
+    aspect-ratio: 3 / 2;
+    position: relative;
+    overflow: hidden;
+    background: var(--paper-soft);
+  }
+  .mc-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .mc-photo .stamp-mini {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 14px; height: 18px;
+    background: var(--red);
+    border-radius: 2px;
+    box-shadow: 0 0 0 2px var(--paper-warm);
+  }
+  .mc-card-meta {
+    padding: 7px 9px;
+  }
+  .mc-card-to {
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .mc-card-date {
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    font-size: 10px;
+    color: var(--ink-mute);
+    margin-top: 1px;
+  }
+
+  /* ---- MAP MOMENT-CARD MOCKUP ------------------------------------ */
+  .map-canvas {
+    flex: 1;
+    background: var(--paper-soft);
+    background-image:
+      radial-gradient(rgba(138,126,112,0.18) 1px, transparent 1px);
+    background-size: 12px 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .map-canvas::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 35%, rgba(232,180,122,0.15) 0%, transparent 60%);
+  }
+  .map-pin {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 0 3px rgba(184,74,58,0.20), 0 0 0 8px rgba(184,74,58,0.08);
+    transform: translate(-50%, -50%);
+  }
+  .map-pin.home { background: var(--ink); box-shadow: 0 0 0 3px rgba(44,38,32,0.20); }
+  .map-route {
+    position: absolute;
+    height: 1.5px;
+    background-image: linear-gradient(to right, var(--red) 60%, transparent 0%);
+    background-size: 6px 1.5px;
+    transform-origin: left center;
+    opacity: 0.55;
+  }
+  .map-label {
+    position: absolute;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    background: var(--paper);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--line-soft);
+    white-space: nowrap;
+  }
+  .peek {
+    position: absolute;
+    bottom: 12px; left: 12px; right: 12px;
+    background: var(--paper-warm);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    gap: 12px;
+    box-shadow: 0 14px 28px -10px rgba(50,40,28,0.20);
+  }
+  .peek-photo {
+    width: 64px; height: 44px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    overflow: hidden;
+    background: var(--paper-soft);
+  }
+  .peek-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .peek-text { flex: 1; min-width: 0; }
+  .peek-to {
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+  .peek-sub {
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 3px;
+  }
+  .peek-status {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-top: 5px;
+  }
+  .peek-chev {
+    align-self: center;
+    color: var(--ink-mute);
+    font-size: 16px;
+  }
+
+  /* ---- POSTCARD DETAIL MOCKUP ------------------------------------ */
+  .detail-photo {
+    aspect-ratio: 3 / 2;
+    background: var(--paper-soft);
+    position: relative;
+    margin: 8px 22px 14px;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 12px 24px -8px rgba(50,40,28,0.25);
+  }
+  .detail-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .detail-photo .stamp {
+    position: absolute;
+    top: 10px; right: 10px;
+    width: 28px; height: 36px;
+    background: var(--red);
+    border-radius: 2px;
+    box-shadow: 0 0 0 4px var(--paper-warm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--paper-warm);
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 9px;
+  }
+  .detail-body {
+    padding: 0 22px;
+  }
+  .detail-note {
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    line-height: 1.45;
+    color: var(--ink);
+    padding: 14px 16px;
+    background: var(--paper-warm);
+    border: 1px solid var(--line-soft);
+    border-radius: 6px;
+    margin-bottom: 14px;
+  }
+  .detail-meta {
+    border-top: 1px solid var(--line-soft);
+    padding-top: 12px;
+    font-family: 'EB Garamond', serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .detail-meta .row { display: flex; justify-content: space-between; padding: 6px 0; }
+  .detail-meta .row .k { color: var(--ink-mute); font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; }
+  .detail-meta .row .v { color: var(--ink); font-weight: 500; }
+  .detail-cta {
+    margin: 16px 22px 0;
+    padding: 12px 14px;
+    background: var(--ink);
+    color: var(--paper);
+    text-align: center;
+    border-radius: 8px;
+    font-family: 'EB Garamond', serif;
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  /* ---- TAB BAR (shared across mockups) --------------------------- */
+  .tabbar {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 12px 16px 22px;
+    border-top: 1px solid var(--line-soft);
+    background: var(--paper-warm);
+  }
+  .tab {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 3px;
+    color: var(--ink-mute);
+    font-family: 'Inter', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .tab.active { color: var(--red); }
+  .tab-dot { width: 18px; height: 18px; border-radius: 4px; background: currentColor; opacity: 0.85; }
+
+  /* ---- INFO ROWS ------------------------------------------------- */
+  .info-row {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 32px;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-key {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .info-val { font-size: 17px; color: var(--ink); }
+  .info-val strong { font-weight: 600; }
+  .info-val em { font-style: italic; color: var(--red); }
+
+  /* ---- CALLOUT --------------------------------------------------- */
+  .callout {
+    margin: 32px 0;
+    padding: 22px 28px;
+    background: var(--paper-warm);
+    border-left: 3px solid var(--red);
+    border-radius: 0 6px 6px 0;
+  }
+  .callout .label {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 8px;
+  }
+  .callout p { margin: 4px 0; max-width: none; }
+
+  /* ---- FOOTER ---------------------------------------------------- */
+  footer {
+    margin-top: 96px;
+    padding-top: 32px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-mute);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Mailroom · Product Direction · May 11, 2026</div>
+  <h1>Run at this <em>our own way</em>.</h1>
+  <p class="lede">
+    Escargot is louder, faster, more viral. Mailroom is quieter, warmer, and built on a different idea: that sending real mail is its own reward. We were starting to mirror their playbook. We're not going to.
+  </p>
+  <div class="stamp-row">
+    <span class="pip"></span>
+    <span>Supersedes ESCARGOT_GALLERY.md</span>
+  </div>
+
+  <!-- ================================================================ -->
+  <section>
+    <div class="sec-tag">The pivot</div>
+    <h2>What we're <em>not</em> doing.</h2>
+    <p class="dim">A clean list of proposals from the prior gallery that are off the table after the conversation. Each was rejected for the same underlying reason: pressuring the user is not our voice. Mailroom should feel like an empty postcard waiting for you, not a notification trying to extract a behavior.</p>
+
+    <div class="grid-2">
+      <div class="card kill">
+        <div class="label">Killed · virality pressure</div>
+        <h4>Every friend = a free card</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">Distracts from the magic of "you have 3 free postcards to send right now." The user came to send mail, not to be a growth vector.</p>
+      </div>
+      <div class="card kill">
+        <div class="label">Killed · speed pressure</div>
+        <h4>"Mail a card in 60 seconds"</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">Quantifying speed reframes the act as a chore to dispatch. Mailroom isn't fast food. The whole point is that someone took the time.</p>
+      </div>
+      <div class="card kill">
+        <div class="label">Killed · time pressure</div>
+        <h4>First-card welcome offer with 24h countdown</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">Manufactured urgency for a product whose currency is sincerity. A countdown on a postcard app is uncanny.</p>
+      </div>
+      <div class="card kill">
+        <div class="label">Killed · task pressure</div>
+        <h4>Friend birthdays as a Todo list</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">Birthdays should be a soft signal, not an inbox. We collect them so cards can land on the right day, not so the user feels nagged into sending them.</p>
+      </div>
+      <div class="card kill">
+        <div class="label">Killed · gating</div>
+        <h4>Map locked until first send</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">Replaced. The empty map should explain itself, not gate itself. New copy: <em>"Send your first card. Its path will show up here."</em> Visible map, no overlay, no quest.</p>
+      </div>
+      <div class="card kill">
+        <div class="label">Killed · vibe theft</div>
+        <h4>Escargot styling, tone, framing</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">Their playbook is right for them. Their copy, color, and humor are not ours. We don't need to argue with them — we're not in the same conversation.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section>
+    <div class="sec-tag">The philosophy</div>
+    <h2>Utility first. <em>Memory archive</em> second. No third thing.</h2>
+    <p class="dim">The whole product is two promises. The first promise gets them in. The second promise keeps them.</p>
+
+    <div class="info-row">
+      <div class="info-key">Promise 1</div>
+      <div class="info-val"><strong>Free sends, no friction.</strong> You get a small starter balance on signup — enough to use today, right now, with one photo from your library and one note. The app exists to make that easy. <em>Open: 3 or 5 starters? Current code is 5; your recent framing said "3 free postcards." Pick before next build.</em></div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">Promise 2</div>
+      <div class="info-val"><strong>Lasting memory.</strong> The photo you cared enough to mail is a photo you cared enough to keep. Mailroom remembers them <em>for</em> you — a quiet archive of moments you sent into someone else's life.</div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">No automatic credit grants</div>
+      <div class="info-val">The starter balance is the <em>only</em> time credits appear without the user buying them. No welcome-offer bonus, no referral-on-tap, no streak rewards, no "complete your profile" credits. The balance is just what you have, like a fresh notebook — not a slot machine.</div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">What we don't do</div>
+      <div class="info-val">Pressure. Streaks. Daily quests. Notification badges. Referral nags. Achievements. Counter-resets. Bonus-credit moments. None of it. The mail itself is the reward.</div>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section>
+    <div class="sec-tag">Brand line · brainstorm</div>
+    <h2>"Make memories <em>mementos</em>."</h2>
+    <p class="dim">Your draft was "make memories momentos." Keeping the structure exactly — just one letter to fix. <strong>Momentos</strong> is Spanish/Portuguese for "moments." The English word for a small keepsake — the thing a printed postcard <em>is</em> — is <strong>mementos</strong>. Same M-M rhythm, real meaning.</p>
+
+    <div class="lines">
+      <div class="line featured">
+        <div class="meta">Your line · locked</div>
+        <p class="text">Make memories <em>mementos</em>.</p>
+        <div class="note">M-M-M three-beat. Reads as a directive: turn memories into things you can hold. Crisp, unique, ours.</div>
+      </div>
+      <div class="line featured">
+        <div class="meta">App Store hero · locked</div>
+        <p class="text">Mail a <em>memory</em>.</p>
+        <div class="note">Two words, imperative, intimate. Hero copy on the first App Store screenshot. The brand line ("Make memories mementos.") sits underneath as the subhead.</div>
+      </div>
+      <div class="line">
+        <div class="meta">Alt · quiet</div>
+        <p class="text">Memories you can <em>hold</em>.</p>
+        <div class="note">No alliteration but the strongest emotional load. Hold in reserve for the welcome screen subhead or marketing site.</div>
+      </div>
+      <div class="line">
+        <div class="meta">Alt · clean</div>
+        <p class="text">Mementos, by <em>mail</em>.</p>
+        <div class="note">Just the noun and the channel. Typeset-book energy. Hold in reserve.</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <div class="label">Locked</div>
+      <p style="font-size:16px;"><strong>"Mail a memory."</strong> on the App Store. <strong>"Make memories mementos."</strong> as the brand line / subhead. Two short sentences, M-M alliteration in both, one verb-led, one noun-led. They carry each other.</p>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section>
+    <div class="sec-tag">The big add</div>
+    <h2>The <em>Mail Card</em> — a retroactive archive.</h2>
+    <p class="dim">Borrowed in spirit from your teteapp's MomentCardHero pattern — the map-prominent journal card. Adapted for Mailroom: every send becomes a Mail Card that survives in a gallery. By week, scrollable, tappable, mappable. Two surfaces: a list view (the journal) and a map view (the routes). Tapping a route shows a peek card at the bottom — like teteapp's `MomentPeek`.</p>
+
+    <h3>The three new surfaces</h3>
+
+    <div class="mockup-row">
+
+      <!-- ============== MOCKUP 1: MAIL CARDS GALLERY ============== -->
+      <div>
+        <div class="phone">
+          <div class="screen">
+            <div class="notch"></div>
+            <div class="status-bar"><span>9:41</span><span>● ● ●</span></div>
+
+            <div class="mc-header">
+              <div class="mc-title">Your Mail</div>
+              <div class="mc-sub">Photos you cared enough to share.</div>
+              <div class="mc-stats">
+                <div class="mc-stat"><div class="n">14</div><div class="l">Sent</div></div>
+                <div class="mc-stat"><div class="n">7</div><div class="l">Friends</div></div>
+                <div class="mc-stat"><div class="n">3.2k</div><div class="l">Miles</div></div>
+              </div>
+            </div>
+
+            <div class="mc-divider"></div>
+
+            <div class="mc-week">
+              <div class="mc-week-label">Week of May 4 <em>· this week</em></div>
+              <div class="mc-cards">
+                <div class="mc-card">
+                  <div class="mc-photo"><img src="https://picsum.photos/seed/alex-brooklyn-rooftop/300/200" alt=""><div class="stamp-mini"></div></div>
+                  <div class="mc-card-meta">
+                    <div class="mc-card-to">to Alex</div>
+                    <div class="mc-card-date">May 6 · Brooklyn</div>
+                  </div>
+                </div>
+                <div class="mc-card">
+                  <div class="mc-photo"><img src="https://picsum.photos/seed/tatiana-austin-bbq/300/200" alt=""><div class="stamp-mini"></div></div>
+                  <div class="mc-card-meta">
+                    <div class="mc-card-to">to Tatiana</div>
+                    <div class="mc-card-date">May 4 · Austin</div>
+                  </div>
+                </div>
+                <div class="mc-card">
+                  <div class="mc-photo"><img src="https://picsum.photos/seed/mom-boise-hike/300/200" alt=""><div class="stamp-mini"></div></div>
+                  <div class="mc-card-meta">
+                    <div class="mc-card-to">to Mom</div>
+                    <div class="mc-card-date">May 5 · Boise</div>
+                  </div>
+                </div>
+                <div class="mc-card">
+                  <div class="mc-photo"><img src="https://picsum.photos/seed/sam-portland-coffee/300/200" alt=""><div class="stamp-mini"></div></div>
+                  <div class="mc-card-meta">
+                    <div class="mc-card-to">to Sam</div>
+                    <div class="mc-card-date">May 7 · Portland</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mc-week">
+              <div class="mc-week-label">Week of April 27</div>
+              <div class="mc-cards">
+                <div class="mc-card">
+                  <div class="mc-photo"><img src="https://picsum.photos/seed/dad-denver-mountains/300/200" alt=""><div class="stamp-mini"></div></div>
+                  <div class="mc-card-meta">
+                    <div class="mc-card-to">to Dad</div>
+                    <div class="mc-card-date">May 1 · Denver</div>
+                  </div>
+                </div>
+                <div class="mc-card">
+                  <div class="mc-photo"><img src="https://picsum.photos/seed/jamie-chicago-skyline/300/200" alt=""><div class="stamp-mini"></div></div>
+                  <div class="mc-card-meta">
+                    <div class="mc-card-to">to Jamie</div>
+                    <div class="mc-card-date">Apr 29 · Chicago</div>
+                  </div>
+                </div>
+                <div class="mc-card">
+                  <div class="mc-photo"><img src="https://picsum.photos/seed/river-asheville-fog/300/200" alt=""><div class="stamp-mini"></div></div>
+                  <div class="mc-card-meta">
+                    <div class="mc-card-to">to River</div>
+                    <div class="mc-card-date">Apr 28 · Asheville</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mc-week">
+              <div class="mc-week-label">Week of April 20</div>
+              <div class="mc-cards">
+                <div class="mc-card">
+                  <div class="mc-photo"><img src="https://picsum.photos/seed/zoe-marfa-desert/300/200" alt=""><div class="stamp-mini"></div></div>
+                  <div class="mc-card-meta">
+                    <div class="mc-card-to">to Zoe</div>
+                    <div class="mc-card-date">Apr 23 · Marfa</div>
+                  </div>
+                </div>
+                <div class="mc-card">
+                  <div class="mc-photo"><img src="https://picsum.photos/seed/eli-boston-harbor/300/200" alt=""><div class="stamp-mini"></div></div>
+                  <div class="mc-card-meta">
+                    <div class="mc-card-to">to Eli</div>
+                    <div class="mc-card-date">Apr 22 · Boston</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="flex:1;"></div>
+            <div class="tabbar">
+              <div class="tab"><span class="tab-dot"></span>Map</div>
+              <div class="tab active"><span class="tab-dot"></span>Mail</div>
+              <div class="tab"><span class="tab-dot"></span>Send</div>
+              <div class="tab"><span class="tab-dot"></span>Friends</div>
+              <div class="tab"><span class="tab-dot"></span>Me</div>
+            </div>
+          </div>
+        </div>
+        <div class="mockup-caption"><strong>Mail Card · Gallery</strong></div>
+      </div>
+
+      <!-- ============== MOCKUP 2: MAP + MOMENT PEEK ============== -->
+      <div>
+        <div class="phone">
+          <div class="screen">
+            <div class="notch"></div>
+            <div class="status-bar"><span>9:41</span><span>● ● ●</span></div>
+
+            <div class="mc-header">
+              <div class="mc-title">Map</div>
+              <div class="mc-sub">Every card you've sent, on one page.</div>
+            </div>
+
+            <div class="map-canvas">
+              <!-- Home pin (sender) -->
+              <div class="map-pin home" style="top: 60%; left: 28%;"></div>
+              <div class="map-label" style="top: 64%; left: 28%; transform: translate(-50%, 0);">Boise</div>
+
+              <!-- Destination pins + routes -->
+              <div class="map-route" style="top: 60%; left: 28%; width: 38%; transform: translateY(-50%) rotate(-18deg);"></div>
+              <div class="map-pin" style="top: 38%; left: 64%;"></div>
+              <div class="map-label" style="top: 32%; left: 64%; transform: translate(-50%, 0);">Brooklyn</div>
+
+              <div class="map-route" style="top: 60%; left: 28%; width: 28%; transform: translateY(-50%) rotate(22deg);"></div>
+              <div class="map-pin" style="top: 78%; left: 52%;"></div>
+              <div class="map-label" style="top: 81%; left: 52%; transform: translate(-50%, 0);">Austin</div>
+
+              <div class="map-route" style="top: 60%; left: 28%; width: 18%; transform: translateY(-50%) rotate(-50deg);"></div>
+              <div class="map-pin" style="top: 38%; left: 38%;"></div>
+              <div class="map-label" style="top: 32%; left: 38%; transform: translate(-50%, 0);">Portland</div>
+
+              <!-- Peek card (selected: Brooklyn / Alex) -->
+              <div class="peek">
+                <div class="peek-photo"><img src="https://picsum.photos/seed/alex-brooklyn-rooftop/240/160" alt=""></div>
+                <div class="peek-text">
+                  <div class="peek-to">to Alex · Brooklyn</div>
+                  <div class="peek-sub">"the view from the roof tonight"</div>
+                  <div class="peek-status">Delivered · May 9</div>
+                </div>
+                <div class="peek-chev">›</div>
+              </div>
+            </div>
+
+            <div class="tabbar">
+              <div class="tab active"><span class="tab-dot"></span>Map</div>
+              <div class="tab"><span class="tab-dot"></span>Mail</div>
+              <div class="tab"><span class="tab-dot"></span>Send</div>
+              <div class="tab"><span class="tab-dot"></span>Friends</div>
+              <div class="tab"><span class="tab-dot"></span>Me</div>
+            </div>
+          </div>
+        </div>
+        <div class="mockup-caption"><strong>Map · Tap pin → peek card</strong></div>
+      </div>
+
+      <!-- ============== MOCKUP 3: SINGLE CARD DETAIL ============== -->
+      <div>
+        <div class="phone">
+          <div class="screen">
+            <div class="notch"></div>
+            <div class="status-bar"><span>9:41</span><span>● ● ●</span></div>
+
+            <div style="padding: 8px 22px 4px; display: flex; justify-content: space-between; align-items: center;">
+              <div style="font-family: 'Inter', sans-serif; font-size: 14px; color: var(--ink-soft);">‹ Back</div>
+              <div style="font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-mute);">May 6 · 2026</div>
+            </div>
+
+            <div class="detail-photo"><img src="https://picsum.photos/seed/alex-brooklyn-rooftop/600/400" alt=""><div class="stamp">1¢</div></div>
+
+            <div class="detail-body">
+              <div class="detail-note">
+                hey alex — sunset from the roof tonight. you would've loved this one. miss you.
+              </div>
+
+              <div class="detail-meta">
+                <div class="row"><span class="k">To</span><span class="v">Alex Park</span></div>
+                <div class="row"><span class="k">Where</span><span class="v">Brooklyn, NY</span></div>
+                <div class="row"><span class="k">From</span><span class="v">Boise, ID</span></div>
+                <div class="row"><span class="k">Travel</span><span class="v">2,160 miles</span></div>
+                <div class="row"><span class="k">Status</span><span class="v" style="color: var(--green);">Delivered May 9</span></div>
+              </div>
+            </div>
+
+            <div style="flex: 1; min-height: 8px;"></div>
+
+            <div class="detail-cta">Send another to Alex</div>
+
+            <div style="height: 22px;"></div>
+
+            <div class="tabbar">
+              <div class="tab"><span class="tab-dot"></span>Map</div>
+              <div class="tab active"><span class="tab-dot"></span>Mail</div>
+              <div class="tab"><span class="tab-dot"></span>Send</div>
+              <div class="tab"><span class="tab-dot"></span>Friends</div>
+              <div class="tab"><span class="tab-dot"></span>Me</div>
+            </div>
+          </div>
+        </div>
+        <div class="mockup-caption"><strong>Detail · One Mail Card</strong></div>
+      </div>
+
+    </div>
+
+    <h3>How it composes (no new tab needed)</h3>
+    <p>The new structure threads into what's already on disk. No extra navigation. <strong>Constellation</strong> becomes <strong>Mail</strong> — same tab slot, new purpose. The map tab keeps its slot but gets the peek-card mechanic. Detail view is a new screen that reuses <code style="font-family:'JetBrains Mono'; font-size: 14px; background: var(--paper-warm); padding: 1px 5px; border-radius: 3px;">PostcardFrontPreview</code> + <code style="font-family:'JetBrains Mono'; font-size: 14px; background: var(--paper-warm); padding: 1px 5px; border-radius: 3px;">PostcardBackPreview</code> at a larger size.</p>
+
+    <h3>What happens to the Friends tab</h3>
+    <p>Friends gets richer. Three pieces land here:</p>
+    <ol style="font-size: 17px; color: var(--ink); max-width: 760px; padding-left: 22px; margin-top: 0;">
+      <li style="margin-bottom: 10px;"><strong>Constellation insights</strong> — "warmest," "newest," "sleeping 60+ days" — move from the retired Constellation tab to small badges on the friend rows, or a header strip above the list.</li>
+      <li style="margin-bottom: 10px;"><strong>Upcoming birthdays section</strong> — a quiet list of friends whose birthdays fall in the next 60 days, sorted nearest-first. <em>Not</em> a task list. No urgency CTAs in the row. Just a list. Tap a friend → existing friend detail. The user decides whether to send. The birthdays surface because they're useful, not because we're prompting.</li>
+      <li style="margin-bottom: 10px;"><strong>Existing friend list</strong> — unchanged. The "All / Close / New" filter chips stay; we can optionally add a "Birthday soon" chip.</li>
+    </ol>
+    <p>Friends becomes the single home for everything about people. Birthdays live here because they're a property of friends — not a separate task surface, not a home-screen interruption.</p>
+
+    <div class="callout">
+      <div class="label">Data model — what's already there</div>
+      <p style="font-size:16px;">The <code style="font-family:'JetBrains Mono'; font-size:14px;">postcards</code> array in <code style="font-family:'JetBrains Mono'; font-size:14px;">MailClubContext</code> already has <code style="font-family:'JetBrains Mono'; font-size:14px;">{ sentAt, toFriendId, toCity, fromCity, photoUri, message, status }</code> per send. The gallery and detail views are pure derivations from this — no schema change. The map already derives routes from this same array. Adding the peek-card mechanic is UI-only on top of `MapPanel`. About 3 days of engineering total.</p>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section>
+    <div class="sec-tag">Small fixes from the original gallery that survive</div>
+    <h2>The few things still worth doing.</h2>
+    <p class="dim">Most of the original 10 proposals got cut. A handful are still right — but only because they support the utility-first philosophy, not because they came from a competitor.</p>
+
+    <div class="info-row">
+      <div class="info-key">Soft map empty state</div>
+      <div class="info-val">Replace the current blank map with one line of cream-paper italic: <em>"Send your first card. Its path will show up here."</em> No overlay, no lock, no quest. Just a sentence that tells the user what the surface will do once they use it.</div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">Delivery transparency on send</div>
+      <div class="info-val">Between the recipient picker and the Send button, a quiet line: <em>"We'll print Tuesday · arrives ~May 18."</em> Real dates from Lob's SLA. This is information, not pressure. Sets the expectation so the wait doesn't feel broken.</div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">Stamp-frame option on the photo</div>
+      <div class="info-val">Toggle, off by default. A small set of postal frames (1¢ red stamp scallop, polaroid white border, washi tape). For people who want it. For people who don't, the raw photo stays. Pulls forward the Mailroom DNA without forcing it.</div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">"Mail a memory" as the App Store hero</div>
+      <div class="info-val">Replaces the abstract brand poetry on the first App Store screenshot. Doesn't quantify speed. Doesn't promise virality. Just names the thing the product does.</div>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section>
+    <div class="sec-tag">Mailroom's existing strengths · do not regress</div>
+    <h2>What Mailroom already has that escargot doesn't.</h2>
+    <div class="grid-2">
+      <div class="card keep">
+        <div class="label">Keep · brand</div>
+        <h4>Coherent physical-mail identity</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">Stamps, postmarks, cream paper, serif, the 1¢ red stamp — every screen reads as one product. Escargot's identity shifts screen-to-screen.</p>
+      </div>
+      <div class="card keep">
+        <div class="label">Keep · privacy</div>
+        <h4>Send-a-link to an unknown address</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">The "Ask" recipient mode is a real moat. Recipient fills in their address privately, sender never sees it. Nobody else does this.</p>
+      </div>
+      <div class="card keep">
+        <div class="label">Keep · honest data</div>
+        <h4>Routes derived from real sends</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">Our map shows what actually happened. No fake pins, no synthetic activity. The new peek card makes this stronger.</p>
+      </div>
+      <div class="card keep">
+        <div class="label">Keep · prompts</div>
+        <h4>Card-idea prompts on home</h4>
+        <p style="font-size:15px; color: var(--ink-soft);">"Send me the photo from tonight," "Send me your favorite place." These are interaction starters, not pressure. They survive the new direction unchanged.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section>
+    <div class="sec-tag">Ship order</div>
+    <h2>What to build, in what order.</h2>
+    <p class="dim">If product wants to act on this, here's the order that delivers the new direction without bloating engineering.</p>
+
+    <div class="info-row">
+      <div class="info-key">Today · copy only</div>
+      <div class="info-val">"Mail a memory." in the App Store hero. <em>"Memories you can hold."</em> as welcome subhead. Soft map empty-state copy. Zero engineering.</div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">This sprint</div>
+      <div class="info-val">Mail Card gallery (rename Constellation tab → Mail; render postcards grouped by week). Reuses existing <code style="font-family:'JetBrains Mono'; font-size:14px;">postcards</code> array. ~2 days.</div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">This sprint</div>
+      <div class="info-val">Map peek card. Tap a pin → bottom sheet with thumbnail + recipient + status. Mirrors teteapp's `MomentPeek` pattern. ~1.5 days.</div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">Next sprint</div>
+      <div class="info-val">Single Mail Card detail screen. Photo, handwritten-font note, metadata table, "Send another" CTA. ~1 day. Constellation insights (warmest, sleeping) get moved to Friends tab — half day.</div>
+    </div>
+    <div class="info-row">
+      <div class="info-key">Backlog</div>
+      <div class="info-val">Stamp-frame option in send flow. Delivery transparency block. Both small and additive.</div>
+    </div>
+  </section>
+
+  <!-- ================================================================ -->
+  <section>
+    <div class="sec-tag">Locked decisions</div>
+    <h2>Settled.</h2>
+    <ul style="font-size: 17px; color: var(--ink); max-width: 760px; padding-left: 22px; list-style: none;">
+      <li style="margin-bottom: 10px;"><span style="color: var(--green); font-weight: 700;">✓</span> <strong>Tab name:</strong> <em>Mail</em>. (Renames the retired Constellation slot.)</li>
+      <li style="margin-bottom: 10px;"><span style="color: var(--green); font-weight: 700;">✓</span> <strong>Brand line:</strong> <em>"Make memories mementos."</em> · App Store hero: <em>"Mail a memory."</em></li>
+      <li style="margin-bottom: 10px;"><span style="color: var(--green); font-weight: 700;">✓</span> <strong>Credit grants:</strong> starter balance only. No welcome-offer bonus, no referral credits, no streak rewards.</li>
+      <li style="margin-bottom: 10px;"><span style="color: var(--green); font-weight: 700;">✓</span> <strong>Birthdays:</strong> live in the Friends tab as a quiet "Upcoming" section. Not a task list.</li>
+      <li style="margin-bottom: 10px;"><span style="color: var(--green); font-weight: 700;">✓</span> <strong>Map:</strong> not gated. Soft empty-state copy: "Send your first card. Its path will show up here."</li>
+      <li style="margin-bottom: 10px;"><span style="color: var(--green); font-weight: 700;">✓</span> <strong>Gallery layout:</strong> each week is a horizontal scroll. Photos are the content, not gradients.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-tag">Still open</div>
+    <h2>Decide before next build.</h2>
+    <ol style="font-size: 17px; color: var(--ink); max-width: 760px; padding-left: 22px;">
+      <li style="margin-bottom: 14px;"><strong>Starter balance: 3 or 5?</strong> Current code grants 5. Your earlier framing said "3 free postcards." 3 is tighter — feels more like a gift, drives the second send to be a paid pack. 5 is what the WelcomeSheet copy already promises ("5 free postcards on us"). Pick before next build so the copy and the math agree.</li>
+      <li style="margin-bottom: 14px;"><strong>Photo-less sends, ever?</strong> Today every send has a photo. If we someday allow text-only postcards, the Mail Card thumbnail needs a fallback — handwritten-script render of the first line of the note, or a solid stamp tile. Defer until we know we want them.</li>
+      <li style="margin-bottom: 14px;"><strong>Friend birthday source.</strong> Where does a friend's birthday come from? (a) your own iOS contacts permission, (b) the friend filling it in via the "Ask" magic-link, (c) the friend's own Mailroom profile. (a) is densest but most invasive; (b) and (c) are cleaner. My lean: <em>start with (c) only</em> — the friend opted into Mailroom, they can put their own birthday in their profile. Add (a) as an explicit opt-in toggle later if friend-graph density becomes the bottleneck.</li>
+      <li style="margin-bottom: 14px;"><strong>Privacy of recipient's street address.</strong> The Mail Card detail shows "Brooklyn, NY" but never the line1 / line2 / ZIP. Worth a one-line audit pass to confirm none of those fields ever land in the gallery view, even for the sender who originally typed them.</li>
+    </ol>
+  </section>
+
+  <footer>
+    Generated 2026-05-11. Supersedes ESCARGOT_GALLERY.md. References: teteapp-main/src/screens/MomentMapScreen.tsx (peek card mechanic), teteapp-main/src/theme/MomentCardHero.tsx (map-prominent card layout), Mailroom/app/(tabs)/map.tsx (existing route derivation).
+  </footer>
+
+</div>
+</body>
+</html>

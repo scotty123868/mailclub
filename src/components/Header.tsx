@@ -1,42 +1,90 @@
 import { Settings } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { CreditsPill } from "@/src/components/CreditsPill";
 import { colors } from "@/src/theme/colors";
 import { fonts, type } from "@/src/theme/typography";
 
-export function Header({ title, onPressSettings }: { title: string; onPressSettings?: () => void }) {
+/**
+ * App header — v0.5.0 single-row layout.
+ *
+ * Layout: [title]                                  [CreditsPill] [gear?]
+ *
+ * Decisions locked in the send-flow gallery:
+ *   • Mailroom wordmark removed — the page title earns the top of every tab.
+ *     The brand still lives on the icon, splash, and printed postcard back.
+ *   • Title sits left at type.title (32pt) so each tab announces itself with
+ *     real type hierarchy instead of a small subheading squeezed between a
+ *     wordmark and the actions.
+ *   • CreditsPill is persistent on every tab (one-tap to Buy Stamps). The
+ *     pill is the ONLY entry to Buy Stamps — the inline "credits · + Buy"
+ *     row on My Card was removed in the same release.
+ *   • Gear icon only renders when the screen passes `onPressSettings` —
+ *     in practice that means My Card only. Other tabs get a clean
+ *     [title] [pill] row, no gear noise.
+ *
+ * `hideCreditsPill` exists for onboarding steps that need to suppress all
+ * chrome above the welcome content.
+ */
+export function Header({
+  title,
+  onPressSettings,
+  hideCreditsPill = false,
+}: {
+  title: string;
+  onPressSettings?: () => void;
+  hideCreditsPill?: boolean;
+}) {
   return (
     <View style={styles.header}>
-      <View style={styles.brandWrap}>
-        <Text style={styles.brand}>Mail Club</Text>
-        <Svg width={92} height={9} viewBox="0 0 92 9" style={styles.flourish}>
-          <Path d="M 0 5 Q 22 1, 44 5 L 46 2 L 48 5 Q 70 9, 92 5" stroke={colors.postalRed} strokeWidth={1.2} fill="none" strokeLinecap="round" />
-        </Svg>
+      <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {title}
+      </Text>
+      <View style={styles.rightActions}>
+        {hideCreditsPill ? null : <CreditsPill />}
+        {onPressSettings ? (
+          <Pressable
+            onPress={onPressSettings}
+            hitSlop={10}
+            style={styles.gearWrap}
+            testID="header-settings-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+          >
+            <Settings color={colors.mutedInk} size={22} strokeWidth={1.6} />
+          </Pressable>
+        ) : null}
       </View>
-      <Text style={styles.title}>{title}</Text>
-      {onPressSettings ? (
-        <Pressable
-          onPress={onPressSettings}
-          hitSlop={10}
-          style={styles.gearWrap}
-          testID="header-settings-btn"
-          accessibilityRole="button"
-          accessibilityLabel="Open settings"
-        >
-          <Settings color={colors.mutedInk} size={22} strokeWidth={1.6} />
-        </Pressable>
-      ) : (
-        <View style={styles.gearWrap}><View style={{ width: 22, height: 22 }} /></View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", minHeight: 58, paddingTop: 4 },
-  brandWrap: { alignItems: "flex-start" },
-  brand: { color: colors.ink, fontFamily: fonts.script, fontSize: type.brand, lineHeight: type.brand + 2, includeFontPadding: false },
-  flourish: { marginTop: -4, marginLeft: 4 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: type.heading, letterSpacing: 0.2 },
-  gearWrap: { alignItems: "center", height: 36, justifyContent: "center", width: 36 },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 52,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  title: {
+    color: colors.ink,
+    flex: 1,
+    fontFamily: fonts.serifSemi,
+    fontSize: type.title,
+    letterSpacing: -0.2,
+    lineHeight: type.title + 2,
+    paddingRight: 12,
+  },
+  rightActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  gearWrap: {
+    alignItems: "center",
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
 });

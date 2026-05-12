@@ -36,7 +36,7 @@ export function SettingsSheet({
   function confirmSignOut() {
     Alert.alert(
       "Sign out?",
-      "This clears your local Mail Club data and returns you to the welcome screen. Your in-flight cards remain queued.",
+      "This clears your local Mailroom data and returns you to the welcome screen. Your in-flight cards remain queued.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -53,7 +53,7 @@ export function SettingsSheet({
 
   function confirmDeleteAccount() {
     Alert.alert(
-      "Delete your Mail Club account?",
+      "Delete your Mailroom account?",
       "Permanently removes your profile, friends, sent mail, and replies. This can't be undone.",
       [
         { text: "Cancel", style: "cancel" },
@@ -157,7 +157,7 @@ export function SettingsSheet({
             <Row icon={Trash2} label="Delete account" tone="red" detail="Permanently remove all your data" onPress={confirmDeleteAccount} testID="settings-row-delete-account" />
           </Section>
 
-          <Text style={styles.version}>Mail Club · beta</Text>
+          <Text style={styles.version}>Mailroom · beta</Text>
         </ScrollView>
       </View>
     </Modal>

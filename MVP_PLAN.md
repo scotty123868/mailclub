@@ -1,4 +1,4 @@
-# Mail Club — MVP Action Plan
+# Mailroom — MVP Action Plan
 
 **Goal:** every tab fully working, every interactive element clickable, looks usable (not stunning). Ship the rolodex Friends paradigm, the four-tier credit-priced card system, and a credits/payments scaffold ready for Apple IAP.
 
@@ -198,7 +198,7 @@ The current postal aesthetic is the antidote — keep it. Specific bans:
 + }
 ```
 
-**Migration policy:** no backwards-compat shims. AsyncStorage key bumps from `mail-club-v0-2-mail-card-state` → `mail-club-v0-3-credits-state`. Old data (which only exists on dev devices) is dropped. Clean break.
+**Migration policy:** no backwards-compat shims. AsyncStorage key bumps from `mailroom-v0-2-mail-card-state` → `mailroom-v0-3-credits-state`. Old data (which only exists on dev devices) is dropped. Clean break.
 
 **File: `src/state/MailClubContext.tsx`**
 
@@ -344,7 +344,7 @@ This converts modals from local state to URL-addressable, which makes deep linki
 
 ### B8. Persistence & data hygiene
 
-- Bump `STORE_KEY` to `mail-club-v0-3-credits-state` (clean break).
+- Bump `STORE_KEY` to `mailroom-v0-3-credits-state` (clean break).
 - New persisted shape:
 ```ts
 {

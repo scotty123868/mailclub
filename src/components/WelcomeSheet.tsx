@@ -1,9 +1,11 @@
+import * as AppleAuthentication from "expo-apple-authentication";
 import { ArrowLeft, Mail, Sparkles } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { Stamp } from "@/src/components/Stamp";
+import { isAppleSignInAvailable } from "@/src/services/apple-auth";
 import { SUPABASE_CONFIGURED } from "@/src/services/supabase";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
@@ -21,19 +23,30 @@ import { fonts } from "@/src/theme/typography";
 type Step = "identity" | "account";
 
 export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComplete: () => void }) {
-  const { completeSignup, signInWithEmail, resetPassword } = useMailClub();
+  const { completeSignup, signInWithEmail, resetPassword, signInWithApple } = useMailClub();
   const [step, setStep] = useState<Step>("identity");
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [birthday, setBirthday] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signup" | "signin">("signup");
   const [saving, setSaving] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  const canContinue = name.trim().length > 0;
+  // Probe for Apple Sign-In availability once on mount
+  useEffect(() => {
+    let mounted = true;
+    isAppleSignInAvailable().then((available) => {
+      if (mounted) setAppleAvailable(available);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const canContinue = name.trim().length > 0 && isValidBirthday(birthday);
   const canSubmit = email.trim().includes("@") && password.length >= 8;
 
   function reset() {
@@ -41,12 +54,43 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
     setName("");
     setCity("");
     setState("");
+    setBirthday("");
     setEmail("");
     setPassword("");
     setMode("signup");
     setSaving(false);
     setError(null);
     setInfo(null);
+  }
+
+  /**
+   * Auto-format MM/DD as the user types. We accept either MM/DD or M/D and
+   * pad to MM/DD on persistence. Year intentionally left out — we only need
+   * birthday for sending birthday cards, not for age.
+   */
+  function onChangeBirthday(raw: string) {
+    // Strip non-digits then re-insert the slash after 2 chars.
+    const digits = raw.replace(/\D/g, "").slice(0, 4);
+    if (digits.length <= 2) {
+      setBirthday(digits);
+    } else {
+      setBirthday(`${digits.slice(0, 2)}/${digits.slice(2)}`);
+    }
+  }
+
+  function isValidBirthday(b: string): boolean {
+    if (b.length === 0) return true; // optional
+    const m = b.match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (!m) return false;
+    const month = Number(m[1]);
+    const day = Number(m[2]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+    // Roundtrip through a real Date to reject impossible month-day pairs
+    // (Feb 30, Apr 31, etc.). Use 2024 (a leap year) as the synthetic year
+    // so Feb 29 always passes — we don't collect a year, so leap-day
+    // birthdays should be valid regardless of "now."
+    const d = new Date(2024, month - 1, day);
+    return d.getMonth() === month - 1 && d.getDate() === day;
   }
 
   async function onForgotPassword() {
@@ -70,13 +114,47 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
     if (!SUPABASE_CONFIGURED) {
       // No backend in this build → finish with identity only (tests, dev).
       setSaving(true);
-      await completeSignup({ name, city, state });
+      await completeSignup({ name, city, state, birthday });
       setSaving(false);
       reset();
       onComplete();
       return;
     }
     setStep("account");
+  }
+
+  async function onContinueWithApple() {
+    setError(null);
+    setSaving(true);
+    try {
+      const result = await signInWithApple();
+      if (!result.ok) {
+        if (!result.cancelled) setError(result.error ?? "Apple sign-in didn't work.");
+        return;
+      }
+      // Apple gave us a session. If it's a brand new user without a name
+      // collected yet, route back to the identity step so they can fill in
+      // city + state. Otherwise we're done.
+      if (result.isNewUser && !result.fullName) {
+        setStep("identity");
+      } else {
+        // If Apple gave us a name, store it locally and complete signup.
+        if (result.fullName) setName(result.fullName);
+        await completeSignup({
+          name: result.fullName ?? name,
+          city,
+          state,
+          birthday,
+          email: result.email ?? undefined,
+        });
+        reset();
+        onComplete();
+      }
+    } catch (err: any) {
+      setError(err?.message ?? "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function submitAccount() {
@@ -95,7 +173,7 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
         return;
       }
       // signup path
-      await completeSignup({ name, city, state, email: email.trim(), password });
+      await completeSignup({ name, city, state, birthday, email: email.trim(), password });
       reset();
       onComplete();
     } catch (err: any) {
@@ -106,7 +184,7 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
   }
 
   async function skip() {
-    await completeSignup({ name: "", city: "", state: "" });
+    await completeSignup({ name: "", city: "", state: "", birthday: "" });
     reset();
     onComplete();
   }
@@ -121,7 +199,7 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
                 <ArrowLeft color={colors.ink} size={26} strokeWidth={1.5} />
               </Pressable>
             ) : (
-              <Text style={styles.brand}>Mail Club</Text>
+              <Text style={styles.brand}>Mailroom</Text>
             )}
             <View style={styles.stamp}>
               <Stamp motif="dove" tone="red" cents="1¢" rotate={-8} size="sm" />
@@ -135,8 +213,8 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
                   <CircularPostmark size={102} topText="HAND CARRIED" bottomText="WITH CARE" centerYear={String(new Date().getFullYear())} />
                 </View>
                 <View style={styles.heroCopy}>
-                  <Text style={styles.title}>Welcome to Mail Club.</Text>
-                  <Text style={styles.body}>Real postcards, sent by you, to the people who matter. Tell us who's writing.</Text>
+                  <Text style={styles.title}>Welcome to Mailroom.</Text>
+                  <Text style={styles.body}>Real postcards. Real friends. Less than a stamp.</Text>
                 </View>
               </View>
 
@@ -171,23 +249,41 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
                   />
                   <TextInput
                     value={state}
-                    onChangeText={setState}
+                    onChangeText={(v) => setState(v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2))}
                     placeholder="CO"
                     placeholderTextColor="#9A8D76"
                     style={[styles.input, { flex: 1 }]}
                     testID="welcome-state"
                     returnKeyType="done"
-                    maxLength={3}
+                    maxLength={2}
                     autoCapitalize="characters"
                     autoCorrect={false}
                   />
                 </View>
               </View>
 
+              <View style={styles.field}>
+                <Text style={styles.label}>Birthday <Text style={styles.labelMuted}>(optional)</Text></Text>
+                <TextInput
+                  value={birthday}
+                  onChangeText={onChangeBirthday}
+                  placeholder="MM/DD"
+                  placeholderTextColor="#9A8D76"
+                  style={styles.input}
+                  testID="welcome-birthday"
+                  keyboardType="number-pad"
+                  maxLength={5}
+                  returnKeyType="done"
+                />
+                <Text style={styles.helper}>
+                  So friends can send you a card on your day. We never share the date.
+                </Text>
+              </View>
+
               <View style={styles.gift}>
                 <Sparkles color={colors.postalRed} size={16} strokeWidth={1.7} />
                 <Text style={styles.giftText}>
-                  5 free credits on us. That's enough for two photo postcards or five handwritten notes.
+                  3 stamps on us — enough to mail 3 photos.
                 </Text>
               </View>
 
@@ -206,7 +302,7 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
             <>
               <View style={styles.heroRow}>
                 <View style={styles.postmark}>
-                  <CircularPostmark size={86} topText="MAIL CLUB" bottomText="MEMBERSHIP" centerYear="" />
+                  <CircularPostmark size={86} topText="MAILROOM" bottomText="MEMBERSHIP" centerYear="" />
                 </View>
                 <View style={styles.heroCopy}>
                   <Text style={styles.title}>
@@ -214,11 +310,32 @@ export function WelcomeSheet({ visible, onComplete }: { visible: boolean; onComp
                   </Text>
                   <Text style={styles.body}>
                     {mode === "signup"
-                      ? "An email + password so your Mail Card finds you on every device."
+                      ? "Sign in with Apple, or use an email + password."
                       : "Sign in with the email and password you used last time."}
                   </Text>
                 </View>
               </View>
+
+              {appleAvailable ? (
+                <View style={styles.appleBlock} testID="welcome-apple-block">
+                  <AppleAuthentication.AppleAuthenticationButton
+                    buttonType={
+                      mode === "signup"
+                        ? AppleAuthentication.AppleAuthenticationButtonType.CONTINUE
+                        : AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+                    }
+                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                    cornerRadius={10}
+                    style={styles.appleButton}
+                    onPress={onContinueWithApple}
+                  />
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>OR</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+                </View>
+              ) : null}
 
               <View style={styles.field}>
                 <Text style={styles.label}>Email</Text>
@@ -306,6 +423,8 @@ const styles = StyleSheet.create({
   body: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 15, lineHeight: 20, marginTop: 6 },
   field: { gap: 6 },
   label: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 14 },
+  labelMuted: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13 },
+  helper: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, marginTop: 2 },
   input: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 8, borderWidth: 1, color: colors.ink, fontFamily: fonts.serif, fontSize: 18, paddingHorizontal: 14, paddingVertical: 12 },
   cityRow: { flexDirection: "row", gap: 10 },
   gift: { alignItems: "center", backgroundColor: "rgba(217,180,110,0.18)", borderColor: "rgba(217,180,110,0.6)", borderRadius: 10, borderWidth: 1, flexDirection: "row", gap: 10, padding: 12 },
@@ -317,4 +436,9 @@ const styles = StyleSheet.create({
   info: { color: "#4A5A38", fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 4, textAlign: "center" },
   forgotBtn: { alignItems: "center", paddingVertical: 6 },
   forgotText: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13 },
+  appleBlock: { gap: 14, marginTop: 6 },
+  appleButton: { height: 48, width: "100%" },
+  dividerRow: { alignItems: "center", flexDirection: "row", gap: 10, marginVertical: 2 },
+  dividerLine: { backgroundColor: colors.line, flex: 1, height: 1, opacity: 0.7 },
+  dividerText: { color: colors.mutedInk, fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1.2 },
 });

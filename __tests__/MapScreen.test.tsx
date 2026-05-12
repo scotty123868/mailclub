@@ -32,14 +32,15 @@ function renderMap() {
 
 describe("MapScreen", () => {
   it("renders all primary sections", () => {
-    const { getByText, getAllByText } = renderMap();
+    const { getByText, getAllByText, queryByText } = renderMap();
     expect(getByText("Map")).toBeTruthy();
     // 'Friends' appears in segmented control + summary stats
     expect(getAllByText("Friends").length).toBeGreaterThanOrEqual(1);
     expect(getByText("Sent")).toBeTruthy();
     expect(getByText("Received")).toBeTruthy();
     expect(getByText("Recent Routes")).toBeTruthy();
-    expect(getByText(/real connection/i)).toBeTruthy();
+    // v0.5.0: footer "Every line started with a real connection." was removed
+    expect(queryByText(/Every line started/i)).toBeNull();
   });
 
   it("displays real summary stats derived from state", () => {
@@ -57,12 +58,25 @@ describe("MapScreen", () => {
     expect(getByText("Denver → Vancouver")).toBeTruthy();
   });
 
-  it("does not crash when segmented control is changed", () => {
-    const { getByText, getAllByText } = renderMap();
-    fireEvent.press(getByText("Sent"));
+  it("filter chips actually filter — Received shows the empty state", () => {
+    // v0.5.0: filter chips wired up. Received has no inbound data yet so we
+    // show the empty state copy instead of pretending there's data.
+    const { getByText, queryByText } = renderMap();
     fireEvent.press(getByText("Received"));
-    const friendsButtons = getAllByText("Friends");
-    fireEvent.press(friendsButtons[0]);
+    expect(getByText(/No replies yet/i)).toBeTruthy();
+    expect(queryByText("Denver → Nashville")).toBeNull();
+  });
+
+  it("Sent and Friends filters keep the routes visible", () => {
+    const { getByText, getAllByText } = renderMap();
+    // Start on Friends, routes present
+    expect(getByText("Denver → Nashville")).toBeTruthy();
+    // Switch to Sent — routes still present (same data slice today)
+    fireEvent.press(getByText("Sent"));
+    expect(getByText("Denver → Nashville")).toBeTruthy();
+    // Back to Friends
+    fireEvent.press(getAllByText("Friends")[0]);
+    expect(getByText("Denver → Nashville")).toBeTruthy();
   });
 
   it("opens the route detail sheet when a route row is tapped", () => {

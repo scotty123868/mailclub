@@ -5,7 +5,7 @@ import React from "react";
 import { Alert, Text } from "react-native";
 import { MailClubProvider, useMailClub } from "@/src/state/MailClubContext";
 
-const STORE_KEY = "mail-club-v1-cache";
+const STORE_KEY = "mailroom-v1-cache";
 
 const ALERT_SPY = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
 
@@ -45,7 +45,7 @@ async function readyHarness() {
 describe("MailClubContext — sendPostcard", () => {
   it("sends a handwritten card (1 credit), deducts balance, fires success haptic", async () => {
     const { ref } = await readyHarness();
-    expect(ref.current!.credits).toBe(5);
+    expect(ref.current!.credits).toBe(3);
 
     let result: { ok: boolean; friendName: string } | null = null;
     await act(async () => {
@@ -57,42 +57,42 @@ describe("MailClubContext — sendPostcard", () => {
     expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
 
     await waitFor(() => {
-      expect(ref.current!.credits).toBe(4);
+      expect(ref.current!.credits).toBe(2);
     });
     expect(ref.current!.postcards[0].toFriendId).toBe("tatiana");
     expect(ref.current!.postcards[0].category).toBe("handwritten");
     expect(ref.current!.postcards[0].creditCost).toBe(1);
   });
 
-  it("sends a photo card (2 credits)", async () => {
+  it("sends a photo card (1 credit)", async () => {
     const { ref } = await readyHarness();
     await act(async () => { await ref.current!.sendPostcard({ kind: "photo", friendId: "alex", photoUri: "file://x.jpg", message: "hi" }); });
     await waitFor(() => {
-      expect(ref.current!.credits).toBe(3);
+      expect(ref.current!.credits).toBe(2);
     });
-    expect(ref.current!.postcards[0].creditCost).toBe(2);
+    expect(ref.current!.postcards[0].creditCost).toBe(1);
     expect(ref.current!.postcards[0].category).toBe("photo");
   });
 
-  it("sends a place card (2 credits) and records the place name", async () => {
+  it("sends a place card (1 credit) and records the place name", async () => {
     const { ref } = await readyHarness();
     await act(async () => {
       await ref.current!.sendPostcard({ kind: "place", friendId: "alex", photoUri: "file://x.jpg", placeName: "Florida", message: "Greetings!" });
     });
     await waitFor(() => {
-      expect(ref.current!.credits).toBe(3);
+      expect(ref.current!.credits).toBe(2);
     });
     expect(ref.current!.postcards[0].category).toBe("place");
     expect(ref.current!.postcards[0].placeName).toBe("Florida");
   });
 
-  it("sends a custom card (5 credits), exhausting balance, marks status draft", async () => {
+  it("sends a custom card (1 credit) and marks status draft", async () => {
     const { ref } = await readyHarness();
     await act(async () => {
       await ref.current!.sendPostcard({ kind: "custom", friendId: "nora", description: "Romantic watercolor of our trip", referencePhotoUris: ["file://1.jpg"] });
     });
     await waitFor(() => {
-      expect(ref.current!.credits).toBe(0);
+      expect(ref.current!.credits).toBe(2);
     });
     expect(ref.current!.postcards[0].category).toBe("custom");
     expect(ref.current!.postcards[0].status).toBe("draft");
@@ -103,7 +103,12 @@ describe("MailClubContext — sendPostcard", () => {
   it("blocks send when credits are insufficient and fires warning haptic + alert", async () => {
     const { ref } = await readyHarness();
 
-    await act(async () => { await ref.current!.sendPostcard({ kind: "custom", friendId: "nora", description: "drain", referencePhotoUris: [] }); });
+    // Drain all 3 free credits at 1/card
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        await ref.current!.sendPostcard({ kind: "handwritten", friendId: "tatiana", message: `drain ${i}` });
+      });
+    }
     await waitFor(() => expect(ref.current!.credits).toBe(0));
 
     let blocked: { ok: boolean; friendName: string } | null = null;
@@ -147,9 +152,9 @@ describe("MailClubContext — sendPostcard", () => {
 
   it("decrements freeCreditsRemaining alongside credits, never below zero", async () => {
     const { ref } = await readyHarness();
-    expect(ref.current!.freeCreditsRemaining).toBe(5);
+    expect(ref.current!.freeCreditsRemaining).toBe(3);
     await act(async () => { await ref.current!.sendPostcard({ kind: "photo", friendId: "alex", photoUri: "x", message: "hi" }); });
-    await waitFor(() => expect(ref.current!.freeCreditsRemaining).toBe(3));
+    await waitFor(() => expect(ref.current!.freeCreditsRemaining).toBe(2));
   });
 });
 
@@ -158,11 +163,11 @@ describe("MailClubContext — purchaseCredits", () => {
     const { ref } = await readyHarness();
     let result: { ok: boolean; creditsAdded?: number } | null = null;
     await act(async () => {
-      result = await ref.current!.purchaseCredits("p10");
+      result = await ref.current!.purchaseCredits("p25");
     });
     expect(result!.ok).toBe(true);
-    expect(result!.creditsAdded).toBe(10);
-    await waitFor(() => expect(ref.current!.credits).toBe(15));
+    expect(result!.creditsAdded).toBe(25);
+    await waitFor(() => expect(ref.current!.credits).toBe(28));
     expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
   });
 
@@ -327,7 +332,7 @@ describe("MailClubContext — persistence", () => {
       const raw = await AsyncStorage.getItem(STORE_KEY);
       expect(raw).toBeTruthy();
       const parsed = JSON.parse(raw!);
-      expect(parsed.credits).toBe(4);
+      expect(parsed.credits).toBe(2);
       expect(parsed.postcards[0].toFriendId).toBe("tatiana");
     });
   });
@@ -335,7 +340,7 @@ describe("MailClubContext — persistence", () => {
   it("falls back to defaults if AsyncStorage is corrupt", async () => {
     await AsyncStorage.setItem(STORE_KEY, "not-json");
     const { ref } = await readyHarness();
-    expect(ref.current!.credits).toBe(5);
+    expect(ref.current!.credits).toBe(3);
   });
 });
 
@@ -367,10 +372,10 @@ describe("MailClubContext — initial state", () => {
     expect(ref.current!.currentUser.city).toBe("Denver");
   });
 
-  it("starts with 5 credits and 5 free credits", async () => {
+  it("starts with 3 credits and 3 free credits", async () => {
     const { ref } = await readyHarness();
-    expect(ref.current!.credits).toBe(5);
-    expect(ref.current!.freeCreditsRemaining).toBe(5);
+    expect(ref.current!.credits).toBe(3);
+    expect(ref.current!.freeCreditsRemaining).toBe(3);
     expect(ref.current!.hasSeenFreeCreditsIntro).toBe(false);
   });
 });

@@ -56,7 +56,7 @@ export function QRCodeModal({
 }) {
   const size = 21;
   const cell = 10;
-  const grid = hashGrid(`mailclub:${userId}:${name}`, size);
+  const grid = hashGrid(`mailroom:${userId}:${name}`, size);
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
