@@ -131,6 +131,74 @@ jest.mock("react-native-maps", () => {
   };
 });
 
+// v0.7.0.4: @gorhom/bottom-sheet pulls in reanimated worklets and
+// gesture-handler in ways that crash react-test-renderer. Stub the
+// surface our screens use (BottomSheet, BottomSheetView, BottomSheetBackdrop,
+// BottomSheetModalProvider) with simple passthrough Views. We keep the
+// ref API so screens that imperatively call .open()/.close()/.snapToIndex()
+// don't crash.
+jest.mock("@gorhom/bottom-sheet", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  const BottomSheetMock = React.forwardRef((props: any, ref: any) => {
+    React.useImperativeHandle(ref, () => ({
+      snapToIndex: jest.fn(),
+      close: jest.fn(),
+      expand: jest.fn(),
+      collapse: jest.fn(),
+    }));
+    return React.createElement(View, { ...props, "data-bottomsheet": true }, props.children);
+  });
+  return {
+    __esModule: true,
+    default: BottomSheetMock,
+    BottomSheet: BottomSheetMock,
+    BottomSheetView: (props: any) =>
+      React.createElement(View, props, props.children),
+    BottomSheetScrollView: (props: any) =>
+      React.createElement(View, props, props.children),
+    BottomSheetBackdrop: (props: any) =>
+      React.createElement(View, props, props.children),
+    BottomSheetModal: BottomSheetMock,
+    BottomSheetModalProvider: (props: any) =>
+      React.createElement(View, props, props.children),
+    useBottomSheet: () => ({ close: jest.fn(), snapToIndex: jest.fn() }),
+  };
+});
+
+jest.mock("react-native-gesture-handler", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    __esModule: true,
+    GestureHandlerRootView: (props: any) =>
+      React.createElement(View, props, props.children),
+    GestureDetector: (props: any) =>
+      React.createElement(View, props, props.children),
+    Gesture: {
+      Pan: () => ({
+        minPointers: () => ({
+          maxPointers: () => ({
+            onUpdate: () => ({ onEnd: () => ({}) }),
+          }),
+        }),
+      }),
+      Pinch: () => ({ onUpdate: () => ({ onEnd: () => ({}) }) }),
+      Tap: () => ({ numberOfTaps: () => ({ onEnd: () => ({}) }) }),
+      Simultaneous: (...args: any[]) => args,
+      Exclusive: (...args: any[]) => args,
+    },
+    PanGestureHandler: (props: any) =>
+      React.createElement(View, props, props.children),
+    PinchGestureHandler: (props: any) =>
+      React.createElement(View, props, props.children),
+    TapGestureHandler: (props: any) =>
+      React.createElement(View, props, props.children),
+    State: {},
+    Directions: {},
+  };
+});
+
 jest.mock("react-native-svg", () => {
   const React = require("react");
   const { View, Text } = require("react-native");

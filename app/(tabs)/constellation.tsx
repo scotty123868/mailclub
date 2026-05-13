@@ -1,6 +1,7 @@
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
 import { Mail } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -12,6 +13,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line } from "react-native-svg";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { FriendDetailSheet } from "@/src/components/FriendDetailSheet";
+import {
+  PostcardPreviewSheet,
+  type PostcardPreviewSheetRef,
+} from "@/src/components/PostcardPreviewSheet";
 import {
   buildSocialGraph,
   edgeId,
@@ -78,6 +83,7 @@ export default function ConstellationScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, friends, postcards, credits, authedUserId } = useMailClub();
   const [creditsOpen, setCreditsOpen] = useState(false);
+  const sheetRef = useRef<PostcardPreviewSheetRef>(null);
 
   // Stage size: square inset from screen width, capped at 360.
   const { width: screenW, height: screenH } = Dimensions.get("window");
@@ -199,6 +205,7 @@ export default function ConstellationScreen() {
   }
 
   return (
+    <BottomSheetModalProvider>
     <View style={styles.root} testID="constellation-screen">
       {/* Dark sky background — full bleed under everything */}
       <View style={styles.sky} pointerEvents="none" />
@@ -228,7 +235,10 @@ export default function ConstellationScreen() {
         <GestureDetector gesture={composedGesture}>
           <AnimatedView style={[styles.stage, { width: stageSize, height: stageSize }, stageStyle]}>
             <Svg width={stageSize} height={stageSize} style={StyleSheet.absoluteFill}>
-              {/* Edges first so they render under nodes */}
+              {/* Edges first so they render under nodes. v0.7.0.4: edges
+                  are tappable — opens the PostcardPreviewSheet scoped to
+                  the friend on the other end of that edge. Wider hit
+                  region via an invisible thicker stroke layered behind. */}
               {edges.map((edge: GraphEdge) => {
                 const sourceId = edgeId(edge.source);
                 const targetId = edgeId(edge.target);
@@ -239,17 +249,42 @@ export default function ConstellationScreen() {
                 const edgeColor = edge.reciprocated
                   ? "rgba(217,180,110,0.78)" // gold for reciprocated
                   : "rgba(255,255,255,0.22)";
+                // The "other side" is whichever endpoint isn&apos;t self.
+                const otherId = a.isSelf ? b.id : a.id;
+                const otherName = a.isSelf ? b.name : a.name;
+                const onEdgePress = () => {
+                  if (otherId === selfId) return;
+                  sheetRef.current?.open({
+                    kind: "friend",
+                    friendId: otherId,
+                    friendName: otherName,
+                  });
+                };
                 return (
-                  <Line
-                    key={`${sourceId}-${targetId}`}
-                    x1={a.x}
-                    y1={a.y}
-                    x2={b.x}
-                    y2={b.y}
-                    stroke={edgeColor}
-                    strokeWidth={thickness}
-                    strokeLinecap="round"
-                  />
+                  <React.Fragment key={`${sourceId}-${targetId}`}>
+                    {/* Wide invisible stroke for hit target */}
+                    <Line
+                      x1={a.x}
+                      y1={a.y}
+                      x2={b.x}
+                      y2={b.y}
+                      stroke="transparent"
+                      strokeWidth={Math.max(thickness, 12)}
+                      strokeLinecap="round"
+                      onPress={onEdgePress}
+                    />
+                    {/* Visible line */}
+                    <Line
+                      x1={a.x}
+                      y1={a.y}
+                      x2={b.x}
+                      y2={b.y}
+                      stroke={edgeColor}
+                      strokeWidth={thickness}
+                      strokeLinecap="round"
+                      onPress={onEdgePress}
+                    />
+                  </React.Fragment>
                 );
               })}
 
@@ -342,7 +377,12 @@ export default function ConstellationScreen() {
       />
 
       <CreditsSheet visible={creditsOpen} onClose={() => setCreditsOpen(false)} />
+
+      {/* v0.7.0.4: tap an edge → bottom sheet of postcards exchanged
+          on that line. Same component the Map uses for pin taps. */}
+      <PostcardPreviewSheet ref={sheetRef} />
     </View>
+    </BottomSheetModalProvider>
   );
 }
 

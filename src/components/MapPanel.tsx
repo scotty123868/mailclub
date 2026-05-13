@@ -117,6 +117,7 @@ export function MapPanel({
   interactive,
   routes,
   cities,
+  onCityPress,
 }: {
   compact?: boolean;
   /**
@@ -134,6 +135,13 @@ export function MapPanel({
    * Cities to render as markers. Omit to use the demo set.
    */
   cities?: MapCity[];
+  /**
+   * v0.7.0.4 C.3: callback fired when a city Marker is tapped. The Map
+   * tab uses this to open a postcard-preview bottom sheet filtered to
+   * that city. Omit for previews / compact mode where pins are
+   * decorative.
+   */
+  onCityPress?: (city: MapCity) => void;
 }) {
   const height = compact ? 168 : 260;
   const liveInteractive = interactive ?? !compact;
@@ -189,7 +197,14 @@ export function MapPanel({
           {/* Cities — custom paper-pin marker with serif label */}
           {!compact &&
             renderCities.map((c) => (
-              <Marker key={c.id} coordinate={c.coord} anchor={{ x: 0.5, y: 0.5 }}>
+              <Marker
+                key={c.id}
+                coordinate={c.coord}
+                anchor={{ x: 0.5, y: 0.5 }}
+                onPress={onCityPress ? () => onCityPress(c) : undefined}
+                // Disable callout — we use the bottom-sheet pattern instead.
+                tracksViewChanges={false}
+              >
                 <CityPin name={c.name} accent={!!c.accent} />
               </Marker>
             ))}
