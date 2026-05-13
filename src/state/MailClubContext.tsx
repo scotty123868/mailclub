@@ -6,6 +6,7 @@ import { CARD_COSTS, CREDIT_PACKS, FREE_CREDITS } from "@/src/data/credits";
 import { currentUser as defaultCurrentUser, friends as initialFriends, milestones, postcards as initialPostcards, routes } from "@/src/data/mock";
 import * as api from "@/src/services/api";
 import { signInWithApple as appleSignInService, type AppleAuthResult } from "@/src/services/apple-auth";
+import { mailboxThunk } from "@/src/services/mailboxThunk";
 import { clearPendingInvite, consumePendingInvite } from "@/src/state/pendingInvite";
 import { SUPABASE_CONFIGURED, supabase } from "@/src/services/supabase";
 import type { CardCategory, CurrentUser, CustomTone, Friend, Postcard } from "@/src/types/mail";
@@ -422,7 +423,9 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     // v0.7: any successful send unlocks the rest of the app. WelcomeGate
     // gates on this flag. Idempotent — re-flipping a true flag is a no-op.
     if (!hasSentFirstCard) setHasSentFirstCard(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    // v0.7.1 D.5: layered thud-then-tap haptic for the mailbox-thunk
+    // moment. mailboxThunk is fire-and-forget; never await it.
+    mailboxThunk();
     return { ok: true, friendName: friend?.name ?? "", creditsRemaining: credits - cost };
   }
 
@@ -468,7 +471,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       // "if they send someone a link to get their address that is a
       // sent card, regardless of if the person fills in the address."
       if (!hasSentFirstCard) setHasSentFirstCard(true);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      mailboxThunk();
       return { ok: true, claimUrl: result.claimUrl, postcardId: result.postcardId };
     } catch (err: any) {
       Alert.alert("Couldn't create the link", err?.message ?? "Try again in a moment.");

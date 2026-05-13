@@ -41,7 +41,7 @@ import { fonts } from "@/src/theme/typography";
  */
 export default function MyMailCardScreen() {
   const router = useRouter();
-  const { currentUser, friends, postcards, voidReplies } = useMailClub();
+  const { currentUser, friends, postcards, voidReplies, authedUserId } = useMailClub();
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editAboutOpen, setEditAboutOpen] = useState(false);
@@ -53,16 +53,34 @@ export default function MyMailCardScreen() {
   // Real metrics derived from state. We DON'T fake-inflate these — if you
   // sent zero, "0" is the right number, and the empty-week whisper on the
   // journal below will nudge accordingly.
-  const sentCount = useMemo(
-    () => postcards.filter((p) => p.status === "sent").length,
-    [postcards],
-  );
-  // v0.7 NOTE: `voidReplies` is what we have today for "received." Once
-  // the Postcard type carries `senderId` (Phase 1210 enables receiver-side
-  // SELECT but the client mapper doesn&apos;t yet expose it), this will
-  // expand to: inbound postcards + void replies. For now the count
-  // matches today&apos;s definition, just renamed.
-  const receivedCount = voidReplies.length;
+  //
+  // v0.7.1: senderId is now exposed on Postcard. Sent = postcards where
+  // senderId matches the current user (or undefined, legacy fallback).
+  // Received = postcards where senderId is OTHER + void replies.
+  const sentCount = useMemo(() => {
+    return postcards.filter((p) => {
+      const isOutbound = p.senderId
+        ? p.senderId === authedUserId
+        : true; // legacy: cards without senderId are outbound by default
+      return isOutbound && p.status === "sent";
+    }).length;
+  }, [postcards, authedUserId]);
+
+  const receivedCount = useMemo(() => {
+    const inboundPostcards = postcards.filter((p) => {
+      if (!p.senderId) return false; // legacy: outbound-only
+      return p.senderId !== authedUserId;
+    }).length;
+    return inboundPostcards + voidReplies.length;
+  }, [postcards, authedUserId, voidReplies]);
+
+  // friendId → friend name lookup table for the WeeklyJournal to label
+  // inbound cards by who they came from.
+  const friendNamesById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of friends) m.set(f.id, f.name.split(" ")[0] ?? f.name);
+    return m;
+  }, [friends]);
 
   const bioText = currentUser.tagline?.trim();
 
@@ -152,6 +170,8 @@ export default function MyMailCardScreen() {
         <WeeklyJournal
           postcards={postcards}
           voidReplies={voidReplies}
+          currentUserId={authedUserId}
+          friendNamesById={friendNamesById}
           onPressCard={() => setMailOpen("sent")}
           onPressEmptyTile={() => router.push("/send")}
         />

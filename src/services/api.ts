@@ -286,6 +286,11 @@ export async function removeFriend(id: string) {
 
 type PostcardRow = {
   id: string;
+  // v0.7.1: sender_id is the canonical column after migration 1209. The
+  // postcardFromRow mapper exposes it on the client-side Postcard type
+  // so the WeeklyJournal + Constellation can distinguish inbound from
+  // outbound cards (gold reciprocation ring + accurate Received count).
+  sender_id?: string | null;
   to_kind: "friend" | "void" | "claim";
   to_friend_id: string | null;
   from_city: string;
@@ -315,6 +320,7 @@ function postcardFromRow(row: PostcardRow): Postcard {
     row.status === "delivered" ? "delivered" : row.status === "draft" ? "draft" : "sent";
   return {
     id: row.id,
+    senderId: row.sender_id ?? undefined,
     toFriendId: row.to_kind === "void" ? "void" : (row.to_friend_id ?? ""),
     fromCity: row.from_city,
     toCity: row.to_city,

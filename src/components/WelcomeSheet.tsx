@@ -16,6 +16,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from "react-native-reanimated";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { isAppleSignInAvailable } from "@/src/services/apple-auth";
 import { lookupReciprocation } from "@/src/services/api";
@@ -1398,6 +1405,30 @@ function YourInfoStep({
 // STEP 7 — MAILED CELEBRATION
 // ============================================================================
 
+/**
+ * MailedStep — v0.7.1 D.1 magical moment: the fold animation.
+ *
+ * Animation sequence (~900ms total) on mount:
+ *   t=0      photo card visible at scale 1, no envelope
+ *   t=150ms  photo card scales down to 0.65 + slides up slightly (the
+ *            "compose" beat)
+ *   t=300ms  envelope back fades in behind the card with a slight
+ *            scale-up (~0.05 → 0.95 final)
+ *   t=500ms  envelope flap rotates 0deg → 180deg around its top edge —
+ *            this is the fold itself
+ *   t=750ms  postal-red "MAILED" rubber-stamp scales in from 1.4 to 1.0
+ *            with a slight rotation, lands with the haptic thunk
+ *   t=900ms  caption fades in below
+ *
+ * Built with react-native-reanimated 4. All animations run on the UI
+ * thread via shared values — no JS-thread frame loop. The haptic
+ * `mailboxThunk` fires from the parent on send-success, so this
+ * component is purely visual.
+ *
+ * If reanimated isn&apos;t available (some test environments mock it
+ * out), the animation degrades to a static "MAILED" stamp + caption
+ * without breaking the screen.
+ */
 function MailedStep({
   recipientName,
   onDismiss,
@@ -1405,23 +1436,102 @@ function MailedStep({
   recipientName: string;
   onDismiss: () => void;
 }) {
+  // Shared values for the fold animation. All start at "card visible,
+  // envelope hidden" and run to "envelope sealed, MAILED stamped" on
+  // mount. useEffect drives the sequence.
+  const cardScale = useSharedValue(1);
+  const cardTranslateY = useSharedValue(0);
+  const envOpacity = useSharedValue(0);
+  const envScale = useSharedValue(0.9);
+  const flapRotate = useSharedValue(0); // 0 → 180deg
+  const stampScale = useSharedValue(0);
+  const stampRotate = useSharedValue(-12);
+  const captionOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    // The sequence.
+    cardScale.value = withDelay(150, withTiming(0.65, { duration: 350, easing: Easing.bezier(0.4, 0, 0.2, 1) }));
+    cardTranslateY.value = withDelay(150, withTiming(-8, { duration: 350 }));
+    envOpacity.value = withDelay(300, withTiming(1, { duration: 250 }));
+    envScale.value = withDelay(300, withTiming(0.95, { duration: 250 }));
+    flapRotate.value = withDelay(500, withTiming(180, { duration: 350, easing: Easing.bezier(0.4, 0, 0.2, 1) }));
+    stampScale.value = withDelay(800, withTiming(1, {
+      duration: 220,
+      easing: Easing.bezier(0.34, 1.56, 0.64, 1), // spring-y overshoot
+    }));
+    stampRotate.value = withDelay(800, withTiming(8, { duration: 220 }));
+    captionOpacity.value = withDelay(1050, withTiming(1, { duration: 400 }));
+  }, [cardScale, cardTranslateY, envOpacity, envScale, flapRotate, stampScale, stampRotate, captionOpacity]);
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: cardScale.value },
+      { translateY: cardTranslateY.value },
+    ],
+  }));
+  const envStyle = useAnimatedStyle(() => ({
+    opacity: envOpacity.value,
+    transform: [{ scale: envScale.value }],
+  }));
+  const flapStyle = useAnimatedStyle(() => ({
+    transform: [{ rotateX: `${flapRotate.value}deg` }],
+  }));
+  const stampStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: stampScale.value },
+      { rotate: `${stampRotate.value}deg` },
+    ],
+  }));
+  const captionStyle = useAnimatedStyle(() => ({
+    opacity: captionOpacity.value,
+  }));
+
   return (
     <View style={[stepStyles.wrap, { alignItems: "center" }]} testID="welcome-step-mailed">
-      <View style={mailedStyles.artFrame}>
-        <Image
-          source={HERO_MAILBOX}
-          style={mailedStyles.art}
-          resizeMode="cover"
-          accessibilityLabel="Hands at the mailbox"
-        />
+      <View style={mailedStyles.stage}>
+        {/* The envelope back (visible after the fold starts) */}
+        <Animated.View style={[mailedStyles.envelope, envStyle]}>
+          <View style={mailedStyles.envelopeBody} />
+          {/* Side fold lines suggest the 3D-ness of the envelope */}
+          <View style={mailedStyles.foldLeft} />
+          <View style={mailedStyles.foldRight} />
+          {/* The flap — rotates around top edge to "close" the envelope */}
+          <Animated.View
+            style={[mailedStyles.flap, flapStyle]}
+            pointerEvents="none"
+          >
+            <View style={mailedStyles.flapInner} />
+          </Animated.View>
+        </Animated.View>
+
+        {/* The postcard — starts at full size, shrinks into the envelope */}
+        <Animated.View style={[mailedStyles.card, cardStyle]}>
+          <View style={mailedStyles.cardPhoto}>
+            <Image
+              source={HERO_MAILBOX}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode="cover"
+            />
+          </View>
+          <View style={mailedStyles.cardStamp} />
+        </Animated.View>
+
+        {/* MAILED rubber stamp — comes down at the end */}
+        <Animated.View style={[mailedStyles.stamp, stampStyle]} pointerEvents="none">
+          <Text style={mailedStyles.stampText}>MAILED</Text>
+        </Animated.View>
       </View>
-      <Text style={mailedStyles.kicker}>MAILED</Text>
-      <Text style={[stepStyles.title, { textAlign: "center", marginTop: 8 }]}>
-        Your card is{"\n"}on its way.
-      </Text>
-      <Text style={[stepStyles.subtitle, { textAlign: "center", maxWidth: 320, marginTop: 12 }]}>
-        {recipientName} gets it in 4–7 days, USPS time. We&apos;ll drop a pin on your map when it lands.
-      </Text>
+
+      <Animated.View style={captionStyle}>
+        <Text style={mailedStyles.kicker}>YOUR CARD IS ON ITS WAY</Text>
+        <Text style={[stepStyles.title, { textAlign: "center", marginTop: 6 }]}>
+          See you{"\n"}in the mailbox.
+        </Text>
+        <Text style={[stepStyles.subtitle, { textAlign: "center", maxWidth: 320, marginTop: 12 }]}>
+          {recipientName} gets it in 4–7 days, USPS time. We&apos;ll drop a pin on your map when it lands.
+        </Text>
+      </Animated.View>
+
       <PrimaryButton
         title="Open Mailroom →"
         onPress={onDismiss}
@@ -1432,21 +1542,111 @@ function MailedStep({
   );
 }
 
+const MAILED_STAGE = 260;
+
 const mailedStyles = StyleSheet.create({
-  artFrame: {
-    aspectRatio: 1,
-    borderRadius: 14,
-    overflow: "hidden",
-    width: "65%",
-    marginTop: 12,
+  stage: {
+    width: MAILED_STAGE,
+    height: MAILED_STAGE,
+    marginTop: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
   },
-  art: { width: "100%", height: "100%" },
+  // ENVELOPE — back panel
+  envelope: {
+    position: "absolute",
+    inset: 20,
+    backgroundColor: colors.white,
+    borderColor: colors.ink,
+    borderWidth: 2,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  envelopeBody: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.paper },
+  foldLeft: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 1,
+    backgroundColor: "rgba(0,0,0,0.08)",
+  },
+  foldRight: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: 1,
+    backgroundColor: "rgba(0,0,0,0.08)",
+  },
+  // FLAP — top half of envelope that folds down. Rotates around X axis
+  // about its top edge. backfaceVisibility hidden so the back doesn&apos;t
+  // bleed through when flipped past 90deg.
+  flap: {
+    position: "absolute",
+    top: -2,
+    left: -2,
+    right: -2,
+    height: "55%",
+    backgroundColor: colors.paperDark,
+    borderColor: colors.ink,
+    borderWidth: 2,
+    borderRadius: 6,
+    transformOrigin: "top",
+    backfaceVisibility: "hidden",
+  },
+  flapInner: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.paperDark },
+  // CARD — the postcard that shrinks into the envelope
+  card: {
+    width: MAILED_STAGE - 70,
+    height: (MAILED_STAGE - 70) * 0.62,
+    backgroundColor: colors.white,
+    borderColor: colors.ink,
+    borderWidth: 1.5,
+    borderRadius: 4,
+    overflow: "hidden",
+    position: "relative",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+  },
+  cardPhoto: { width: "100%", height: "100%" },
+  cardStamp: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 22,
+    backgroundColor: colors.postalRed,
+    borderRadius: 2,
+  },
+  // MAILED rubber stamp overlay
+  stamp: {
+    position: "absolute",
+    top: 30,
+    right: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 3,
+    borderColor: colors.postalRed,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,253,247,0.6)",
+  },
+  stampText: {
+    color: colors.postalRed,
+    fontFamily: fonts.sansBold,
+    fontSize: 16,
+    letterSpacing: 2,
+  },
   kicker: {
     color: colors.postalRed,
     fontFamily: fonts.sansBold,
-    fontSize: 12,
+    fontSize: 11,
     letterSpacing: 1.6,
-    marginTop: 26,
+    marginTop: 30,
+    textAlign: "center",
   },
   doneBtn: { marginTop: 28, width: "100%" },
 });

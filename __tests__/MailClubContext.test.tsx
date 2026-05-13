@@ -43,7 +43,7 @@ async function readyHarness() {
 }
 
 describe("MailClubContext — sendPostcard", () => {
-  it("sends a handwritten card (1 credit), deducts balance, fires success haptic", async () => {
+  it("sends a handwritten card (1 credit), deducts balance, fires mailbox-thunk haptic", async () => {
     const { ref } = await readyHarness();
     expect(ref.current!.credits).toBe(3);
 
@@ -54,7 +54,12 @@ describe("MailClubContext — sendPostcard", () => {
 
     expect(result!.ok).toBe(true);
     expect(result!.friendName).toBe("Tatiana");
-    expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
+    // v0.7.1 D.5: success haptic is now the layered mailbox-thunk
+    // (Heavy impact → pause → Light impact) instead of the bland
+    // NotificationFeedbackType.Success "ding". Assert at least the
+    // Heavy beat fires — the Light beat happens after a setTimeout
+    // and may race past the test boundary.
+    expect(Haptics.impactAsync).toHaveBeenCalledWith("heavy");
 
     await waitFor(() => {
       expect(ref.current!.credits).toBe(2);

@@ -106,6 +106,17 @@ function bucketByWeek(items: CardItem[], now: Date): WeekBucket[] {
 export type WeeklyJournalProps = {
   postcards: Postcard[];
   voidReplies: VoidReply[];
+  /** Current user id. Used to classify cards as inbound vs outbound by
+   *  comparing against `Postcard.senderId`. v0.7.1: when senderId is
+   *  absent (older mock data, pre-migration rows), card defaults to
+   *  outbound — that&apos;s the historical assumption. */
+  currentUserId?: string | null;
+  /**
+   * Map of friendId → friend name. Used to label inbound cards with
+   * the sender&apos;s name + decide whether a card is reciprocated
+   * (i.e. both an inbound AND outbound card exist for the same friend).
+   */
+  friendNamesById?: Map<string, string>;
   /** Tap a card → open its detail (today: opens the mail-history sheet). */
   onPressCard?: (cardId: string) => void;
   /** Tap a trailing empty "+" or "Mail someone →" tile → start the send flow. */
@@ -117,28 +128,69 @@ export type WeeklyJournalProps = {
 export function WeeklyJournal({
   postcards,
   voidReplies,
+  currentUserId,
+  friendNamesById,
   onPressCard,
   onPressEmptyTile,
   now,
 }: WeeklyJournalProps) {
   const today = now ?? new Date();
 
+  // v0.7.1 reciprocation detection: scan the postcards array twice —
+  // once to identify which friendIds have BOTH inbound + outbound cards
+  // from/to the user. Those friends&apos; cards get the gold ring + "Your
+  // pen pal" stamp overlay.
+  const reciprocatedFriends = (() => {
+    if (!currentUserId) return new Set<string>();
+    const outboundTo = new Set<string>();
+    const inboundFrom = new Set<string>();
+    for (const p of postcards) {
+      const isOutbound = p.senderId
+        ? p.senderId === currentUserId
+        : true; // legacy assumption: postcards without senderId are outbound
+      if (isOutbound) {
+        if (p.toFriendId && p.toFriendId !== "void") outboundTo.add(p.toFriendId);
+      } else if (p.senderId) {
+        inboundFrom.add(p.senderId);
+      }
+    }
+    const both = new Set<string>();
+    outboundTo.forEach((id) => { if (inboundFrom.has(id)) both.add(id); });
+    return both;
+  })();
+
   // Merge sent postcards + received void replies into one timeline.
   const items: CardItem[] = [
-    ...postcards.map<CardItem>((p) => ({
-      id: p.id,
-      kind: "sent",
-      date: new Date(p.sentAt),
-      label: p.toCity || undefined,
-      photoUri: p.photoUri,
-      // v0.7: 'queued' status doesn&apos;t exist on the narrowed Postcard
-      // type yet — postcardFromRow coerces queued → 'sent'. When that
-      // mapper is widened, the dashed-border treatment lights up. For
-      // now: postcards with no `toFriendId` (kind === "void") OR a
-      // sentinel via empty toFriendId are treated as "sent via link"
-      // queued cards. Heuristic; tighten later.
-      queued: p.toFriendId === "",
-    })),
+    ...postcards.map<CardItem>((p) => {
+      const isOutbound = p.senderId
+        ? p.senderId === currentUserId
+        : true;
+      // For inbound cards, label = sender name (lookup friendNamesById
+      // by senderId). For outbound, label = recipient city (existing).
+      let label: string | undefined;
+      if (isOutbound) {
+        label = p.toCity || undefined;
+      } else if (p.senderId && friendNamesById) {
+        label = friendNamesById.get(p.senderId) ?? "Someone";
+      } else {
+        label = "Someone";
+      }
+      // Reciprocation flag: inbound card from a friend the user has
+      // ALSO mailed (i.e. the friend reciprocated the loop). Gold ring
+      // overlay = D.3 magical moment.
+      const otherSide = isOutbound ? p.toFriendId : p.senderId;
+      const reciprocated =
+        !!otherSide && otherSide !== "void" && reciprocatedFriends.has(otherSide);
+      return {
+        id: p.id,
+        kind: isOutbound ? "sent" : "received",
+        date: new Date(p.sentAt),
+        label,
+        photoUri: p.photoUri,
+        queued: p.toFriendId === "",
+        reciprocated,
+      };
+    }),
     ...voidReplies.map<CardItem>((v) => ({
       id: v.id,
       kind: "received",

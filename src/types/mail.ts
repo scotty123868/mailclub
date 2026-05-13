@@ -42,6 +42,23 @@ export type FriendAddressInput = {
 
 export type Postcard = {
   id: string;
+  /**
+   * Sender id — UUID of the user who sent the card. Required for the
+   * v0.7 reciprocation badge (gold ring when sender + recipient both
+   * exist on the same friend) and the WeeklyJournal&apos;s inbound /
+   * outbound rendering.
+   *
+   * Optional for backward compat with v0.6.x mock postcards that don&apos;t
+   * carry it. When undefined, treat as "outbound from the current user"
+   * (the historical default — only outbound cards lived in this array
+   * before migration 1210).
+   */
+  senderId?: string;
+  /**
+   * Recipient id. For "void"/"penpal" cards this is the literal string
+   * "void". For "friend" cards it&apos;s the friend&apos;s UUID. For "link"
+   * cards (claim-link mode) it&apos;s "" until the recipient claims.
+   */
   toFriendId: string;
   fromCity: string;
   toCity: string;

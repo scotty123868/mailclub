@@ -98,19 +98,20 @@ export default function ConstellationScreen() {
     return m;
   }, [friends]);
 
-  // Convert postcards + voidReplies into graph-ready PostcardForGraph rows.
-  // postcards array today doesn&apos;t carry senderId (postcardFromRow doesn&apos;t
-  // expose it yet) so we assume all entries are outbound (sender = self).
-  // voidReplies represent inbound from anonymous "void" — we don&apos;t graph
-  // them because the sender is unknown. Once the Postcard type widens to
-  // include senderId, the graph picks up real inbound edges too.
+  // Convert postcards into graph-ready PostcardForGraph rows.
+  // v0.7.1: senderId is now exposed on Postcard. Real inbound edges
+  // surface in the graph (the reciprocation gold ring fires when a
+  // friend has BOTH outbound + inbound cards with the user).
+  // voidReplies are anonymous-sender — they can&apos;t be graphed since
+  // we don&apos;t know the other endpoint&apos;s userId.
   const graphPostcards = useMemo<PostcardForGraph[]>(() => {
     const rows: PostcardForGraph[] = [];
     for (const p of postcards) {
       if (!p.toFriendId || p.toFriendId === "void" || p.toFriendId === "") continue;
+      // If senderId is missing (legacy), default to self → outbound.
       rows.push({
         id: p.id,
-        senderId: selfId,
+        senderId: p.senderId ?? selfId,
         recipientId: p.toFriendId,
         status: p.status,
       });
