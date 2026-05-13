@@ -95,10 +95,21 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
   if (error) return jsonResponse({ ok: false, error: error.message }, 500);
   if (!data?.ok) return jsonResponse({ ok: false, error: data?.reason ?? "Unknown error" }, 400);
 
-  // TODO: trigger lob-send-postcard with the new address. For now we just
-  // return success and the sender's app will see the postcard flip from
-  // 'awaiting_address' → 'queued'. The actual Lob submit happens via the
-  // postgres trigger or a follow-up server-side render path (Sprint 2).
+  // KNOWN GAP (codex Phase 6 audit, P1 deferred):
+  // After redemption we have the recipient's address on the claim row and
+  // the postcard's status = 'queued', but no actual Lob print job is
+  // submitted. Why: magic-link sends never captured the front/back
+  // rendered PNGs (view-shot only runs for direct sends today). To close
+  // this we need server-side postcard rendering (Lob HTML templates with
+  // merge variables) OR a notify-sender-to-capture flow.
+  //
+  // For 0.6.x: a daily reconcile job on the server side picks up
+  // status='queued' rows with a claim_id, renders them via Lob's HTML
+  // template API, and submits them. That code is queued for Phase 7.
+  //
+  // What we DO record here: the address is saved, the postcard row is in
+  // 'queued' status, and the sender's app shows the flip from
+  // 'awaiting_address' so they know the recipient claimed.
 
   return jsonResponse({
     ok: true,

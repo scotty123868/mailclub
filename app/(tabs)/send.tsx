@@ -361,8 +361,12 @@ export default function SendScreen() {
       // For "address" mode: silently create the friend first, then send.
       // For "self" mode: addr is the current user's address (we'd already
       // have it from onboarding; otherwise fall through to address flow).
+      // codex Phase 6 P1: pass the just-created friend object explicitly
+      // to sendPostcard so the action doesn't rely on a stale `friends`
+      // closure that doesn't yet include this friend.
       let targetFriendId: string;
       let targetName: string;
+      let targetFriend: import("@/src/types/mail").Friend | null = null;
       if (deliveryMode === "address") {
         const result = await addFriendByAddress({
           name: address.name || recipientName,
@@ -381,10 +385,12 @@ export default function SendScreen() {
         }
         targetFriendId = result.friend.id;
         targetName = result.friend.name;
+        targetFriend = result.friend;
       } else {
         if (!selectedFriend) return;
         targetFriendId = selectedFriend.id;
         targetName = selectedFriend.name;
+        targetFriend = selectedFriend;
       }
 
       const result = await sendPostcard({
@@ -392,6 +398,7 @@ export default function SendScreen() {
         friendId: targetFriendId,
         photoUri: photoUri ?? "",
         message,
+        friend: targetFriend ?? undefined,
       });
       if (!result.ok) return;
 

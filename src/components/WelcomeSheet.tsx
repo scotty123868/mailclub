@@ -187,13 +187,23 @@ export function WelcomeSheet({
       }
       setAppleSignedIn(true);
       if (result.fullName) setName(result.fullName);
-      if (!result.isNewUser) {
-        // Returning user — `hasCompletedSignup` will flip; the effect above
-        // closes the sheet. Just bail out here.
-        return;
+      // codex Phase 6 P1: don't trust `isNewUser` from the Apple service
+      // alone — Apple returns isNewUser based on whether the relying-party
+      // identifier has seen this Apple ID before, not whether the Mailroom
+      // profile is complete. A returning Apple user who never finished
+      // signup (e.g. crashed on the address page) would be misclassified
+      // as "returning" and the sheet would close, stranding them with no
+      // profile.
+      //
+      // The context-side useEffect on `hasCompletedSignup` is the truth.
+      // We always advance to step "name" for the profile-collection branch
+      // UNLESS the context already knows hasCompletedSignup. In that case,
+      // the close-on-completed-signup effect fires naturally.
+      if (result.isNewUser || !hasCompletedSignup) {
+        setStep("name");
       }
-      // New Apple user — collect name + address.
-      setStep("name");
+      // else: returning user with complete profile; the
+      // hasCompletedSignup useEffect at top of component closes the sheet.
     } catch (e: any) {
       setError(e?.message ?? "Something went wrong.");
     } finally {
@@ -213,7 +223,15 @@ export function WelcomeSheet({
           setError(result.error ?? "Couldn't sign in.");
           return;
         }
-        // Sign-in succeeded — `hasCompletedSignup` flips, sheet closes.
+        // codex Phase 6 P1: Sign-in may land an incomplete-profile user
+        // (auth ok but profile row missing fields). If hasCompletedSignup
+        // is already true, the useEffect at top of component closes the
+        // sheet. If NOT, route through name + address collection so they
+        // can complete. Without this, an incomplete user would silently
+        // get stuck on this page forever.
+        if (!hasCompletedSignup) {
+          setStep("name");
+        }
         return;
       }
       // Sign-up path: defer the actual signup to the final step (page 5);

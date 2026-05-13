@@ -286,16 +286,23 @@ export async function removeFriend(id: string) {
 
 type PostcardRow = {
   id: string;
-  to_kind: "friend" | "void";
+  to_kind: "friend" | "void" | "claim";
   to_friend_id: string | null;
   from_city: string;
   to_city: string;
   category: CardCategory;
   credit_cost: number;
-  status: "draft" | "sent" | "delivered";
+  // codex Phase 6 P2: status union was missing the runtime values added by
+  // migrations 1208/1209 ('queued', 'awaiting_address', 'in_transit',
+  // 'returned'). TS was lying about the row shape.
+  status: "draft" | "sent" | "delivered" | "queued" | "awaiting_address" | "in_transit" | "returned";
   message: string;
   place_name: string | null;
-  photo_uri: string | null;
+  // codex Phase 6 P2: column renamed from photo_uri → photo_path in
+  // migration 1209. The old name is read with a fallback so a schema not
+  // yet on 1209 still returns photo data; the new name is canonical.
+  photo_path?: string | null;
+  photo_uri?: string | null;
   custom_description: string | null;
   custom_tone: CustomTone | null;
   reference_photo_uris: string[];
@@ -303,6 +310,9 @@ type PostcardRow = {
 };
 
 function postcardFromRow(row: PostcardRow): Postcard {
+  // status type used by the rest of the app is narrower; coerce.
+  const narrowStatus: "draft" | "sent" | "delivered" =
+    row.status === "delivered" ? "delivered" : row.status === "draft" ? "draft" : "sent";
   return {
     id: row.id,
     toFriendId: row.to_kind === "void" ? "void" : (row.to_friend_id ?? ""),
@@ -310,11 +320,13 @@ function postcardFromRow(row: PostcardRow): Postcard {
     toCity: row.to_city,
     category: row.category,
     creditCost: row.credit_cost,
-    status: row.status,
+    status: narrowStatus,
     message: row.message,
     sentAt: row.sent_at,
     placeName: row.place_name ?? undefined,
-    photoUri: row.photo_uri ?? undefined,
+    // Prefer photo_path (the post-1209 column name), fall back to photo_uri
+    // so unmigrated environments still surface the photo. codex Phase 6 P2.
+    photoUri: row.photo_path ?? row.photo_uri ?? undefined,
     customDescription: row.custom_description ?? undefined,
     customTone: row.custom_tone ?? undefined,
     referencePhotoUris: row.reference_photo_uris,

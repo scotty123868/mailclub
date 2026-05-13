@@ -12,11 +12,15 @@ import type { CardCategory, CurrentUser, CustomTone, Friend, Postcard } from "@/
 
 const STORE_KEY = "mailroom-v1-cache";
 
+// Optional `friend` is the canonical reference when the caller created the
+// friend in the same event-loop tick (e.g. address-mode send creates the
+// friend via addFriendByAddress and then sends immediately). Avoids stale-
+// closure lookups on the friends array. (codex Phase 6 P1.)
 export type SendInput =
-  | { kind: "handwritten"; friendId: string; message: string }
-  | { kind: "photo"; friendId: string; photoUri: string; message: string }
-  | { kind: "place"; friendId: string; photoUri: string; placeName: string; message: string }
-  | { kind: "custom"; friendId: string; description: string; tone?: CustomTone; referencePhotoUris: string[] };
+  | { kind: "handwritten"; friendId: string; message: string; friend?: Friend }
+  | { kind: "photo"; friendId: string; photoUri: string; message: string; friend?: Friend }
+  | { kind: "place"; friendId: string; photoUri: string; placeName: string; message: string; friend?: Friend }
+  | { kind: "custom"; friendId: string; description: string; tone?: CustomTone; referencePhotoUris: string[]; friend?: Friend };
 
 export type VoidReply = {
   id: string;
@@ -269,7 +273,18 @@ export function MailClubProvider({ children }: PropsWithChildren) {
   const sendPostcardAction = useCallback(async (input: SendInput): Promise<SendResult> => {
     const category: CardCategory = input.kind;
     const cost = costForCategory(category);
-    const friend = friends.find((f) => f.id === input.friendId) ?? friends[0];
+    // codex Phase 6 P1: address-mode sends create a friend via addFriendByAddress
+    // and then immediately call sendPostcard with the new friend's id. The
+    // friends array closure in this callback may not include the freshly-
+    // created friend yet (state updates async). Fallback to friends[0] in
+    // that case crashes when the user has zero friends, and returns the
+    // wrong friend otherwise. Accept the friend object on the input as the
+    // authoritative reference. Lookup falls back to the array, then to the
+    // input.friend if provided, in that order.
+    const friend =
+      friends.find((f) => f.id === input.friendId) ??
+      (input as { friend?: Friend }).friend ??
+      friends[0];
 
     if (credits < cost) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -694,7 +709,12 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     const trimmedBirthday = (input.birthday ?? "").trim();
     const initials = trimmedName.split(/\s+/).map((p) => p[0] ?? "").join("").slice(0, 2).toUpperCase() || trimmedName.slice(0, 2).toUpperCase();
 
-    // Optimistic local set first
+    // codex Phase 6 P1: previously this set hasCompletedSignup = true
+    // BEFORE the backend operations and never rolled back on failure. A
+    // user could land on a screen where the app thinks they're done but
+    // no profile row exists server-side. Now: set local user info early
+    // (so the UI doesn't flash an empty state) but DEFER the completion
+    // flags until the server-side flow succeeds.
     setUserInfo({
       ...EMPTY_USER,
       name: trimmedName,
@@ -707,10 +727,13 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     setFriends([]);
     setPostcards([]);
     setVoidReplies([]);
-    setHasSeenFreeCreditsIntro(true);
-    setHasCompletedSignup(true);
 
-    if (!SUPABASE_CONFIGURED) return;
+    if (!SUPABASE_CONFIGURED) {
+      // Dev/test path with no backend — set flags locally and move on.
+      setHasSeenFreeCreditsIntro(true);
+      setHasCompletedSignup(true);
+      return;
+    }
 
     // If an email + password were provided AND we're not authed, sign up first
     if (input.email && input.password && !authedUserId) {
@@ -723,7 +746,12 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         } catch (signinErr: any) {
           // eslint-disable-next-line no-console
           console.warn("Auth failed during completeSignup", signinErr?.message ?? err?.message);
-          return;
+          // codex Phase 6 P1: throw instead of silently returning with
+          // signup flags already flipped. The WelcomeSheet catches and
+          // shows an error; the user stays on the signup screen and can
+          // retry instead of getting stuck in a "completed" state with no
+          // backend profile.
+          throw new Error(signinErr?.message ?? err?.message ?? "Sign in failed");
         }
       }
     }
@@ -749,6 +777,12 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.warn("complete_signup RPC failed", err?.message);
+      // codex Phase 6 P1: re-throw so the WelcomeSheet shows the error
+      // and the user can retry. Previously this swallowed the failure,
+      // leaving hasCompletedSignup at whatever it was before (often false)
+      // but the UI was already past the signup screen. Throwing keeps the
+      // signup loop honest.
+      throw new Error(err?.message ?? "Couldn't save your profile. Try again?");
     }
 
     // Phase 3.5: consume any pending invite from a pre-signup QR scan.

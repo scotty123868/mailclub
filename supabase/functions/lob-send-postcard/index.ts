@@ -5,13 +5,22 @@
 // Postcards API. Persists Lob's response (lob_id, lob_status, expected
 // delivery, error) back to the `postcards` row.
 //
+// AUTH MODEL (v0.6.1 hardening, codex audit Phase 6):
+//   - Caller MUST present an Authorization: Bearer <jwt> header. We verify
+//     it against Supabase auth and resolve the user ID.
+//   - The postcard's sender_id must equal the auth'd user. This prevents
+//     anyone from calling the function with someone else's postcard_id to
+//     burn down our Lob budget.
+//   - The `claim` edge function calls this with an internal service-role
+//     header (X-Mailroom-Internal) for magic-link redemptions. That code
+//     path bypasses the user check but still must present the shared
+//     secret stored in MAILROOM_INTERNAL_SECRET.
+//
 // Deploy:
 //   supabase secrets set LOB_API_KEY=test_xxxxx
-//   supabase functions deploy lob-send-postcard --no-verify-jwt
-//
-// Test in sandbox first (LOB_API_KEY starting with `test_`). No real
-// postcards get printed in sandbox mode — Lob returns a fake postcard ID +
-// rendered PDF preview.
+//   supabase secrets set MAILROOM_INTERNAL_SECRET=$(openssl rand -hex 32)
+//   supabase functions deploy lob-send-postcard
+//   (NO --no-verify-jwt; we want JWT enforcement on the edge)
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -27,6 +36,47 @@ type Body = {
 serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ ok: false, error: "POST only" }), { status: 405 });
+  }
+
+  // -- AUTH --------------------------------------------------------------
+  // Either: (a) Bearer JWT from a signed-in user, or (b) internal service
+  // call from the claim function with the shared secret. Reject everything
+  // else. This closes the abuse vector codex flagged: the function used to
+  // accept any request with a valid postcard_id and front/back URLs.
+  const authHeader = req.headers.get("authorization") ?? "";
+  const internalSecret = req.headers.get("x-mailroom-internal") ?? "";
+  const expectedInternal = Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "";
+
+  let callerUserId: string | null = null;
+  let isInternalCall = false;
+
+  if (internalSecret && expectedInternal && internalSecret === expectedInternal) {
+    // Internal service-to-service call (claim → lob-send-postcard).
+    // Skip the user-id check; the claim function already validated the
+    // claim token.
+    isInternalCall = true;
+  } else if (authHeader.toLowerCase().startsWith("bearer ")) {
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      {
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      },
+    );
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData?.user?.id) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "Invalid auth token" }),
+        { status: 401 },
+      );
+    }
+    callerUserId = userData.user.id;
+  } else {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Auth required (Bearer JWT or internal secret)" }),
+      { status: 401 },
+    );
   }
 
   let body: Body;
@@ -59,9 +109,20 @@ serve(async (req: Request) => {
   // Load the postcard + recipient address + sender info
   const { data: postcard, error: pcErr } = await supabase
     .from("postcards")
-    .select("*, friend:friend_id(*), sender:sender_id(*)")
+    .select("*, friend:to_friend_id(*), sender:sender_id(*)")
     .eq("id", body.postcard_id)
     .single();
+
+  // -- OWNERSHIP CHECK --------------------------------------------------
+  // User JWT callers can only send their own postcards. Internal callers
+  // (claim → lob-send-postcard) skip this since the claim function already
+  // validated the claim token AND created the postcard server-side.
+  if (postcard && !isInternalCall && callerUserId && (postcard as any).sender_id !== callerUserId) {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Postcard does not belong to caller" }),
+      { status: 403 },
+    );
+  }
 
   if (pcErr || !postcard) {
     return new Response(
