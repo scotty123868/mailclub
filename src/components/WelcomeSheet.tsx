@@ -1,7 +1,7 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as ImagePicker from "expo-image-picker";
 import { ArrowLeft, ArrowRight, Image as ImageIcon, Link as LinkIcon, User as UserIcon, Users as UsersIcon } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -25,11 +25,20 @@ import Animated, {
 } from "react-native-reanimated";
 import { PrimaryButton } from "@/src/components/Buttons";
 import {
+  PostcardBackPreview,
+  PostcardFrontPreview,
+} from "@/src/components/PostcardPreview";
+import {
   fetchAddressSuggestions,
   type AddressSuggestion,
 } from "@/src/services/addressAutocomplete";
 import { isAppleSignInAvailable } from "@/src/services/apple-auth";
 import { lookupReciprocation } from "@/src/services/api";
+import {
+  capturePostcardForPrint,
+  lobRenderDimensions,
+  submitToLob,
+} from "@/src/services/lob";
 import { SUPABASE_CONFIGURED } from "@/src/services/supabase";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { peekPendingInvite } from "@/src/state/pendingInvite";
@@ -155,6 +164,34 @@ export function WelcomeSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  // ----- v0.7.0.8 Lob handoff: off-screen print-scale views -----------------
+  // Mirrors the pattern from app/(tabs)/send.tsx. After the RPC creates a
+  // postcards row, we capture these off-screen views to PNGs, upload them
+  // to Storage, and call the lob-send-postcard Edge Function so Lob
+  // actually prints + mails the card. Without this, the welcome flow only
+  // creates a DB row — no physical postcard ever ships.
+  //
+  // The views read from `printSnapshot` if set (frozen at send time), so
+  // capture works against stable data even if the user races to finish
+  // the celebration screen.
+  type WelcomePrintSnapshot = {
+    photoUri: string;
+    message: string;
+    recipient: {
+      name: string;
+      city: string;
+      state: string;
+      addressLine1?: string;
+      addressLine2?: string;
+      zip?: string;
+    };
+    sender: { name: string; city: string; state: string };
+  };
+  const [printSnapshot, setPrintSnapshot] = useState<WelcomePrintSnapshot | null>(null);
+  const printFrontRef = useRef<View>(null);
+  const printBackRef = useRef<View>(null);
+  const { width: PRINT_W } = lobRenderDimensions();
 
   // ----- Phase 3.5: pending invite ------------------------------------------
   const [pendingInviteCopy, setPendingInviteCopy] = useState<string | null>(null);
@@ -364,6 +401,53 @@ export function WelcomeSheet({
     }
   }
 
+  // ----- v0.7.0.8 Lob submission helper -----------------------------------
+  // Captures the off-screen print views (front + back) and forwards the
+  // PNGs to the lob-send-postcard Edge Function. Awaited inline so the
+  // user sees "Mailing..." until Lob actually has the card; the fold
+  // animation on the mailed step then plays against real success.
+  //
+  // Returns true on success, false otherwise. Callers swallow the false
+  // case so a slow Lob/upload doesn't block the celebration screen — the
+  // DB row exists either way, and a server-side reconcile job can catch
+  // stragglers later (TODO Phase 7).
+  async function submitWelcomePostcardToLob(
+    postcardId: string,
+    snapshot: WelcomePrintSnapshot,
+  ): Promise<boolean> {
+    setPrintSnapshot(snapshot);
+    // Two ticks for layout + paint. send.tsx uses 250ms; we use the same.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    if (!printFrontRef.current || !printBackRef.current) {
+      // eslint-disable-next-line no-console
+      console.warn("[WelcomeSheet] print refs not mounted; skipping Lob submit");
+      return false;
+    }
+    try {
+      const captured = await capturePostcardForPrint(printFrontRef, printBackRef);
+      const result = await submitToLob({
+        postcardId,
+        frontUri: captured.frontUri,
+        backUri: captured.backUri,
+      });
+      if (!result.ok) {
+        // eslint-disable-next-line no-console
+        console.warn("[WelcomeSheet] Lob submit failed:", result.error);
+        return false;
+      }
+      // eslint-disable-next-line no-console
+      console.log("[WelcomeSheet] Lob submit ok", result.lobId);
+      return true;
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.warn("[WelcomeSheet] Lob submit threw:", err?.message ?? err);
+      return false;
+    } finally {
+      // Release the snapshot so the off-screen views go quiet.
+      setPrintSnapshot(null);
+    }
+  }
+
   // ----- Final commit ------------------------------------------------------
 
   async function commitSignupAndSend() {
@@ -409,6 +493,28 @@ export function WelcomeSheet({
         });
         if (!sendRes.ok) {
           throw new Error("Couldn't mail the card.");
+        }
+        // v0.7.0.8: hand the postcard off to Lob. Captures off-screen
+        // print views → uploads → invokes lob-send-postcard Edge Function.
+        // Without this, the RPC's postcards row exists but nothing ships.
+        if (sendRes.postcardId) {
+          await submitWelcomePostcardToLob(sendRes.postcardId, {
+            photoUri: photoUri ?? "",
+            message: message.trim(),
+            recipient: {
+              name: result.friend.name,
+              city: result.friend.addressCity || result.friend.city || "",
+              state: result.friend.addressState || result.friend.state || "",
+              addressLine1: result.friend.addressLine1,
+              addressLine2: result.friend.addressLine2,
+              zip: result.friend.addressZip,
+            },
+            sender: {
+              name: yourFirstName.trim() || "You",
+              city: yourAddress.city.trim(),
+              state: yourAddress.state.trim().toUpperCase(),
+            },
+          });
         }
       } else if (recipientKind === "link") {
         // Send-link flow: card queues immediately + the user gets a
@@ -460,6 +566,26 @@ export function WelcomeSheet({
         });
         if (!sendRes.ok) {
           throw new Error("Couldn't mail the card.");
+        }
+        // v0.7.0.8: hand off to Lob — same path as friend, recipient = self.
+        if (sendRes.postcardId) {
+          await submitWelcomePostcardToLob(sendRes.postcardId, {
+            photoUri: photoUri ?? "",
+            message: message.trim(),
+            recipient: {
+              name: result.friend.name,
+              city: result.friend.addressCity || result.friend.city || "",
+              state: result.friend.addressState || result.friend.state || "",
+              addressLine1: result.friend.addressLine1,
+              addressLine2: result.friend.addressLine2,
+              zip: result.friend.addressZip,
+            },
+            sender: {
+              name: yourFirstName.trim() || "You",
+              city: yourAddress.city.trim(),
+              state: yourAddress.state.trim().toUpperCase(),
+            },
+          });
         }
       } else if (recipientKind === "penpal") {
         // v0.7.0.1: pen pal is wired through sendIntoVoid — the existing
@@ -645,9 +771,53 @@ export function WelcomeSheet({
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* v0.7.0.8: off-screen 1875×1250 print views for Lob capture.
+          Positioned way off-screen (-10000,-10000) but laid out + painted
+          so react-native-view-shot can capture them to PNG. Renders from
+          `printSnapshot` when set (frozen at send time). Without these,
+          the welcome flow creates a DB row but never actually mails. */}
+      <View
+        style={welcomeOffscreenStyle.offscreen}
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <PostcardFrontPreview
+          ref={printFrontRef}
+          photoUri={printSnapshot?.photoUri || photoUri || undefined}
+          width={PRINT_W}
+        />
+        <PostcardBackPreview
+          ref={printBackRef}
+          message={printSnapshot?.message ?? message}
+          recipient={
+            printSnapshot?.recipient ?? {
+              name: theirName.trim() || "Recipient",
+              city: theirAddress.city,
+              state: theirAddress.state,
+              addressLine1: theirAddress.line1,
+              addressLine2: theirAddress.line2,
+              zip: theirAddress.zip,
+            }
+          }
+          sender={
+            printSnapshot?.sender ?? {
+              name: yourFirstName.trim() || "You",
+              city: yourAddress.city,
+              state: yourAddress.state,
+            }
+          }
+          width={PRINT_W}
+        />
+      </View>
     </Modal>
   );
 }
+
+const welcomeOffscreenStyle = StyleSheet.create({
+  offscreen: { left: -10000, position: "absolute", top: -10000 },
+});
 
 // ============================================================================
 // STEP 1 — HERO (unchanged from v0.6.1 build 8, just the tagline)
@@ -1694,16 +1864,20 @@ function AddressFields({
   testIDPrefix: string;
   label?: string;
 }) {
-  const [raw, setRaw] = useState<string>(() => addressToText(address));
+  // v0.7.0.7: the main textbox holds line1 + city + state + zip ONLY.
+  // line2 (apt/suite/unit) lives in its own field below so it doesn't
+  // get blown away when the user re-edits the address. Same pattern
+  // every US shipping form uses.
+  const [raw, setRaw] = useState<string>(() => addressToTextNoLine2(address));
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   useEffect(() => {
-    const expected = addressToText(address);
+    const expected = addressToTextNoLine2(address);
     setRaw((prev) => (prev === expected ? prev : expected));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address.line1, address.line2, address.city, address.state, address.zip]);
+  }, [address.line1, address.city, address.state, address.zip]);
 
   // Debounced Nominatim lookup. 350ms after the last keystroke we hit
   // the API. Aborts in-flight on new keystrokes so only the latest
@@ -1733,14 +1907,18 @@ function AddressFields({
   }, [raw]);
 
   function applySuggestion(s: AddressSuggestion) {
+    // Preserve any apt/suite the user already typed in the dedicated
+    // field — Nominatim doesn't return unit data, so blowing line2 away
+    // would frustrate users who entered "Apt 5" before picking from the
+    // suggestion dropdown.
     const next: AddressDraft = {
       line1: s.line1,
-      line2: "",
+      line2: address.line2 || "",
       city: s.city,
       state: s.state,
       zip: s.zip,
     };
-    setRaw(addressToText(next));
+    setRaw(addressToTextNoLine2(next));
     setShowSuggestions(false);
     setSuggestions([]);
     onChange(next);
@@ -1755,8 +1933,18 @@ function AddressFields({
           setRaw(v);
           setShowSuggestions(true);
           const parsed = parseFreeFormAddress(v);
-          if (parsed) onChange(parsed);
-          else onChange({ line1: v.trim(), line2: "", city: "", state: "", zip: "" });
+          if (parsed) {
+            // Preserve the apt field if the user already typed one.
+            onChange({ ...parsed, line2: address.line2 || parsed.line2 });
+          } else {
+            onChange({
+              line1: v.trim(),
+              line2: address.line2 || "",
+              city: "",
+              state: "",
+              zip: "",
+            });
+          }
         }}
         onFocus={() => setShowSuggestions(true)}
         placeholder="5209 Dorset Ave, Boise, ID 83706"
@@ -1794,16 +1982,49 @@ function AddressFields({
       <Text style={fieldStyles.helper}>
         {loadingSuggestions ? "Looking up addresses..." : "Start typing — we'll suggest addresses."}
       </Text>
+
+      {/* Apt / suite / unit — separate field, optional. Maps to line2.
+          Every shipping form does this. Keeps the autofill flow clean
+          (Nominatim doesn't return unit info) and prevents the apt from
+          getting wiped when the user re-edits the main address. */}
+      <FieldLabel style={{ marginTop: 14 }}>Apt, suite, unit (optional)</FieldLabel>
+      <TextInput
+        value={address.line2 ?? ""}
+        onChangeText={(v) => {
+          onChange({ ...address, line2: v });
+        }}
+        placeholder="Apt 4B"
+        placeholderTextColor={colors.mutedInk}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        autoComplete="address-line2"
+        textContentType="sublocality"
+        style={fieldStyles.input}
+        testID={`${testIDPrefix}-address-line2`}
+      />
     </>
   );
 }
 
 /** Convert a structured AddressDraft into the display string we use in
- *  the single-textbox field. */
+ *  the single-textbox field. Includes line2 — call sites that have a
+ *  dedicated apt field use addressToTextNoLine2 instead. */
 function addressToText(a: AddressDraft): string {
   const parts: string[] = [];
   if (a.line1) parts.push(a.line1);
   if (a.line2) parts.push(a.line2);
+  if (a.city) parts.push(a.city);
+  const stateZip = [a.state, a.zip].filter(Boolean).join(" ");
+  if (stateZip) parts.push(stateZip);
+  return parts.join(", ");
+}
+
+/** Display variant that omits line2 — used by AddressFields where the
+ *  apt/suite lives in its own input so it doesn't get round-tripped
+ *  through the main textbox. */
+function addressToTextNoLine2(a: AddressDraft): string {
+  const parts: string[] = [];
+  if (a.line1) parts.push(a.line1);
   if (a.city) parts.push(a.city);
   const stateZip = [a.state, a.zip].filter(Boolean).join(" ");
   if (stateZip) parts.push(stateZip);
@@ -1898,6 +2119,23 @@ function extractCityStateZip(
  *
  * Returns null if it can&apos;t extract a usable address.
  */
+/** Match "STATE ZIP" or "State Name ZIP" at the start-to-end of a string.
+ *  Used by Strategy 0 to detect "IL 60649" or "Maryland 20815" tail chunks. */
+function matchStateZipChunk(s: string): { state: string; zip: string } | null {
+  const trimmed = s.trim();
+  // "ST 12345" or "ST 12345-1234"
+  const m1 = trimmed.match(/^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+  if (m1) return { state: m1[1].toUpperCase(), zip: m1[2] };
+  // "State Name 12345"
+  const m2 = trimmed.match(/^(.+?)\s+(\d{5}(?:-\d{4})?)$/);
+  if (m2) {
+    const stateName = m2[1].trim().toLowerCase();
+    const code = STATE_NAME_TO_CODE[stateName];
+    if (code) return { state: code, zip: m2[2] };
+  }
+  return null;
+}
+
 function parseFreeFormAddress(input: string): AddressDraft | null {
   let cleaned = input.trim().replace(/\s+/g, " ");
   if (!cleaned) return null;
@@ -1906,13 +2144,38 @@ function parseFreeFormAddress(input: string): AddressDraft | null {
 
   const parts = cleaned.split(",").map((s) => s.trim()).filter(Boolean);
 
+  // Strategy 0: comma-aware. If the LAST chunk matches "STATE ZIP" and
+  // there are ≥ 3 chunks, we have unambiguous structure:
+  //   parts = ["Line1 (maybe with Apt)", "City", "ST ZIP"]
+  //   or     ["Line1", "Apt 5", "City", "ST ZIP"]   (4 chunks → line2)
+  // This is what the Google Places autofill returns most of the time
+  // (e.g. "South Jeffery Boulevard, Chicago, IL 60649"). The older
+  // joined-string Strategy A would mis-identify "Line1, City" as the
+  // city blob and leave line1 empty — that bug blocked sends for any
+  // user whose autofill came back without a street number on the line1
+  // chunk, since their `line1` would be wiped to "".
+  if (parts.length >= 3) {
+    const last = parts[parts.length - 1];
+    const stateZip = matchStateZipChunk(last);
+    if (stateZip) {
+      const city = parts[parts.length - 2];
+      const before = parts.slice(0, parts.length - 2);
+      return {
+        line1: before[0] ?? "",
+        line2: before.length > 1 ? before.slice(1).join(", ") : "",
+        city,
+        state: stateZip.state,
+        zip: stateZip.zip,
+      };
+    }
+  }
+
   // Strategy A: scan from the END of the joined string for "City State ZIP".
-  // This handles "Line1, City State ZIP" (Google format) AND
-  // "Line1, City, State ZIP" (canonical) AND "Line1, City, State, ZIP".
+  // Handles 2-chunk Maryland-style input: "Chevy Chase Maryland 20815".
   const joined = parts.join(", ");
   const extracted = extractCityStateZip(joined);
   if (extracted) {
-    // What&apos;s left in `joined` BEFORE city is line1 + optional line2.
+    // What's left in `joined` BEFORE city is line1 + optional line2.
     const beforeCityIdx = joined.toLowerCase().lastIndexOf(extracted.city.toLowerCase());
     const beforeCity =
       beforeCityIdx > 0
@@ -1922,17 +2185,23 @@ function parseFreeFormAddress(input: string): AddressDraft | null {
     const beforeParts = beforeCity.split(",").map((s) => s.trim()).filter(Boolean);
     const line1 = beforeParts[0] ?? "";
     const line2 = beforeParts.length > 1 ? beforeParts.slice(1).join(", ") : "";
-    return {
-      line1,
-      line2,
-      city: extracted.city,
-      state: extracted.state,
-      zip: extracted.zip,
-    };
+    // Only commit Strategy A's result if line1 is non-empty. The joined
+    // approach can swallow line1 into the city blob when commas are
+    // present in the city's neighbors — fall through to Strategy B
+    // instead of returning an unusable parse.
+    if (line1) {
+      return {
+        line1,
+        line2,
+        city: extracted.city,
+        state: extracted.state,
+        zip: extracted.zip,
+      };
+    }
   }
 
-  // Strategy B fallback: maybe state and zip are in separate comma chunks
-  // and there&apos;s no inline pattern match. "Line1, City, ST, ZIP" or
+  // Strategy B fallback: state and zip in separate comma chunks with no
+  // inline pattern match. "Line1, City, ST, ZIP" or
   // "Line1, City, Maryland, 20815".
   if (parts.length >= 3) {
     const last = parts[parts.length - 1];

@@ -1,0 +1,394 @@
+import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import * as Haptics from "expo-haptics";
+import { Share2, X } from "lucide-react-native";
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Image, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { useMailClub } from "@/src/state/MailClubContext";
+import type { Postcard } from "@/src/types/mail";
+import { colors } from "@/src/theme/colors";
+import { fonts } from "@/src/theme/typography";
+
+/**
+ * PostcardDetailSheet — single-card detail bottom sheet.
+ *
+ * v0.7.0.7 addition. Distinct from PostcardPreviewSheet (which lists
+ * cards filtered by city/friend). This one renders a SINGLE postcard
+ * in full: photo + message + recipient + status, plus the
+ * "Share again" surface for send-by-link cards.
+ *
+ * Why this exists: the user wanted past cards to expose their claim
+ * URL so they can resend the link forever. The send-claim-link Edge
+ * Function path is intentionally not used — the SHARE comes from the
+ * user's own number/email via iOS Share Sheet (higher trust than a
+ * Twilio short code). This sheet is where that "Share Again" button
+ * lives, alongside the URL itself in case the user wants to copy it.
+ *
+ * Imperative API: parent holds a ref, calls open(postcardId).
+ */
+
+export type PostcardDetailSheetRef = {
+  open: (postcardId: string) => void;
+  close: () => void;
+};
+
+export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
+  (_, ref) => {
+    const { postcards, friends, currentUser } = useMailClub();
+    const sheetRef = useRef<BottomSheet>(null);
+    const [activeId, setActiveId] = useState<string | null>(null);
+
+    const snapPoints = useMemo(() => ["72%", "92%"], []);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        open: (postcardId) => {
+          setActiveId(postcardId);
+          sheetRef.current?.snapToIndex(0);
+        },
+        close: () => {
+          sheetRef.current?.close();
+        },
+      }),
+      [],
+    );
+
+    const postcard = useMemo<Postcard | null>(
+      () => postcards.find((p) => p.id === activeId) ?? null,
+      [postcards, activeId],
+    );
+
+    const isPending = !!postcard && postcard.toFriendId === "";
+    const recipientLabel = useMemo(() => {
+      if (!postcard) return "";
+      if (isPending) return "Awaiting recipient";
+      if (postcard.toFriendId === "void") return "Pen pal (anonymous)";
+      const friend = friends.find((f) => f.id === postcard.toFriendId);
+      return friend?.name ?? postcard.toCity ?? "Recipient";
+    }, [postcard, isPending, friends]);
+
+    const renderBackdrop = useCallback(
+      (props: any) => (
+        <BottomSheetBackdrop
+          {...props}
+          appearsOnIndex={0}
+          disappearsOnIndex={-1}
+          opacity={0.4}
+          pressBehavior="close"
+        />
+      ),
+      [],
+    );
+
+    async function onShareAgain() {
+      if (!postcard?.claimUrl) return;
+      const senderFirst = currentUser?.name?.split(" ")[0] || "I";
+      try {
+        Haptics.selectionAsync().catch(() => {});
+      } catch {
+        /* no-op on simulators without haptics */
+      }
+      try {
+        await Share.share({
+          message: `${senderFirst} sent you a postcard on Mailroom. Tap to claim it — ${postcard.claimUrl}`,
+          url: postcard.claimUrl,
+        });
+      } catch {
+        /* user dismissed share sheet — no-op */
+      }
+    }
+
+    if (!postcard) {
+      return (
+        <BottomSheet
+          ref={sheetRef}
+          index={-1}
+          snapPoints={snapPoints}
+          enablePanDownToClose
+          backdropComponent={renderBackdrop}
+          backgroundStyle={styles.bgPanel}
+          handleIndicatorStyle={styles.handleIndicator}
+        >
+          <BottomSheetScrollView contentContainerStyle={styles.body}>
+            <View />
+          </BottomSheetScrollView>
+        </BottomSheet>
+      );
+    }
+
+    return (
+      <BottomSheet
+        ref={sheetRef}
+        index={-1}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        backdropComponent={renderBackdrop}
+        backgroundStyle={styles.bgPanel}
+        handleIndicatorStyle={styles.handleIndicator}
+      >
+        <BottomSheetScrollView contentContainerStyle={styles.body}>
+          {/* Header */}
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.kicker}>
+                {isPending ? "AWAITING ADDRESS" : statusKicker(postcard.status)}
+              </Text>
+              <Text style={styles.title} numberOfLines={1}>
+                To {recipientLabel}
+              </Text>
+              <Text style={styles.subtitle}>{formatDate(postcard.sentAt)}</Text>
+            </View>
+            <Pressable
+              onPress={() => sheetRef.current?.close()}
+              style={styles.closeBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={10}
+              testID="postcard-detail-close"
+            >
+              <X color={colors.ink} size={20} strokeWidth={1.8} />
+            </Pressable>
+          </View>
+
+          {/* Photo + message — the postcard itself */}
+          <View style={styles.cardFrame}>
+            {postcard.photoUri ? (
+              <Image
+                source={{ uri: postcard.photoUri }}
+                style={styles.cardPhoto}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.cardPhoto, styles.cardPhotoPlaceholder]} />
+            )}
+            <View style={styles.cardMessageBox}>
+              <Text style={styles.cardMessage} numberOfLines={6}>
+                {postcard.message ? `"${postcard.message}"` : "(no message)"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Share-again block — only for send-link cards */}
+          {postcard.claimUrl ? (
+            <View style={styles.shareBlock}>
+              <Text style={styles.shareKicker}>
+                {isPending ? "SOLICIT THEIR ADDRESS" : "SHARE LINK"}
+              </Text>
+              <Text style={styles.shareBlurb}>
+                {isPending
+                  ? "Send this link to the recipient. They'll add their mailing address, and we'll drop the card in the post."
+                  : "This is the link you sent. Share again if they lost it."}
+              </Text>
+              <View style={styles.urlBox}>
+                <Text style={styles.urlText} numberOfLines={2} ellipsizeMode="middle">
+                  {postcard.claimUrl}
+                </Text>
+              </View>
+              <Pressable
+                onPress={onShareAgain}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  pressed && { opacity: 0.85 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Share link"
+                testID="postcard-detail-share-again"
+              >
+                <Share2 color={colors.paper} size={16} strokeWidth={1.8} />
+                <Text style={styles.primaryBtnText}>Share link</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </BottomSheetScrollView>
+      </BottomSheet>
+    );
+  },
+);
+
+PostcardDetailSheet.displayName = "PostcardDetailSheet";
+
+function statusKicker(status: Postcard["status"]): string {
+  switch (status) {
+    case "delivered":
+      return "DELIVERED";
+    case "sent":
+      return "IN TRANSIT";
+    case "draft":
+      return "DRAFT";
+  }
+}
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+const styles = StyleSheet.create({
+  bgPanel: {
+    backgroundColor: colors.paper,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  handleIndicator: {
+    backgroundColor: colors.line,
+    width: 44,
+    height: 4,
+  },
+  body: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 48,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingBottom: 14,
+    borderBottomColor: colors.line,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 16,
+  },
+  kicker: {
+    color: colors.postalRed,
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    marginBottom: 4,
+  },
+  title: {
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 24,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 100,
+    backgroundColor: colors.paperDark,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardFrame: {
+    backgroundColor: colors.white,
+    borderRadius: 10,
+    borderColor: colors.line,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  cardPhoto: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    backgroundColor: colors.paperDark,
+  },
+  cardPhotoPlaceholder: {
+    backgroundColor: colors.paperDark,
+  },
+  cardMessageBox: {
+    padding: 16,
+    backgroundColor: colors.white,
+  },
+  cardMessage: {
+    color: colors.ink,
+    fontFamily: fonts.serifItalic,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  shareBlock: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: colors.paperDark,
+    borderRadius: 12,
+    borderColor: colors.line,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  shareKicker: {
+    color: colors.postalBlue,
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    marginBottom: 4,
+  },
+  shareBlurb: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serif,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  urlBox: {
+    backgroundColor: colors.white,
+    borderRadius: 6,
+    borderColor: colors.line,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  urlText: {
+    color: colors.ink,
+    fontFamily: fonts.sans,
+    fontSize: 12,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  primaryBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.ink,
+    paddingVertical: 12,
+    borderRadius: 100,
+  },
+  primaryBtnText: {
+    color: colors.paper,
+    fontFamily: fonts.serifSemi,
+    fontSize: 14,
+  },
+  secondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.white,
+    borderColor: colors.line,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 100,
+  },
+  secondaryBtnText: {
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 14,
+  },
+});

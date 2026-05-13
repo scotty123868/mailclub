@@ -72,6 +72,14 @@ export type Postcard = {
   customDescription?: string;
   customTone?: CustomTone;
   referencePhotoUris?: string[];
+  /**
+   * Claim URL for send-by-link cards. Populated by fetchPostcards via a
+   * LEFT JOIN against postcard_claims. Present whenever the card was sent
+   * with `to_kind === "claim"`. The card may still be unclaimed
+   * (`toFriendId === ""`) or claimed (toFriendId populated) — both cases
+   * surface the URL so the sender can re-share it forever.
+   */
+  claimUrl?: string;
 };
 
 export type MailRoute = {

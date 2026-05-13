@@ -45,7 +45,22 @@ const HAS_GOOGLE = GOOGLE_MAPS_KEY.length > 0;
 
 export type Geo = { latitude: number; longitude: number };
 
-export type MapCity = { id: string; name: string; coord: Geo; accent?: boolean };
+export type MapCity = {
+  id: string;
+  name: string;
+  coord: Geo;
+  accent?: boolean;
+  /**
+   * v0.7.0.7: pending-send marker. Used for cards sent via the
+   * "share-a-link" flow where the recipient hasn't claimed yet. The pin
+   * gets a dashed gold ring + italic label so the user can see "yeah I
+   * sent something, it's waiting on them" right after their first send.
+   */
+  pending?: boolean;
+  /** Postcard id this pending pin represents. Tap → open detail sheet
+   *  with the claim URL + "Share again" button. */
+  pendingPostcardId?: string;
+};
 
 export type MapRoute = { from: Geo; to: Geo; tone?: "sent" | "received" };
 
@@ -241,7 +256,12 @@ export function MapPanel({
                 anchor={{ x: 0.5, y: 0.5 }}
                 onPress={onCityPress ? () => onCityPress(c) : undefined}
               >
-                <CityPin name={c.name} accent={!!c.accent} staggerIndex={idx} />
+                <CityPin
+                  name={c.name}
+                  accent={!!c.accent}
+                  pending={!!c.pending}
+                  staggerIndex={idx}
+                />
               </Marker>
             ))}
 
@@ -289,10 +309,12 @@ export function MapPanel({
 function CityPin({
   name,
   accent,
+  pending = false,
   staggerIndex = 0,
 }: {
   name: string;
   accent: boolean;
+  pending?: boolean;
   staggerIndex?: number;
 }) {
   // v0.7.0.5 D.2: drop-in entrance animation. Each pin springs in
@@ -328,11 +350,26 @@ function CityPin({
 
   return (
     <Animated.View style={[pinStyles.wrap, animStyle]}>
-      <View style={[pinStyles.dot, accent && pinStyles.dotAccent]}>
-        <View style={[pinStyles.core, accent && pinStyles.coreAccent]} />
+      <View
+        style={[
+          pinStyles.dot,
+          accent && pinStyles.dotAccent,
+          pending && pinStyles.dotPending,
+        ]}
+      >
+        <View
+          style={[
+            pinStyles.core,
+            accent && pinStyles.coreAccent,
+            pending && pinStyles.corePending,
+          ]}
+        />
       </View>
-      <View style={pinStyles.labelWrap}>
-        <Text style={pinStyles.label} numberOfLines={1}>
+      <View style={[pinStyles.labelWrap, pending && pinStyles.labelWrapPending]}>
+        <Text
+          style={[pinStyles.label, pending && pinStyles.labelPending]}
+          numberOfLines={1}
+        >
           {name}
         </Text>
       </View>
@@ -369,6 +406,18 @@ const pinStyles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
   },
+  // v0.7.0.7: pending-send pin — dashed gold ring + warm inner. Reads as
+  // "still waiting on something" without competing with the bold red
+  // delivered/sent pins.
+  dotPending: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FBEFD6",
+    borderColor: colors.gold,
+    borderStyle: "dashed",
+    borderWidth: 1.5,
+  },
   core: {
     width: 6,
     height: 6,
@@ -381,10 +430,20 @@ const pinStyles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.postalRed,
   },
+  corePending: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.gold,
+  },
   labelWrap: {
     marginTop: 2,
     paddingHorizontal: 4,
     paddingVertical: 1,
+  },
+  labelWrapPending: {
+    backgroundColor: "rgba(217,180,110,0.18)",
+    borderRadius: 3,
   },
   label: {
     color: "#2B1A08",
@@ -395,6 +454,12 @@ const pinStyles = StyleSheet.create({
     textShadowColor: "rgba(232, 213, 168, 0.95)",
     textShadowRadius: 3,
     textShadowOffset: { width: 0, height: 0 },
+  },
+  labelPending: {
+    color: "#6E5421",
+    fontFamily: fonts.serifItalic,
+    letterSpacing: 0.4,
+    textTransform: "none",
   },
 });
 

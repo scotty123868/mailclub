@@ -1,6 +1,7 @@
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
 import { Mail, Pencil, Send, Users } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
@@ -12,6 +13,10 @@ import { MailHistorySheet } from "@/src/components/MailHistorySheet";
 import { MetricStrip } from "@/src/components/MetricStrip";
 import { NotificationsSheet } from "@/src/components/NotificationsSheet";
 import { OnboardingFreeCreditsBanner } from "@/src/components/OnboardingFreeCreditsBanner";
+import {
+  PostcardDetailSheet,
+  type PostcardDetailSheetRef,
+} from "@/src/components/PostcardDetailSheet";
 import { PrivacySheet } from "@/src/components/PrivacySheet";
 import { SettingsSheet } from "@/src/components/SettingsSheet";
 import { WeeklyJournal } from "@/src/components/WeeklyJournal";
@@ -49,6 +54,10 @@ export default function MyMailCardScreen() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  // v0.7.0.7: per-card detail sheet for the gallery. Tap a journal tile
+  // → opens the postcard's photo + message + (for send-link cards) the
+  // claim URL + Share Again button.
+  const detailSheetRef = useRef<PostcardDetailSheetRef>(null);
 
   // Real metrics derived from state. We DON'T fake-inflate these — if you
   // sent zero, "0" is the right number, and the empty-week whisper on the
@@ -85,6 +94,7 @@ export default function MyMailCardScreen() {
   const bioText = currentUser.tagline?.trim();
 
   return (
+    <BottomSheetModalProvider>
     <AppShell>
       <Header title="My Card" onPressSettings={() => setSettingsOpen(true)} />
 
@@ -172,7 +182,7 @@ export default function MyMailCardScreen() {
           voidReplies={voidReplies}
           currentUserId={authedUserId}
           friendNamesById={friendNamesById}
-          onPressCard={() => setMailOpen("sent")}
+          onPressCard={(cardId) => detailSheetRef.current?.open(cardId)}
           onPressEmptyTile={() => router.push("/send")}
         />
       </ScrollView>
@@ -199,6 +209,10 @@ export default function MyMailCardScreen() {
       <PrivacySheet visible={privacyOpen} onClose={() => setPrivacyOpen(false)} />
       <AboutAppSheet visible={aboutOpen} onClose={() => setAboutOpen(false)} />
     </AppShell>
+    {/* PostcardDetailSheet mounts outside AppShell so the bottom-sheet
+        portal renders over the tab bar + safe area. */}
+    <PostcardDetailSheet ref={detailSheetRef} />
+    </BottomSheetModalProvider>
   );
 }
 

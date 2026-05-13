@@ -47,6 +47,12 @@ export interface GraphNode extends SimulationNodeDatum {
   /** Number of visible postcards this node participates in (sent + received,
    *  between self and them). */
   momentCount: number;
+  /** v0.7.0.7: pending-recipient flag. True for synthetic nodes that
+   *  stand in for a send-link postcard whose claim hasn&apos;t been
+   *  resolved yet. The UI renders these with a dashed edge + dimmed
+   *  node so the user gets a tangible "I sent something" feel before
+   *  the recipient ever fills in their address. */
+  pending?: boolean;
 }
 
 export interface GraphEdge extends SimulationLinkDatum<GraphNode> {
@@ -59,6 +65,10 @@ export interface GraphEdge extends SimulationLinkDatum<GraphNode> {
   /** v0.7 D.3 magical-moment: gold ring on the recipient&apos;s node when
    *  the user has both sent to AND received from them. */
   reciprocated?: boolean;
+  /** v0.7.0.7: edge into a pending-recipient (send-link, unclaimed)
+   *  node. Rendered as a dashed line so the user sees the connection
+   *  forming before the address is filled in. */
+  pending?: boolean;
 }
 
 /** Canonical pair key so (a,b) and (b,a) accumulate into one edge. */
@@ -123,13 +133,44 @@ export function buildSocialGraph(
       momentIds: string[];
       hasOutbound: boolean;
       hasInbound: boolean;
+      pending?: boolean;
     }
   >();
 
   for (const p of postcards) {
-    // Skip drafts and edge statuses with no real meaning to the graph.
+    // Skip drafts.
     if (p.status === "draft") continue;
-    if (!p.recipientId) continue;
+
+    // v0.7.0.7: pending-claim postcards arrive with recipientId === null
+    // (the recipient hasn't claimed the link yet, so we don't know who
+    // they are). Synthesize a placeholder node + edge so the graph
+    // SHOWS the outbound card visually — the user just sent their first
+    // postcard, the constellation should be populated, not empty.
+    if (!p.recipientId) {
+      if (p.senderId !== selfId) continue; // only self-outbound pending
+      const pendingId = `pending:${p.id}`;
+      nodes.set(pendingId, {
+        id: pendingId,
+        name: "Awaiting friend",
+        color: "rgba(255,255,255,0.42)",
+        isSelf: false,
+        isFoF: false,
+        momentCount: 1,
+        pending: true,
+      });
+      nodes.get(selfId)!.momentCount += 1;
+      const key = pairKey(selfId, pendingId);
+      edgeMap.set(key, {
+        a: selfId,
+        b: pendingId,
+        momentCount: 1,
+        momentIds: [p.id],
+        hasOutbound: true,
+        hasInbound: false,
+        pending: true,
+      });
+      continue;
+    }
 
     const isOutbound = p.senderId === selfId;
     const isInbound = p.recipientId === selfId;
@@ -183,6 +224,7 @@ export function buildSocialGraph(
     momentCount: e.momentCount,
     momentIds: e.momentIds,
     reciprocated: e.hasOutbound && e.hasInbound,
+    pending: e.pending,
   }));
 
   // Force simulation, parameters lifted from teteapp.

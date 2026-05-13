@@ -318,6 +318,22 @@ function postcardFromRow(row: PostcardRow): Postcard {
   // status type used by the rest of the app is narrower; coerce.
   const narrowStatus: "draft" | "sent" | "delivered" =
     row.status === "delivered" ? "delivered" : row.status === "draft" ? "draft" : "sent";
+  // v0.7.0.7: build the claim URL from the embedded postcard_claims row,
+  // if any. fetchPostcards LEFT JOINs postcard_claims so send-link cards
+  // (to_kind === "claim") expose their share URL on the Postcard type.
+  // Past cards in the gallery can then surface the URL for re-share.
+  let claimUrl: string | undefined;
+  const claimRow = (row as any).postcard_claims;
+  const claimToken: string | undefined = Array.isArray(claimRow)
+    ? claimRow[0]?.claim_token
+    : claimRow?.claim_token;
+  if (claimToken) {
+    const supabaseUrl =
+      (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_SUPABASE_URL) ||
+      "https://nlwnmgwylmmnaemdnzlq.supabase.co";
+    const functionsBase = supabaseUrl.replace(".supabase.co", ".functions.supabase.co");
+    claimUrl = `${functionsBase}/claim?t=${claimToken}`;
+  }
   return {
     id: row.id,
     senderId: row.sender_id ?? undefined,
@@ -336,13 +352,17 @@ function postcardFromRow(row: PostcardRow): Postcard {
     customDescription: row.custom_description ?? undefined,
     customTone: row.custom_tone ?? undefined,
     referencePhotoUris: row.reference_photo_uris,
+    claimUrl,
   };
 }
 
 export async function fetchPostcards(): Promise<Postcard[]> {
+  // v0.7.0.7: LEFT JOIN postcard_claims so each send-link card carries
+  // its claim_token (→ shareable URL) into the client. Lets the gallery
+  // surface "Share again" on past pending cards.
   const { data, error } = await supabase
     .from("postcards")
-    .select("*")
+    .select("*, postcard_claims(claim_token)")
     .order("sent_at", { ascending: false });
   if (error) throw error;
   return (data as PostcardRow[]).map(postcardFromRow);

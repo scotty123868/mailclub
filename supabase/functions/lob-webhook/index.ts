@@ -36,7 +36,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const LOB_WEBHOOK_SECRET = Deno.env.get("LOB_WEBHOOK_SECRET") ?? "";
+// v0.7.0.6: accept both live + test webhook secrets. Lob auto-generates
+// a fresh secret per webhook endpoint and won't let you reuse the same
+// one across LIVE and TEST tabs. We try each configured secret in turn
+// and accept the signature if ANY of them match. Set both:
+//   supabase secrets set LOB_WEBHOOK_SECRET=<live-tab-signing-secret>
+//   supabase secrets set LOB_WEBHOOK_SECRET_TEST=<test-tab-signing-secret>
+const LOB_WEBHOOK_SECRETS: string[] = [
+  Deno.env.get("LOB_WEBHOOK_SECRET") ?? "",
+  Deno.env.get("LOB_WEBHOOK_SECRET_TEST") ?? "",
+].filter(Boolean);
 
 const STATUS_BY_EVENT: Record<string, string | null> = {
   "postcard.created": null, // already 'sent' at insert; ignore
@@ -50,37 +59,97 @@ const STATUS_BY_EVENT: Record<string, string | null> = {
   "postcard.delivered": "delivered",
 };
 
-/** Verify Lob's HMAC-SHA256 signature on the raw request body.
- *  Header name varies by Lob version: lob-signature OR lob_signature.
- *  Computed signature is hex-encoded. */
-async function verifySignature(rawBody: string, headerSig: string): Promise<boolean> {
-  if (!LOB_WEBHOOK_SECRET) {
-    // Fail open ONLY if no secret is configured — for local dev. Logs
-    // a warning so this never happens silently in prod.
-    console.warn("[lob-webhook] LOB_WEBHOOK_SECRET not set; skipping signature check");
-    return true;
+/** Parse Lob's Stripe-style signature header:
+ *    Lob-Signature: t=1492774577,v1=<hex_hmac_sha256>
+ *  Returns the timestamp string and an array of v1 signatures (Lob can
+ *  send multiple during secret rotation). Tolerates extra whitespace. */
+function parseLobSignatureHeader(header: string): { t: string | null; v1: string[] } {
+  const parts = header.split(",").map((p) => p.trim());
+  let t: string | null = null;
+  const v1: string[] = [];
+  for (const part of parts) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    const key = part.slice(0, eq).trim();
+    const val = part.slice(eq + 1).trim();
+    if (key === "t") t = val;
+    else if (key === "v1") v1.push(val);
   }
-  if (!headerSig) return false;
+  return { t, v1 };
+}
 
+/** Constant-time string compare. */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+/** HMAC-SHA256 over a payload, returned as lowercase hex. */
+async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(LOB_WEBHOOK_SECRET),
+    encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
   );
-  const sigBuf = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
-  const computed = Array.from(new Uint8Array(sigBuf))
+  const sigBuf = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
+  return Array.from(new Uint8Array(sigBuf))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-  // Constant-time compare.
-  if (computed.length !== headerSig.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < computed.length; i++) {
-    mismatch |= computed.charCodeAt(i) ^ headerSig.charCodeAt(i);
+}
+
+/** Verify Lob's HMAC-SHA256 signature on the raw request body against
+ *  every configured secret. Returns true if ANY secret matches.
+ *
+ *  Lob signs `${timestamp}.${body}` and sends it in a Stripe-style
+ *  header `t=<ts>,v1=<hex>`. We support both that format and a fallback
+ *  where the header is a bare hex signature over just the body (older
+ *  Lob webhooks or some Debugger configs). */
+async function verifySignature(rawBody: string, headerSig: string): Promise<boolean> {
+  if (LOB_WEBHOOK_SECRETS.length === 0) {
+    // Fail open ONLY if no secret is configured — for local dev. Logs
+    // a warning so this never happens silently in prod.
+    console.warn("[lob-webhook] no LOB_WEBHOOK_SECRET* env vars set; skipping signature check");
+    return true;
   }
-  return mismatch === 0;
+  if (!headerSig) return false;
+
+  const { t, v1 } = parseLobSignatureHeader(headerSig);
+
+  // --- Path A: Stripe-style header with t= and v1= ---
+  if (t && v1.length > 0) {
+    const signedPayload = `${t}.${rawBody}`;
+    for (const secret of LOB_WEBHOOK_SECRETS) {
+      const computed = await hmacSha256Hex(secret, signedPayload);
+      for (const candidate of v1) {
+        if (timingSafeEqual(computed, candidate)) return true;
+      }
+    }
+  }
+
+  // --- Path B: bare hex signature over the body ---
+  // Older Lob webhooks (or odd Debugger configs) send the signature as
+  // a plain hex string with no t=/v1= prefix. Try the body-only HMAC.
+  for (const secret of LOB_WEBHOOK_SECRETS) {
+    const computed = await hmacSha256Hex(secret, rawBody);
+    if (timingSafeEqual(computed, headerSig.trim())) return true;
+  }
+
+  // Diagnostics — log the header shape (NOT the value, to avoid leaking
+  // valid sigs) so we can see why it failed in Supabase logs.
+  console.warn("[lob-webhook] signature mismatch", {
+    headerLen: headerSig.length,
+    headerPrefix: headerSig.slice(0, 12),
+    parsed: { hasT: !!t, v1Count: v1.length },
+    secretCount: LOB_WEBHOOK_SECRETS.length,
+  });
+  return false;
 }
 
 serve(async (req) => {
@@ -92,17 +161,47 @@ serve(async (req) => {
   // and JSON parsing.
   const rawBody = await req.text();
 
-  // Lob signature header (try both casings — Deno's Headers normalizes
-  // to lowercase, but worth being defensive).
+  // Lob signature header (try every variant we've seen — Deno's Headers
+  // normalizes to lowercase, but worth being defensive).
   const sig =
     req.headers.get("lob-signature") ??
+    req.headers.get("lob-signature-256") ??
+    req.headers.get("x-lob-signature") ??
     req.headers.get("lob_signature") ??
     "";
 
   const ok = await verifySignature(rawBody, sig);
   if (!ok) {
-    console.warn("[lob-webhook] signature mismatch; rejecting");
-    return new Response("Bad signature", { status: 401 });
+    // Diagnostics — surface header shape in the response body so we can
+    // see what's happening from the Lob Debugger UI without scraping
+    // function logs. SAFE to include: we print header NAMES + sig
+    // length/prefix, never the secret or a valid signature.
+    const allHeaders: Record<string, string> = {};
+    req.headers.forEach((v, k) => {
+      // Don't leak Authorization or anything that looks like a secret.
+      if (k.toLowerCase().includes("auth") || k.toLowerCase() === "cookie") return;
+      allHeaders[k] = k.toLowerCase().includes("signature") ? `${v.slice(0, 24)}…(len=${v.length})` : v;
+    });
+    const parsed = parseLobSignatureHeader(sig);
+    const debug = {
+      ok: false,
+      reason: "signature_mismatch",
+      sig_header_present: !!sig,
+      sig_header_len: sig.length,
+      sig_header_prefix: sig.slice(0, 24),
+      parsed_t: parsed.t,
+      parsed_v1_count: parsed.v1.length,
+      parsed_v1_lens: parsed.v1.map((v) => v.length),
+      body_len: rawBody.length,
+      body_prefix: rawBody.slice(0, 80),
+      secrets_loaded: LOB_WEBHOOK_SECRETS.length,
+      received_headers: allHeaders,
+    };
+    console.warn("[lob-webhook] signature mismatch", debug);
+    return new Response(JSON.stringify(debug, null, 2), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   let event: any;

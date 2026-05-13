@@ -14,6 +14,10 @@ import Svg, { Circle, Line } from "react-native-svg";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { FriendDetailSheet } from "@/src/components/FriendDetailSheet";
 import {
+  PostcardDetailSheet,
+  type PostcardDetailSheetRef,
+} from "@/src/components/PostcardDetailSheet";
+import {
   PostcardPreviewSheet,
   type PostcardPreviewSheetRef,
 } from "@/src/components/PostcardPreviewSheet";
@@ -84,6 +88,10 @@ export default function ConstellationScreen() {
   const { currentUser, friends, postcards, credits, authedUserId } = useMailClub();
   const [creditsOpen, setCreditsOpen] = useState(false);
   const sheetRef = useRef<PostcardPreviewSheetRef>(null);
+  // v0.7.0.7: detail sheet for pending-recipient nodes — tapping the
+  // dashed edge or the placeholder node opens the postcard directly so
+  // the sender can re-share the claim URL.
+  const detailRef = useRef<PostcardDetailSheetRef>(null);
 
   // Stage size: square inset from screen width, capped at 360.
   const { width: screenW, height: screenH } = Dimensions.get("window");
@@ -113,7 +121,23 @@ export default function ConstellationScreen() {
   const graphPostcards = useMemo<PostcardForGraph[]>(() => {
     const rows: PostcardForGraph[] = [];
     for (const p of postcards) {
-      if (!p.toFriendId || p.toFriendId === "void" || p.toFriendId === "") continue;
+      // Pen-pal cards (void) stay out of the graph — they have no real
+      // recipient to graph against.
+      if (p.toFriendId === "void") continue;
+      // v0.7.0.7: pending send-link cards have toFriendId === "". Pass
+      // them through with recipientId: null — buildSocialGraph
+      // synthesizes a placeholder node so the constellation shows the
+      // outbound card immediately after the first send.
+      if (p.toFriendId === "") {
+        rows.push({
+          id: p.id,
+          senderId: p.senderId ?? selfId,
+          recipientId: null,
+          status: p.status,
+        });
+        continue;
+      }
+      if (!p.toFriendId) continue;
       // If senderId is missing (legacy), default to self → outbound.
       rows.push({
         id: p.id,
@@ -201,6 +225,14 @@ export default function ConstellationScreen() {
       setActiveFriendId(null);
       return;
     }
+    // v0.7.0.7: pending node → open the postcard detail sheet so the
+    // sender can re-share the claim URL. The pending node id has the
+    // form "pending:<postcardId>".
+    if (node.pending && node.id.startsWith("pending:")) {
+      const postcardId = node.id.slice("pending:".length);
+      detailRef.current?.open(postcardId);
+      return;
+    }
     setActiveFriendId(node.id);
   }
 
@@ -245,15 +277,28 @@ export default function ConstellationScreen() {
                 const a = nodes.find((n) => n.id === sourceId);
                 const b = nodes.find((n) => n.id === targetId);
                 if (!a || !b || a.x == null || a.y == null || b.x == null || b.y == null) return null;
-                const thickness = Math.min(2.2, 0.6 + edge.momentCount * 0.18);
-                const edgeColor = edge.reciprocated
-                  ? "rgba(217,180,110,0.78)" // gold for reciprocated
-                  : "rgba(255,255,255,0.22)";
-                // The "other side" is whichever endpoint isn&apos;t self.
+                const isPending = !!edge.pending;
+                const thickness = isPending
+                  ? 1.4
+                  : Math.min(2.2, 0.6 + edge.momentCount * 0.18);
+                const edgeColor = isPending
+                  ? "rgba(255,255,255,0.48)" // dimmer for pending
+                  : edge.reciprocated
+                    ? "rgba(217,180,110,0.78)" // gold for reciprocated
+                    : "rgba(255,255,255,0.22)";
+                // The "other side" is whichever endpoint isn't self.
                 const otherId = a.isSelf ? b.id : a.id;
                 const otherName = a.isSelf ? b.name : a.name;
                 const onEdgePress = () => {
                   if (otherId === selfId) return;
+                  // v0.7.0.7: pending nodes carry the postcard id in their
+                  // synthetic id ("pending:<postcardId>") — open the detail
+                  // sheet directly so the user can re-share the claim URL.
+                  if (isPending && otherId.startsWith("pending:")) {
+                    const postcardId = otherId.slice("pending:".length);
+                    detailRef.current?.open(postcardId);
+                    return;
+                  }
                   sheetRef.current?.open({
                     kind: "friend",
                     friendId: otherId,
@@ -273,7 +318,7 @@ export default function ConstellationScreen() {
                       strokeLinecap="round"
                       onPress={onEdgePress}
                     />
-                    {/* Visible line */}
+                    {/* Visible line — dashed for pending claims */}
                     <Line
                       x1={a.x}
                       y1={a.y}
@@ -282,6 +327,7 @@ export default function ConstellationScreen() {
                       stroke={edgeColor}
                       strokeWidth={thickness}
                       strokeLinecap="round"
+                      strokeDasharray={isPending ? "4,5" : undefined}
                       onPress={onEdgePress}
                     />
                   </React.Fragment>
@@ -291,7 +337,12 @@ export default function ConstellationScreen() {
               {/* Nodes */}
               {nodes.map((node) => {
                 if (node.x == null || node.y == null) return null;
-                const radius = node.isSelf ? 13 : 9 + Math.min(6, node.momentCount * 1.5);
+                const isPending = !!node.pending;
+                const radius = node.isSelf
+                  ? 13
+                  : isPending
+                    ? 8
+                    : 9 + Math.min(6, node.momentCount * 1.5);
                 const isReciprocated = (node as any).reciprocated === true;
                 return (
                   <Circle
@@ -299,15 +350,18 @@ export default function ConstellationScreen() {
                     cx={node.x}
                     cy={node.y}
                     r={radius}
-                    fill={node.color}
+                    fill={isPending ? "rgba(248,241,227,0.18)" : node.color}
                     stroke={
                       node.isSelf
                         ? "rgba(255,255,255,0.7)"
                         : isReciprocated
                           ? "#D9B46E"
-                          : "rgba(255,255,255,0.4)"
+                          : isPending
+                            ? "rgba(255,255,255,0.55)"
+                            : "rgba(255,255,255,0.4)"
                     }
                     strokeWidth={node.isSelf ? 2 : isReciprocated ? 2.4 : 1.4}
+                    strokeDasharray={isPending ? "3,3" : undefined}
                     onPress={() => onTapNode(node)}
                   />
                 );
@@ -381,6 +435,10 @@ export default function ConstellationScreen() {
       {/* v0.7.0.4: tap an edge → bottom sheet of postcards exchanged
           on that line. Same component the Map uses for pin taps. */}
       <PostcardPreviewSheet ref={sheetRef} />
+
+      {/* v0.7.0.7: tap a pending node or pending edge → postcard detail
+          sheet with the claim URL + Share Again button. */}
+      <PostcardDetailSheet ref={detailRef} />
     </View>
     </BottomSheetModalProvider>
   );

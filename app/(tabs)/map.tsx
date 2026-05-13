@@ -11,6 +11,10 @@ import {
   normalizeCityKey,
 } from "@/src/components/MapPanel";
 import {
+  PostcardDetailSheet,
+  type PostcardDetailSheetRef,
+} from "@/src/components/PostcardDetailSheet";
+import {
   PostcardPreviewSheet,
   type PostcardPreviewSheetRef,
 } from "@/src/components/PostcardPreviewSheet";
@@ -46,15 +50,24 @@ import { useMailClub } from "@/src/state/MailClubContext";
  */
 export default function MapScreen() {
   const sheetRef = useRef<PostcardPreviewSheetRef>(null);
+  // v0.7.0.7: detail sheet for pending-send pins. Tap the gold dashed
+  // pin → opens the postcard detail with the claim URL + Share Again.
+  const detailRef = useRef<PostcardDetailSheetRef>(null);
   const { postcards, friends, currentUser } = useMailClub();
   const [highlightRoute, setHighlightRoute] = useState<MapRoute | null>(null);
 
   // Pin set: the user&apos;s sent-to cities + received-from cities. We
   // build it from the postcards array directly so the pins reflect
   // the real history, not a hardcoded fixture.
+  //
+  // v0.7.0.7: also emit a "pending" pin at the sender's home for every
+  // send-link card that hasn't been claimed yet. This populates the map
+  // immediately after the first send — empty map ≠ first impression.
   const pins: MapCity[] = useMemo(() => {
     const seen = new Map<string, MapCity>();
     for (const p of postcards) {
+      // Skip pending — handled separately below.
+      if (p.toFriendId === "") continue;
       const friend = friends.find((f) => f.id === p.toFriendId);
       const cityName = p.toCity || friend?.city || "";
       if (!cityName) continue;
@@ -76,8 +89,33 @@ export default function MapScreen() {
         seen.set(id, { id, name: p.fromCity, coord });
       }
     }
+    // Pending send-link cards: one pin per unclaimed card, offset
+    // slightly from the sender's home so they don't stack on top of
+    // each other. Coord = fromCity (where the user lives — that's all
+    // we know until the recipient claims).
+    const pendingCards = postcards.filter((p) => p.toFriendId === "");
+    pendingCards.forEach((p, idx) => {
+      const baseCity = p.fromCity || currentUser?.city || "";
+      const coord = baseCity ? CITY_COORDS[normalizeCityKey(baseCity)] : null;
+      if (!coord) return;
+      // Spread pending pins slightly so they don't stack. ~0.3 deg
+      // ≈ ~30km — visible but doesn't lie about location.
+      const angle = (idx * 137.5 * Math.PI) / 180; // golden angle
+      const r = 0.3 + idx * 0.05;
+      const jittered = {
+        latitude: coord.latitude + Math.sin(angle) * r,
+        longitude: coord.longitude + Math.cos(angle) * r,
+      };
+      seen.set(`pending-${p.id}`, {
+        id: `pending-${p.id}`,
+        name: "awaiting address",
+        coord: jittered,
+        pending: true,
+        pendingPostcardId: p.id,
+      });
+    });
     return Array.from(seen.values());
-  }, [postcards, friends]);
+  }, [postcards, friends, currentUser]);
 
   // Routes for polylines. Each unique (fromCity, toCity) pair → one
   // polyline. Tone defaults to "sent" since postcards in the array
@@ -113,6 +151,13 @@ export default function MapScreen() {
             cities={pins.length > 0 ? pins : undefined}
             highlightRoute={highlightRoute}
             onCityPress={(city) => {
+              // v0.7.0.7: pending pin → open the postcard detail
+              // sheet directly. Bypasses the city-scoped preview
+              // because pending cards don't have a real destination yet.
+              if (city.pending && city.pendingPostcardId) {
+                detailRef.current?.open(city.pendingPostcardId);
+                return;
+              }
               // v0.7.0.5 D.2: trace a bright polyline from the tapped
               // city to the user's home city while the sheet rises.
               // If home city isn't resolved (no profile city yet), the
@@ -133,6 +178,9 @@ export default function MapScreen() {
           the tab bar + nav. It mounts as a portal at the root and
           stays hidden (index=-1) until .open() is called. */}
       <PostcardPreviewSheet ref={sheetRef} />
+
+      {/* v0.7.0.7: per-card detail sheet for pending-send pins. */}
+      <PostcardDetailSheet ref={detailRef} />
     </BottomSheetModalProvider>
   );
 }
