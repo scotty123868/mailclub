@@ -1,6 +1,14 @@
 import Constants from "expo-constants";
+import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from "react-native-maps";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from "react-native-reanimated";
 import Svg, { Circle, Defs, Ellipse, G, Line, Path, Pattern, RadialGradient, Rect, Stop, Text as SvgText } from "react-native-svg";
 import { sepiaMapStyle } from "@/src/data/sepiaMapStyle";
 import { colors } from "@/src/theme/colors";
@@ -118,6 +126,7 @@ export function MapPanel({
   routes,
   cities,
   onCityPress,
+  highlightRoute,
 }: {
   compact?: boolean;
   /**
@@ -142,6 +151,14 @@ export function MapPanel({
    * decorative.
    */
   onCityPress?: (city: MapCity) => void;
+  /**
+   * v0.7.0.5 D.2: when a pin is tapped, the Map tab passes a
+   * highlightRoute to draw a brighter polyline from the tapped city
+   * to a reference city (typically the user&apos;s home). The line
+   * appears INSTANTLY with a strong stroke + no dash — distinct
+   * from the ambient routes — and disappears when the sheet closes.
+   */
+  highlightRoute?: MapRoute | null;
 }) {
   const height = compact ? 168 : 260;
   const liveInteractive = interactive ?? !compact;
@@ -194,18 +211,37 @@ export function MapPanel({
             />
           ))}
 
-          {/* Cities — custom paper-pin marker with serif label */}
+          {/* v0.7.0.5 D.2: highlight polyline when a pin is tapped.
+              Solid (no dash), thicker, brighter. Renders on top of the
+              ambient routes so the user can clearly see the line
+              connecting the tapped city to home. */}
+          {highlightRoute ? (
+            <Polyline
+              key="highlight-route"
+              coordinates={[highlightRoute.from, highlightRoute.to]}
+              strokeColor={colors.postalRed}
+              strokeWidth={3.5}
+              geodesic
+              zIndex={10}
+            />
+          ) : null}
+
+          {/* Cities — custom paper-pin marker with serif label.
+              tracksViewChanges defaults to true for the first render so
+              the entrance animation actually composites, then we'd
+              ideally disable it once settled. Marker's animation
+              behavior with React Native Reanimated is fiddly across
+              iOS/Android; we leave the marker tracking on for v0.7.0.5
+              and accept a tiny CPU cost during the 300ms drop. */}
           {!compact &&
-            renderCities.map((c) => (
+            renderCities.map((c, idx) => (
               <Marker
                 key={c.id}
                 coordinate={c.coord}
                 anchor={{ x: 0.5, y: 0.5 }}
                 onPress={onCityPress ? () => onCityPress(c) : undefined}
-                // Disable callout — we use the bottom-sheet pattern instead.
-                tracksViewChanges={false}
               >
-                <CityPin name={c.name} accent={!!c.accent} />
+                <CityPin name={c.name} accent={!!c.accent} staggerIndex={idx} />
               </Marker>
             ))}
 
@@ -250,9 +286,48 @@ export function MapPanel({
 // Custom marker views
 // ────────────────────────────────────────────────────────────────
 
-function CityPin({ name, accent }: { name: string; accent: boolean }) {
+function CityPin({
+  name,
+  accent,
+  staggerIndex = 0,
+}: {
+  name: string;
+  accent: boolean;
+  staggerIndex?: number;
+}) {
+  // v0.7.0.5 D.2: drop-in entrance animation. Each pin springs in
+  // with a small downward offset → settles, delayed by staggerIndex *
+  // 60ms so a map full of pins draws in a satisfying cascade rather
+  // than appearing all at once. ~300ms per pin from offset → settled.
+  // Hoisted to Reanimated shared values so the animation runs on the
+  // UI thread, never the JS thread.
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(-8);
+  const scale = useSharedValue(0.7);
+
+  useEffect(() => {
+    const delay = staggerIndex * 60;
+    opacity.value = withDelay(delay, withTiming(1, { duration: 240 }));
+    translateY.value = withDelay(
+      delay,
+      withTiming(0, { duration: 300, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
+    );
+    scale.value = withDelay(
+      delay,
+      withTiming(1, { duration: 300, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
+    );
+  }, [opacity, translateY, scale, staggerIndex]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
   return (
-    <View style={pinStyles.wrap}>
+    <Animated.View style={[pinStyles.wrap, animStyle]}>
       <View style={[pinStyles.dot, accent && pinStyles.dotAccent]}>
         <View style={[pinStyles.core, accent && pinStyles.coreAccent]} />
       </View>
@@ -261,7 +336,7 @@ function CityPin({ name, accent }: { name: string; accent: boolean }) {
           {name}
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

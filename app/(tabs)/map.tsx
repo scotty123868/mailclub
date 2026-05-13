@@ -1,5 +1,5 @@
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { Header } from "@/src/components/Header";
@@ -46,7 +46,8 @@ import { useMailClub } from "@/src/state/MailClubContext";
  */
 export default function MapScreen() {
   const sheetRef = useRef<PostcardPreviewSheetRef>(null);
-  const { postcards, friends } = useMailClub();
+  const { postcards, friends, currentUser } = useMailClub();
+  const [highlightRoute, setHighlightRoute] = useState<MapRoute | null>(null);
 
   // Pin set: the user&apos;s sent-to cities + received-from cities. We
   // build it from the postcards array directly so the pins reflect
@@ -110,9 +111,20 @@ export default function MapScreen() {
           <MapPanel
             routes={mapRoutes}
             cities={pins.length > 0 ? pins : undefined}
-            onCityPress={(city) =>
-              sheetRef.current?.open({ kind: "city", cityName: city.name })
-            }
+            highlightRoute={highlightRoute}
+            onCityPress={(city) => {
+              // v0.7.0.5 D.2: trace a bright polyline from the tapped
+              // city to the user's home city while the sheet rises.
+              // If home city isn't resolved (no profile city yet), the
+              // highlight just doesn't fire — sheet still opens.
+              const homeCoord = currentUser.city
+                ? CITY_COORDS[normalizeCityKey(currentUser.city)]
+                : null;
+              if (homeCoord && city.coord !== homeCoord) {
+                setHighlightRoute({ from: city.coord, to: homeCoord, tone: "sent" });
+              }
+              sheetRef.current?.open({ kind: "city", cityName: city.name });
+            }}
           />
         </View>
       </AppShell>

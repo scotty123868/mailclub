@@ -304,6 +304,49 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     };
   }, [authedUserId]);
 
+  // ---- 4b. Supabase Realtime: live postcard updates -------------------
+  // v0.7.0.5: subscribe to the `postcards` table so the Lob webhook
+  // updates flow into the app live. When a card&apos;s status flips
+  // (in_transit / delivered / returned), the Map pins + journal
+  // re-render without the user needing to swipe to refresh.
+  //
+  // Scoped via RLS: the subscription only fires for rows the user can
+  // see (their own sent + the inbound rows enabled by migration 1210).
+  //
+  // Channel lifecycle: opens on sign-in, tears down on sign-out or
+  // unmount. Errors are caught silently; the worst case is "Map
+  // updates lag until tab focus" which is the v0.6.x behavior anyway.
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED) return;
+    if (!authedUserId) return;
+
+    const channel = supabase
+      .channel(`postcards:${authedUserId}`)
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "postcards" },
+        async () => {
+          // Re-fetch on any change. Cheaper than reconciling row-by-row,
+          // and the postcards list is small (<100 rows for most users).
+          try {
+            const fresh = await api.fetchPostcards();
+            setPostcards(fresh);
+          } catch {
+            // ignore — next fetch on tab focus picks it up
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        channel.unsubscribe();
+      } catch {
+        // ignore
+      }
+    };
+  }, [authedUserId]);
+
   // ---- Actions ----------------------------------------------------------
 
   const sendPostcardAction = useCallback(async (input: SendInput): Promise<SendResult> => {
