@@ -1,7 +1,9 @@
 import * as AppleAuthentication from "expo-apple-authentication";
-import { ArrowLeft, ArrowRight } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import { ArrowLeft, ArrowRight, Image as ImageIcon, Link as LinkIcon, User as UserIcon, Users as UsersIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -23,39 +25,70 @@ import { colors } from "@/src/theme/colors";
 import { fonts, type } from "@/src/theme/typography";
 
 /**
- * WelcomeSheet — v0.6.1 streamlined sign-up.
+ * WelcomeSheet — v0.7 forced signup→send flow.
  *
- * Per user feedback after v0.6.0 TestFlight (build 6):
- *   - The "Mailroom mails real postcards" pause page was too text-heavy and
- *     redundant with the hero tagline. DELETED.
- *   - The single-bar address input with strict comma parsing was blocking
- *     users from completing signup. iOS QuickType only suggests addresses
- *     if the user has one saved in Contacts, which most don't. REPLACED
- *     with separate City + State fields (the only two we actually persist
- *     to the profile in v0.6.x — line1/zip were thrown away anyway).
+ * The keystone of v0.7. A user cannot enter the app until they have
+ * mailed a postcard. The "form" they fill out IS a postcard. Every
+ * field we need (name, address, photo, message, recipient) gets
+ * collected naturally because they&apos;re literally addressing one.
  *
- * Step machine now:
- *   1. hero        — brand art, "Mail a photo for less than a stamp.", Apple
- *                    Sign In primary + "Sign up with email" secondary
- *   1b. auth-email — email + password fallback (sign-up or sign-in)
- *   2. name        — "What should your friends call you?" single input
- *   3. city        — "Where do you mail from?" City + State, two fields
- *   4. done        — "3 stamps, on us." celebration + first-send CTA
+ * Step machine:
+ *   1. hero        — Recraft brand art + Apple Sign In (primary) + email link
+ *   1b. auth-email — Email + password fallback (sign-up or sign-in)
+ *   2. photo       — Pick a photo from camera roll (3:2 crop)
+ *   3. note        — Write a one-or-two-line message
+ *   4. recipient   — Pick one: A friend / Send-link / Send to yourself / Pen pal
+ *   5. their-info  — Their name + address (varies by recipient kind)
+ *   6. your-info   — Your first name + address (sender side)
+ *   7. mailed      — "MAILED" celebration → enter app
  *
- * Full street/zip will be collected later when the user first receives a
- * card via the magic-link reciprocation loop (Phase 7).
+ * Order of server-side calls on the final commit (step 7):
+ *   a) completeSignup({ name, city, state })  — creates profile row
+ *   b) For "friend" recipient: addFriendByAddress(...)  — creates friend row
+ *   c) sendPostcard(...) OR sendPostcardViaLink(...)
+ *      — flips hasSentFirstCard=true in MailClubContext, which un-gates
+ *        the WelcomeGate so the user lands in My Card with the new card
+ *        already in their journal.
  *
- * Auth contract is unchanged. The context still exposes:
- *   - signInWithApple(), returns { ok, isNewUser, fullName, email }
- *   - signInWithEmail(email, password)
- *   - signUpWithEmail(email, password)
- *   - completeSignup({ name, city, state, birthday?, email?, password? })
+ * Failure handling: any error in (a/b/c) surfaces an alert and keeps
+ * the user on the current step. The signup→send is treated as a single
+ * intent — if it fails, we don&apos;t partial-commit a half-signed-up
+ * user (matches codex audit finding Q1: atomicity-or-roll-back).
+ *
+ * Pen pal (Phase 7+): currently a disabled option on the recipient
+ * picker. The matching backend ships in v0.7.5; the UI placeholder
+ * lives here so users know the path exists.
  */
 
-type Step = "hero" | "auth-email" | "name" | "city" | "done";
+type Step =
+  | "hero"
+  | "auth-email"
+  | "photo"
+  | "note"
+  | "recipient"
+  | "their-info"
+  | "your-info"
+  | "mailed";
+
+type RecipientKind = "friend" | "link" | "self" | "penpal";
+
+type AddressDraft = {
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  zip: string;
+};
+
+const EMPTY_ADDRESS: AddressDraft = { line1: "", line2: "", city: "", state: "", zip: "" };
 
 const HERO_FOLK_MAP = require("@/assets/onboarding/hero-folk-map.png");
 const HERO_MAILBOX = require("@/assets/onboarding/hero-mailbox.png");
+
+// State validator: 2-char US state code. We don&apos;t validate against a
+// full state list here — Lob does USPS verification server-side at send.
+const STATE_RE = /^[A-Za-z]{2}$/;
+const ZIP_RE = /^\d{5}(-\d{4})?$/;
 
 export function WelcomeSheet({
   visible,
@@ -64,38 +97,52 @@ export function WelcomeSheet({
   visible: boolean;
   onComplete: () => void;
 }) {
-  const { completeSignup, signInWithEmail, signInWithApple, resetPassword, hasCompletedSignup } =
-    useMailClub();
+  const {
+    completeSignup,
+    signInWithEmail,
+    signInWithApple,
+    resetPassword,
+    addFriendByAddress,
+    sendPostcard,
+    sendPostcardViaLink,
+    hasCompletedSignup,
+  } = useMailClub();
 
-  // -- Step state ---------------------------------------------------------
+  // ----- Step + linear nav --------------------------------------------------
   const [step, setStep] = useState<Step>("hero");
 
-  // -- Profile data -------------------------------------------------------
-  const [name, setName] = useState("");
-  // v0.6.1: city + state directly. The strict comma-parser of 0.6.0 was
-  // blocking users — switched to discrete fields that iOS can autofill
-  // individually via textContentType.
-  const [city, setCity] = useState("");
-  const [stateAbbr, setStateAbbr] = useState("");
-
-  // -- Email fallback path ------------------------------------------------
+  // ----- Auth state ---------------------------------------------------------
   const [emailMode, setEmailMode] = useState<"signup" | "signin">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  // -- Apple Sign In status ----------------------------------------------
   const [appleAvailable, setAppleAvailable] = useState(false);
-  // Set when Apple Sign In completes successfully. From that point on we
-  // skip the email/password page on the back path.
-  const [appleSignedIn, setAppleSignedIn] = useState(false);
+  // True once Apple sign-in or email sign-up has succeeded. From this point
+  // we collect profile+card fields and commit them together at "mailed".
+  const [authed, setAuthed] = useState(false);
+  // Name + email pre-filled by Apple if they shared them.
+  const [presetFirstName, setPresetFirstName] = useState("");
 
-  // -- UX flags -----------------------------------------------------------
+  // ----- Card draft state ---------------------------------------------------
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+
+  // ----- Recipient ----------------------------------------------------------
+  const [recipientKind, setRecipientKind] = useState<RecipientKind | null>(null);
+  const [theirName, setTheirName] = useState("");
+  const [theirAddress, setTheirAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
+  // For "link" mode: contact (phone or email) instead of an address.
+  const [theirContact, setTheirContact] = useState("");
+
+  // ----- Your info ----------------------------------------------------------
+  const [yourFirstName, setYourFirstName] = useState("");
+  const [yourAddress, setYourAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
+
+  // ----- UX flags -----------------------------------------------------------
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // Phase 3.5: pending invite copy on the hero page when arriving via a
-  // QR scan.
+  // ----- Phase 3.5: pending invite ------------------------------------------
   const [pendingInviteCopy, setPendingInviteCopy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -115,17 +162,15 @@ export function WelcomeSheet({
       try {
         const pending = await peekPendingInvite();
         if (cancelled || !pending) return;
-        const info = await lookupReciprocation(pending.token);
-        if (cancelled) return;
-        if (info.ok) {
-          const first = (info.sender_name ?? "Someone").split(" ")[0];
-          const place = info.sender_city ? ` in ${info.sender_city}` : "";
-          setPendingInviteCopy(
-            `${first}${place} sent you a postcard. We'll add them to your rolodex when you finish signing up.`,
-          );
-        }
+        const data = await lookupReciprocation(pending.token);
+        if (cancelled || !data.ok) return;
+        const first = (data.sender_name ?? "Someone").split(" ")[0];
+        const place = data.sender_city ? ` in ${data.sender_city}` : "";
+        setPendingInviteCopy(
+          `${first}${place} sent you a postcard. We'll add them to your rolodex once you mail your first card.`,
+        );
       } catch {
-        // ignore — note is nice-to-have
+        // ignore — invite copy is nice-to-have
       }
     })();
     return () => {
@@ -133,43 +178,76 @@ export function WelcomeSheet({
     };
   }, [visible]);
 
-  // Reset everything when the sheet transitions to hidden so a sign-out +
-  // re-open starts at the hero again.
+  // Reset everything when the sheet hides so a sign-out → re-open starts
+  // at hero with no leaked draft state.
   useEffect(() => {
-    if (!visible) {
-      setStep("hero");
-      setName("");
-      setCity("");
-      setStateAbbr("");
-      setEmail("");
-      setPassword("");
-      setEmailMode("signup");
-      setAppleSignedIn(false);
-      setSaving(false);
-      setError(null);
-      setInfo(null);
-    }
+    if (visible) return;
+    setStep("hero");
+    setEmail("");
+    setPassword("");
+    setEmailMode("signup");
+    setAuthed(false);
+    setPresetFirstName("");
+    setPhotoUri(null);
+    setMessage("");
+    setRecipientKind(null);
+    setTheirName("");
+    setTheirAddress(EMPTY_ADDRESS);
+    setTheirContact("");
+    setYourFirstName("");
+    setYourAddress(EMPTY_ADDRESS);
+    setSaving(false);
+    setError(null);
+    setInfo(null);
   }, [visible]);
 
-  // If `hasCompletedSignup` flips true mid-flow (e.g. context restored a
-  // session via Apple Sign In on app cold-start), close immediately. This
-  // covers the returning-user path without us having to thread state.
+  // If hasCompletedSignup AND hasSentFirstCard become true while we&apos;re
+  // mounted (e.g. a returning user who already onboarded), the WelcomeGate
+  // closes us automatically. We don&apos;t need to do anything here.
   useEffect(() => {
-    if (hasCompletedSignup) {
-      onComplete();
+    if (hasCompletedSignup && step === "hero") {
+      // Returning user with profile but no first card yet. Skip auth, send
+      // them straight to the photo step.
+      setAuthed(true);
+      setStep("photo");
     }
-  }, [hasCompletedSignup, onComplete]);
+  }, [hasCompletedSignup, step]);
 
-  // -- Validators ---------------------------------------------------------
+  // ----- Validators ---------------------------------------------------------
 
-  const canAdvanceName = name.trim().length > 0;
-  const trimmedState = stateAbbr.trim().toUpperCase();
-  const canAdvanceCity =
-    city.trim().length > 0 && /^[A-Z]{2}$/.test(trimmedState);
   const canAdvanceEmail =
     email.trim().includes("@") && password.length >= 8 && !saving;
+  const canAdvancePhoto = !!photoUri;
+  const canAdvanceNote = message.trim().length > 0;
+  const canAdvanceRecipient = recipientKind !== null && recipientKind !== "penpal";
 
-  // -- Hero page actions --------------------------------------------------
+  function isAddressComplete(a: AddressDraft): boolean {
+    return (
+      a.line1.trim().length > 0 &&
+      a.city.trim().length > 0 &&
+      STATE_RE.test(a.state.trim()) &&
+      ZIP_RE.test(a.zip.trim())
+    );
+  }
+
+  const canAdvanceTheirInfo = (() => {
+    if (recipientKind === "friend") {
+      return theirName.trim().length > 0 && isAddressComplete(theirAddress);
+    }
+    if (recipientKind === "link") {
+      return theirName.trim().length > 0 && theirContact.trim().length > 0;
+    }
+    if (recipientKind === "self") {
+      // Self-send: we&apos;ll use the user&apos;s own address (collected next step).
+      return true;
+    }
+    return false;
+  })();
+
+  const canAdvanceYourInfo =
+    yourFirstName.trim().length > 0 && isAddressComplete(yourAddress);
+
+  // ----- Hero actions -------------------------------------------------------
 
   async function onAppleSignIn() {
     setError(null);
@@ -177,30 +255,27 @@ export function WelcomeSheet({
     try {
       const result = await signInWithApple();
       if (!result.ok) {
-        if (!result.cancelled) {
-          setError(result.error ?? "Apple sign-in didn't work.");
-        }
+        if (!result.cancelled) setError(result.error ?? "Apple sign-in didn&apos;t work.");
         return;
       }
-      setAppleSignedIn(true);
-      if (result.fullName) setName(result.fullName);
-      // codex Phase 6 P1: don't trust `isNewUser` from the Apple service
-      // alone — Apple returns isNewUser based on whether the relying-party
-      // identifier has seen this Apple ID before, not whether the Mailroom
-      // profile is complete. A returning Apple user who never finished
-      // signup (e.g. crashed on the address page) would be misclassified
-      // as "returning" and the sheet would close, stranding them with no
-      // profile.
-      //
-      // The context-side useEffect on `hasCompletedSignup` is the truth.
-      // We always advance to step "name" for the profile-collection branch
-      // UNLESS the context already knows hasCompletedSignup. In that case,
-      // the close-on-completed-signup effect fires naturally.
-      if (result.isNewUser || !hasCompletedSignup) {
-        setStep("name");
+      setAuthed(true);
+      // codex Phase 6 P1: trust hasCompletedSignup over isNewUser. Apple
+      // only knows whether THIS Apple ID has used the relying party
+      // before; it doesn&apos;t know whether the Mailroom profile is
+      // complete. Always advance through the full flow unless the
+      // profile is already done.
+      if (result.fullName) {
+        const first = result.fullName.split(/\s+/)[0] ?? "";
+        setPresetFirstName(first);
+        setYourFirstName(first);
       }
-      // else: returning user with complete profile; the
-      // hasCompletedSignup useEffect at top of component closes the sheet.
+      if (hasCompletedSignup) {
+        // Returning, fully-onboarded user — they shouldn&apos;t be here at
+        // all. WelcomeGate should close us. Nudge to photo anyway.
+        setStep("photo");
+      } else {
+        setStep("photo");
+      }
     } catch (e: any) {
       setError(e?.message ?? "Something went wrong.");
     } finally {
@@ -217,24 +292,20 @@ export function WelcomeSheet({
       if (emailMode === "signin") {
         const result = await signInWithEmail(email.trim(), password);
         if (!result.ok) {
-          setError(result.error ?? "Couldn't sign in.");
+          setError(result.error ?? "Couldn&apos;t sign in.");
           return;
         }
-        // codex Phase 6 P1: Sign-in may land an incomplete-profile user
-        // (auth ok but profile row missing fields). If hasCompletedSignup
-        // is already true, the useEffect at top of component closes the
-        // sheet. If NOT, route through name + address collection so they
-        // can complete. Without this, an incomplete user would silently
-        // get stuck on this page forever.
-        if (!hasCompletedSignup) {
-          setStep("name");
-        }
+        setAuthed(true);
+        // If they already have a complete profile but no first card,
+        // skip past the photo intro; they know what they&apos;re here for.
+        setStep("photo");
         return;
       }
-      // Sign-up path: defer the actual signup to the final step (page 5);
-      // we just bank the email + password and move on to name collection.
-      // This way, completeSignup runs ONCE at the end with the full profile.
-      setStep("name");
+      // Sign-up path: defer the actual signup until "mailed" step so we
+      // can commit profile + first card atomically. We just bank email +
+      // password and move on.
+      setAuthed(true);
+      setStep("photo");
     } catch (e: any) {
       setError(e?.message ?? "Something went wrong.");
     } finally {
@@ -253,26 +324,126 @@ export function WelcomeSheet({
     if (result.ok) {
       setInfo("Check your inbox for a reset link.");
     } else {
-      setError(result.error ?? "Couldn't send the reset email.");
+      setError(result.error ?? "Couldn&apos;t send the reset email.");
     }
   }
 
-  // -- Final commit -------------------------------------------------------
+  // ----- Photo step --------------------------------------------------------
 
-  async function finish() {
+  async function pickPhoto() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        "Photo access needed",
+        "Mailroom needs photo access to attach an image to your postcard. Enable it in iOS Settings → Mailroom.",
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [3, 2],
+      quality: 0.92,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  }
+
+  // ----- Final commit ------------------------------------------------------
+
+  async function commitSignupAndSend() {
     setError(null);
     setSaving(true);
     try {
+      // 1) Profile must exist server-side before postcard FKs can resolve.
+      //    completeSignup also handles the email signup case (creates the
+      //    auth user if we banked email+password earlier).
       await completeSignup({
-        name: name.trim(),
-        city: city.trim(),
-        state: trimmedState,
-        // Birthday intentionally omitted. Friend-birthday collection still
-        // happens on Add Friend.
-        email: appleSignedIn ? undefined : email.trim() || undefined,
-        password: appleSignedIn ? undefined : password || undefined,
+        name: yourFirstName.trim(),
+        city: yourAddress.city.trim(),
+        state: yourAddress.state.trim().toUpperCase(),
+        email: email.trim() || undefined,
+        password: password || undefined,
       });
-      setStep("done");
+
+      // 2) Recipient creation + send. The action types don&apos;t carry
+      //    structured error fields, so we surface generic messages and
+      //    rely on the action itself to have logged + alerted the user
+      //    with specifics (e.g. INSUFFICIENT_CREDITS).
+      if (recipientKind === "friend") {
+        const result = await addFriendByAddress({
+          name: theirName.trim(),
+          city: theirAddress.city.trim(),
+          state: theirAddress.state.trim().toUpperCase(),
+          addressLine1: theirAddress.line1.trim(),
+          addressLine2: theirAddress.line2.trim() || undefined,
+          addressCity: theirAddress.city.trim(),
+          addressState: theirAddress.state.trim().toUpperCase(),
+          addressZip: theirAddress.zip.trim(),
+          addressCountry: "US",
+        });
+        if (!result.ok || !result.friend) {
+          throw new Error("Couldn't add your friend.");
+        }
+        const sendRes = await sendPostcard({
+          kind: "photo",
+          friendId: result.friend.id,
+          photoUri: photoUri ?? "",
+          message: message.trim(),
+          friend: result.friend,
+        });
+        if (!sendRes.ok) {
+          throw new Error("Couldn't mail the card.");
+        }
+      } else if (recipientKind === "link") {
+        // Send-link flow: card queues, recipient gets a link to enter
+        // their address, Lob ships once they do. Counts as the first
+        // send right away.
+        const sendRes = await sendPostcardViaLink({
+          category: "photo",
+          message: message.trim(),
+          photoUri: photoUri ?? undefined,
+        });
+        if (!sendRes.ok) {
+          throw new Error("Couldn't create the link.");
+        }
+        // TODO v0.7.1: dispatch the SMS/email to `theirContact` with the
+        // claim URL. For v0.7.0 the user copies it manually from a
+        // follow-up screen. Acceptable — first send still completes.
+      } else if (recipientKind === "self") {
+        // Send to yourself: create a friend row with your own address
+        // (so future repeat-sends to self work) and send.
+        const result = await addFriendByAddress({
+          name: `${yourFirstName.trim()} (me)`,
+          city: yourAddress.city.trim(),
+          state: yourAddress.state.trim().toUpperCase(),
+          addressLine1: yourAddress.line1.trim(),
+          addressLine2: yourAddress.line2.trim() || undefined,
+          addressCity: yourAddress.city.trim(),
+          addressState: yourAddress.state.trim().toUpperCase(),
+          addressZip: yourAddress.zip.trim(),
+          addressCountry: "US",
+        });
+        if (!result.ok || !result.friend) {
+          throw new Error("Couldn't set up self-send.");
+        }
+        const sendRes = await sendPostcard({
+          kind: "photo",
+          friendId: result.friend.id,
+          photoUri: photoUri ?? "",
+          message: message.trim(),
+          friend: result.friend,
+        });
+        if (!sendRes.ok) {
+          throw new Error("Couldn't mail the card.");
+        }
+      } else {
+        // penpal — not wired in v0.7.0
+        throw new Error("Pen pal matching ships in v0.7.5.");
+      }
+
+      setStep("mailed");
     } catch (e: any) {
       setError(e?.message ?? "Couldn't finish signup.");
     } finally {
@@ -280,7 +451,32 @@ export function WelcomeSheet({
     }
   }
 
-  // Dev / no-backend escape hatch (matches the prior WelcomeSheet behavior).
+  // ----- Linear nav --------------------------------------------------------
+
+  function back() {
+    setError(null);
+    if (step === "auth-email") setStep("hero");
+    else if (step === "photo") setStep(authed ? "hero" : "auth-email");
+    else if (step === "note") setStep("photo");
+    else if (step === "recipient") setStep("note");
+    else if (step === "their-info") setStep("recipient");
+    else if (step === "your-info") {
+      // If "self" skipped their-info, back goes to recipient.
+      setStep(recipientKind === "self" ? "recipient" : "their-info");
+    } else if (step === "mailed") setStep("your-info");
+  }
+
+  function next() {
+    setError(null);
+    if (step === "recipient") {
+      if (recipientKind === "self") setStep("your-info");
+      else setStep("their-info");
+    } else if (step === "their-info") {
+      setStep("your-info");
+    }
+  }
+
+  // Fast-forward (dev / no-backend escape hatch).
   async function maybeFastForward() {
     if (!SUPABASE_CONFIGURED) {
       await completeSignup({ name: "", city: "", state: "" });
@@ -288,17 +484,7 @@ export function WelcomeSheet({
     }
   }
 
-  // -- Step nav helpers ---------------------------------------------------
-
-  function back() {
-    if (step === "name") setStep(appleSignedIn ? "hero" : "auth-email");
-    else if (step === "city") setStep("name");
-    else if (step === "auth-email") setStep("hero");
-    else if (step === "done") setStep("city");
-    // step === "hero" → no-op; the sheet is modal
-  }
-
-  // -- Render -------------------------------------------------------------
+  // ----- Render ------------------------------------------------------------
 
   return (
     <Modal
@@ -306,7 +492,7 @@ export function WelcomeSheet({
       animationType="slide"
       presentationStyle="fullScreen"
       onRequestClose={() => {
-        // Disallow back-out from the modal. Signup is required.
+        // Forced flow: no back-out from the modal.
       }}
     >
       <KeyboardAvoidingView
@@ -317,7 +503,7 @@ export function WelcomeSheet({
           contentContainerStyle={styles.root}
           keyboardShouldPersistTaps="handled"
         >
-          {step !== "hero" && step !== "done" ? (
+          {step !== "hero" && step !== "mailed" ? (
             <Pressable onPress={back} style={styles.backBtn} testID="welcome-back">
               <ArrowLeft color={colors.ink} size={20} strokeWidth={1.8} />
               <Text style={styles.backBtnText}>Back</Text>
@@ -353,34 +539,65 @@ export function WelcomeSheet({
             />
           ) : null}
 
-          {step === "name" ? (
-            <NameStep
-              name={name}
-              onNameChange={setName}
-              canContinue={canAdvanceName}
-              onContinue={() => setStep("city")}
+          {step === "photo" ? (
+            <PhotoStep
+              photoUri={photoUri}
+              onPickPhoto={pickPhoto}
+              canContinue={canAdvancePhoto}
+              onContinue={() => setStep("note")}
             />
           ) : null}
 
-          {step === "city" ? (
-            <CityStep
-              city={city}
-              onCityChange={setCity}
-              stateAbbr={stateAbbr}
-              onStateChange={setStateAbbr}
-              canContinue={canAdvanceCity}
-              onContinue={finish}
+          {step === "note" ? (
+            <NoteStep
+              message={message}
+              onMessageChange={setMessage}
+              canContinue={canAdvanceNote}
+              onContinue={() => setStep("recipient")}
+            />
+          ) : null}
+
+          {step === "recipient" ? (
+            <RecipientStep
+              kind={recipientKind}
+              onPick={setRecipientKind}
+              canContinue={canAdvanceRecipient}
+              onContinue={next}
+            />
+          ) : null}
+
+          {step === "their-info" ? (
+            <TheirInfoStep
+              kind={recipientKind ?? "friend"}
+              theirName={theirName}
+              onTheirNameChange={setTheirName}
+              theirAddress={theirAddress}
+              onTheirAddressChange={setTheirAddress}
+              theirContact={theirContact}
+              onTheirContactChange={setTheirContact}
+              canContinue={canAdvanceTheirInfo}
+              onContinue={() => setStep("your-info")}
+            />
+          ) : null}
+
+          {step === "your-info" ? (
+            <YourInfoStep
+              firstName={yourFirstName}
+              onFirstNameChange={setYourFirstName}
+              presetFirstName={presetFirstName}
+              address={yourAddress}
+              onAddressChange={setYourAddress}
+              canContinue={canAdvanceYourInfo}
+              onContinue={commitSignupAndSend}
               saving={saving}
               error={error}
             />
           ) : null}
 
-          {step === "done" ? (
-            <DoneStep
-              firstName={(name || "").split(" ")[0] || "you"}
-              onDismiss={() => {
-                onComplete();
-              }}
+          {step === "mailed" ? (
+            <MailedStep
+              recipientName={theirName.trim() || (recipientKind === "self" ? yourFirstName.trim() : "your friend")}
+              onDismiss={() => onComplete()}
             />
           ) : null}
         </ScrollView>
@@ -390,7 +607,7 @@ export function WelcomeSheet({
 }
 
 // ============================================================================
-// STEP 1 — HERO
+// STEP 1 — HERO (unchanged from v0.6.1 build 8, just the tagline)
 // ============================================================================
 
 function HeroStep({
@@ -422,7 +639,7 @@ function HeroStep({
       </View>
       <View style={heroStyles.textBlock}>
         <Text style={heroStyles.wordmark}>Mailroom</Text>
-        <Text style={heroStyles.tagline}>Mail a photo for less than a stamp.</Text>
+        <Text style={heroStyles.tagline}>Mail a memory for less than a stamp.</Text>
       </View>
 
       {pendingInviteCopy ? (
@@ -442,7 +659,6 @@ function HeroStep({
             onPress={onAppleSignIn}
           />
         ) : null}
-
         <Pressable
           onPress={onSwitchToEmail}
           style={heroStyles.emailLink}
@@ -451,13 +667,11 @@ function HeroStep({
         >
           <Text style={heroStyles.emailLinkText}>Sign up with email →</Text>
         </Pressable>
-
         {error ? (
           <Text style={heroStyles.error} testID="welcome-error">
             {error}
           </Text>
         ) : null}
-
         {!SUPABASE_CONFIGURED ? (
           <Pressable onPress={fastForward} style={heroStyles.devSkip} testID="welcome-dev-skip">
             <Text style={heroStyles.devSkipText}>Dev: skip auth</Text>
@@ -470,20 +684,10 @@ function HeroStep({
 
 const heroStyles = StyleSheet.create({
   wrap: { flex: 1, gap: 18 },
-  artFrame: {
-    aspectRatio: 1,
-    borderRadius: 18,
-    overflow: "hidden",
-    width: "100%",
-  },
+  artFrame: { aspectRatio: 1, borderRadius: 18, overflow: "hidden", width: "100%" },
   art: { width: "100%", height: "100%" },
   textBlock: { alignItems: "center", gap: 10, marginTop: 4 },
-  wordmark: {
-    color: colors.ink,
-    fontFamily: fonts.script,
-    fontSize: 44,
-    lineHeight: 46,
-  },
+  wordmark: { color: colors.ink, fontFamily: fonts.script, fontSize: 44, lineHeight: 46 },
   tagline: {
     color: colors.ink,
     fontFamily: fonts.serifSemi,
@@ -502,18 +706,8 @@ const heroStyles = StyleSheet.create({
     padding: 14,
     marginTop: 4,
   },
-  inviteKicker: {
-    color: colors.postalBlue,
-    fontFamily: fonts.sansBold,
-    fontSize: 10,
-    letterSpacing: 1.6,
-  },
-  inviteBody: {
-    color: colors.ink,
-    fontFamily: fonts.serifItalic,
-    fontSize: 14,
-    lineHeight: 19,
-  },
+  inviteKicker: { color: colors.postalBlue, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.6 },
+  inviteBody: { color: colors.ink, fontFamily: fonts.serifItalic, fontSize: 14, lineHeight: 19 },
   actions: { gap: 10, marginTop: 12, marginBottom: 8 },
   appleBtn: { height: 50, width: "100%" },
   emailLink: { alignItems: "center", paddingVertical: 12 },
@@ -535,7 +729,7 @@ const heroStyles = StyleSheet.create({
 });
 
 // ============================================================================
-// STEP 1b — EMAIL AUTH
+// STEP 1b — EMAIL AUTH (unchanged from v0.6.1 build 8)
 // ============================================================================
 
 function EmailAuthStep({
@@ -592,7 +786,6 @@ function EmailAuthStep({
           testID="welcome-email"
         />
       </View>
-
       <View style={emailStyles.field}>
         <Text style={emailStyles.label}>Password</Text>
         <TextInput
@@ -675,205 +868,471 @@ const emailStyles = StyleSheet.create({
 });
 
 // ============================================================================
-// STEP 2 — NAME
+// STEP 2 — PHOTO PICK
 // ============================================================================
 
-function NameStep({
-  name,
-  onNameChange,
+function PhotoStep({
+  photoUri,
+  onPickPhoto,
   canContinue,
   onContinue,
 }: {
-  name: string;
-  onNameChange: (v: string) => void;
+  photoUri: string | null;
+  onPickPhoto: () => void;
   canContinue: boolean;
   onContinue: () => void;
 }) {
   return (
-    <View style={stepStyles.wrap} testID="welcome-step-name">
-      <StepDots count={3} active={0} />
-      <Text style={stepStyles.title}>What should{"\n"}your friends call you?</Text>
+    <View style={stepStyles.wrap} testID="welcome-step-photo">
+      <StepDots count={5} active={0} />
+      <Text style={stepStyles.title}>Pick the photo.</Text>
       <Text style={stepStyles.subtitle}>
-        Just a first name is fine. We'll print it on the back of the postcards you send.
+        The moment that meant something. Your phone&apos;s camera roll, 3:2 crop.
       </Text>
-      <TextInput
-        value={name}
-        onChangeText={onNameChange}
-        placeholder="Scotty"
-        placeholderTextColor={colors.mutedInk}
-        autoFocus
-        autoCapitalize="words"
-        autoCorrect={false}
-        textContentType="givenName"
-        style={stepStyles.bigInput}
-        testID="welcome-name"
-        returnKeyType="next"
-        onSubmitEditing={canContinue ? onContinue : undefined}
-        maxLength={48}
-      />
+
+      <Pressable onPress={onPickPhoto} style={photoStyles.frame} testID="welcome-photo-pick">
+        {photoUri ? (
+          <Image source={{ uri: photoUri }} style={photoStyles.image} resizeMode="cover" />
+        ) : (
+          <View style={photoStyles.empty}>
+            <ImageIcon color={colors.mutedInk} size={40} strokeWidth={1.4} />
+            <Text style={photoStyles.emptyText}>Tap to pick a photo</Text>
+          </View>
+        )}
+      </Pressable>
+
       <PrimaryButton
         title="Continue →"
         onPress={onContinue}
         disabled={!canContinue}
         style={stepStyles.continueBtn}
-        testID="welcome-name-continue"
+        testID="welcome-photo-continue"
       />
     </View>
   );
 }
 
-// ============================================================================
-// STEP 3 — CITY + STATE
-// ============================================================================
-//
-// v0.6.1: replaced the single-bar address parser with discrete City + State
-// fields. We only ever persisted city + state in v0.6.x anyway (line1/zip
-// were thrown away), and iOS only auto-suggests addresses if one is saved
-// in Contacts — most users got stuck. Two fields, two textContentTypes,
-// done. Full address can be collected later when the first reply needs
-// somewhere to land (Phase 7).
+const photoStyles = StyleSheet.create({
+  frame: {
+    aspectRatio: 3 / 2,
+    backgroundColor: colors.paperDark,
+    borderColor: colors.line,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    marginTop: 20,
+    overflow: "hidden",
+  },
+  image: { width: "100%", height: "100%" },
+  empty: { alignItems: "center", flex: 1, gap: 10, justifyContent: "center" },
+  emptyText: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 14 },
+});
 
-function CityStep({
-  city,
-  onCityChange,
-  stateAbbr,
-  onStateChange,
+// ============================================================================
+// STEP 3 — NOTE
+// ============================================================================
+
+function NoteStep({
+  message,
+  onMessageChange,
   canContinue,
   onContinue,
-  saving,
-  error,
 }: {
-  city: string;
-  onCityChange: (v: string) => void;
-  stateAbbr: string;
-  onStateChange: (v: string) => void;
+  message: string;
+  onMessageChange: (v: string) => void;
   canContinue: boolean;
   onContinue: () => void;
-  saving: boolean;
-  error: string | null;
 }) {
   return (
-    <View style={stepStyles.wrap} testID="welcome-step-city">
-      <StepDots count={3} active={1} />
-      <Text style={stepStyles.title}>Where do you{"\n"}mail from?</Text>
+    <View style={stepStyles.wrap} testID="welcome-step-note">
+      <StepDots count={5} active={1} />
+      <Text style={stepStyles.title}>What&apos;s the memory?</Text>
       <Text style={stepStyles.subtitle}>
-        Friends will see "from {city.trim() || "your city"}" on the postcards you send. Your full
-        address stays private — we ask for it later, only when someone mails you back.
+        A line or two. It&apos;s a postcard, not an email.
       </Text>
-
-      <View style={cityStyles.row}>
-        <View style={cityStyles.cityCol}>
-          <Text style={cityStyles.label}>City</Text>
-          <TextInput
-            value={city}
-            onChangeText={onCityChange}
-            placeholder="Boise"
-            placeholderTextColor={colors.mutedInk}
-            autoFocus
-            autoCapitalize="words"
-            autoCorrect={false}
-            textContentType="addressCity"
-            autoComplete="postal-address-locality"
-            style={cityStyles.input}
-            testID="welcome-city"
-            returnKeyType="next"
-            maxLength={64}
-          />
-        </View>
-        <View style={cityStyles.stateCol}>
-          <Text style={cityStyles.label}>State</Text>
-          <TextInput
-            value={stateAbbr}
-            onChangeText={(v) => onStateChange(v.toUpperCase().slice(0, 2))}
-            placeholder="ID"
-            placeholderTextColor={colors.mutedInk}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            textContentType="addressState"
-            autoComplete="postal-address-region"
-            style={cityStyles.input}
-            testID="welcome-state"
-            returnKeyType="done"
-            maxLength={2}
-            onSubmitEditing={canContinue && !saving ? onContinue : undefined}
-          />
-        </View>
-      </View>
-
-      <Text style={cityStyles.helper}>
-        Two-letter state code, like CA or NY.
-      </Text>
-
-      {error ? (
-        <Text style={cityStyles.error} testID="welcome-city-error">
-          {error}
-        </Text>
-      ) : null}
-
+      <TextInput
+        value={message}
+        onChangeText={onMessageChange}
+        placeholder="the hike we kept saying we'd do —"
+        placeholderTextColor={colors.mutedInk}
+        autoFocus
+        multiline
+        maxLength={280}
+        style={noteStyles.input}
+        testID="welcome-note"
+      />
+      <Text style={noteStyles.counter}>{message.length} / 280</Text>
       <PrimaryButton
-        title={saving ? "Almost there..." : "Continue →"}
+        title="Continue →"
         onPress={onContinue}
-        disabled={!canContinue || saving}
+        disabled={!canContinue}
         style={stepStyles.continueBtn}
-        testID="welcome-city-continue"
+        testID="welcome-note-continue"
       />
     </View>
   );
 }
 
-const cityStyles = StyleSheet.create({
-  row: { flexDirection: "row", gap: 12, marginTop: 20 },
-  cityCol: { flex: 3, gap: 6 },
-  stateCol: { flex: 1, gap: 6, minWidth: 80 },
-  label: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 13 },
+const noteStyles = StyleSheet.create({
   input: {
     backgroundColor: "rgba(245, 240, 230, 0.6)",
     borderColor: colors.line,
     borderRadius: 12,
     borderWidth: 1.5,
     color: colors.ink,
-    fontFamily: fonts.serifSemi,
-    fontSize: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    fontFamily: fonts.script,
+    fontSize: 22,
+    marginTop: 20,
+    minHeight: 140,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    textAlignVertical: "top",
+    lineHeight: 28,
   },
-  helper: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 17, marginTop: 8 },
-  error: { color: colors.postalRed, fontFamily: fonts.serifSemi, fontSize: 13, marginTop: 12 },
+  counter: {
+    color: colors.mutedInk,
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: "right",
+  },
 });
 
 // ============================================================================
-// STEP 5 — DONE
+// STEP 4 — RECIPIENT
 // ============================================================================
 
-function DoneStep({ firstName, onDismiss }: { firstName: string; onDismiss: () => void }) {
+function RecipientStep({
+  kind,
+  onPick,
+  canContinue,
+  onContinue,
+}: {
+  kind: RecipientKind | null;
+  onPick: (k: RecipientKind) => void;
+  canContinue: boolean;
+  onContinue: () => void;
+}) {
   return (
-    <View style={[stepStyles.wrap, { alignItems: "center" }]} testID="welcome-step-done">
-      <View style={doneStyles.artFrame}>
-        <Image
-          source={HERO_MAILBOX}
-          style={doneStyles.art}
-          resizeMode="cover"
-          accessibilityLabel="Hands at the mailbox"
-        />
-      </View>
-      <Text style={doneStyles.kicker}>YOU'RE IN</Text>
-      <Text style={[stepStyles.title, { textAlign: "center", marginTop: 8 }]}>
-        3 stamps,{"\n"}on us, {firstName}.
+    <View style={stepStyles.wrap} testID="welcome-step-recipient">
+      <StepDots count={5} active={2} />
+      <Text style={stepStyles.title}>Who&apos;s it for?</Text>
+      <Text style={stepStyles.subtitle}>
+        Pick one. You can always mail another later.
       </Text>
-      <Text style={[stepStyles.subtitle, { textAlign: "center", maxWidth: 320, marginTop: 12 }]}>
-        Pick a photo, write a note, send it. Real postcards to anyone you know.
-      </Text>
+
+      <RecipientOption
+        kind="friend"
+        selected={kind === "friend"}
+        title="Someone I know"
+        sub="Friend, family, anyone with an address"
+        Icon={UsersIcon}
+        onPress={() => onPick("friend")}
+        testID="welcome-recipient-friend"
+      />
+      <RecipientOption
+        kind="link"
+        selected={kind === "link"}
+        title="Send them a link"
+        sub="Don't have their address? We'll ask them."
+        Icon={LinkIcon}
+        onPress={() => onPick("link")}
+        testID="welcome-recipient-link"
+      />
+      <RecipientOption
+        kind="self"
+        selected={kind === "self"}
+        title="Send it to myself"
+        sub="Future you will thank past you"
+        Icon={UserIcon}
+        onPress={() => onPick("self")}
+        testID="welcome-recipient-self"
+      />
+      <RecipientOption
+        kind="penpal"
+        selected={kind === "penpal"}
+        title="A pen pal"
+        sub="Send one, get one from a stranger (coming soon)"
+        Icon={UsersIcon}
+        onPress={() => onPick("penpal")}
+        testID="welcome-recipient-penpal"
+        disabled
+      />
+
       <PrimaryButton
-        title="Send my first card →"
-        onPress={onDismiss}
-        style={doneStyles.doneBtn}
-        testID="welcome-done-continue"
+        title="Continue →"
+        onPress={onContinue}
+        disabled={!canContinue}
+        style={stepStyles.continueBtn}
+        testID="welcome-recipient-continue"
       />
     </View>
   );
 }
 
-const doneStyles = StyleSheet.create({
+function RecipientOption({
+  selected,
+  title,
+  sub,
+  Icon,
+  onPress,
+  testID,
+  disabled,
+}: {
+  kind: RecipientKind;
+  selected: boolean;
+  title: string;
+  sub: string;
+  Icon: any;
+  onPress: () => void;
+  testID: string;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      style={({ pressed }) => [
+        recipientStyles.option,
+        selected && recipientStyles.optionSelected,
+        disabled && recipientStyles.optionDisabled,
+        pressed && !disabled && { opacity: 0.85 },
+      ]}
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled }}
+    >
+      <View style={recipientStyles.iconBox}>
+        <Icon color={colors.ink} size={20} strokeWidth={1.7} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={recipientStyles.title}>{title}</Text>
+        <Text style={recipientStyles.sub}>{sub}</Text>
+      </View>
+      {selected ? <Text style={recipientStyles.check}>✓</Text> : null}
+    </Pressable>
+  );
+}
+
+const recipientStyles = StyleSheet.create({
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.white,
+    borderColor: colors.line,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    padding: 14,
+    marginTop: 10,
+  },
+  optionSelected: {
+    borderColor: colors.ink,
+    borderWidth: 2,
+    backgroundColor: colors.paper,
+  },
+  optionDisabled: { opacity: 0.55 },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.paperDark,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 15, lineHeight: 18 },
+  sub: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, marginTop: 2 },
+  check: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 18, marginLeft: 6 },
+});
+
+// ============================================================================
+// STEP 5 — THEIR INFO  (friend: name + address  |  link: name + contact)
+// ============================================================================
+
+function TheirInfoStep({
+  kind,
+  theirName,
+  onTheirNameChange,
+  theirAddress,
+  onTheirAddressChange,
+  theirContact,
+  onTheirContactChange,
+  canContinue,
+  onContinue,
+}: {
+  kind: RecipientKind;
+  theirName: string;
+  onTheirNameChange: (v: string) => void;
+  theirAddress: AddressDraft;
+  onTheirAddressChange: (a: AddressDraft) => void;
+  theirContact: string;
+  onTheirContactChange: (v: string) => void;
+  canContinue: boolean;
+  onContinue: () => void;
+}) {
+  const isLink = kind === "link";
+  return (
+    <View style={stepStyles.wrap} testID="welcome-step-their-info">
+      <StepDots count={5} active={3} />
+      <Text style={stepStyles.title}>Where to?</Text>
+      <Text style={stepStyles.subtitle}>
+        {isLink
+          ? "We'll text or email them a link to enter their address."
+          : "Just for the envelope. Never shared with anyone else."}
+      </Text>
+
+      <FieldLabel>Their name</FieldLabel>
+      <TextInput
+        value={theirName}
+        onChangeText={onTheirNameChange}
+        placeholder="Maya Chen"
+        placeholderTextColor={colors.mutedInk}
+        autoCapitalize="words"
+        autoCorrect={false}
+        textContentType="name"
+        style={fieldStyles.input}
+        testID="welcome-their-name"
+      />
+
+      {isLink ? (
+        <>
+          <FieldLabel style={{ marginTop: 14 }}>Their phone or email</FieldLabel>
+          <TextInput
+            value={theirContact}
+            onChangeText={onTheirContactChange}
+            placeholder="555 123 4567  or  maya@example.com"
+            placeholderTextColor={colors.mutedInk}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            style={fieldStyles.input}
+            testID="welcome-their-contact"
+          />
+        </>
+      ) : (
+        <AddressFields
+          address={theirAddress}
+          onChange={onTheirAddressChange}
+          testIDPrefix="welcome-their"
+        />
+      )}
+
+      <PrimaryButton
+        title="Continue →"
+        onPress={onContinue}
+        disabled={!canContinue}
+        style={stepStyles.continueBtn}
+        testID="welcome-their-continue"
+      />
+    </View>
+  );
+}
+
+// ============================================================================
+// STEP 6 — YOUR INFO  (sender name + address)
+// ============================================================================
+
+function YourInfoStep({
+  firstName,
+  onFirstNameChange,
+  presetFirstName,
+  address,
+  onAddressChange,
+  canContinue,
+  onContinue,
+  saving,
+  error,
+}: {
+  firstName: string;
+  onFirstNameChange: (v: string) => void;
+  presetFirstName: string;
+  address: AddressDraft;
+  onAddressChange: (a: AddressDraft) => void;
+  canContinue: boolean;
+  onContinue: () => void;
+  saving: boolean;
+  error: string | null;
+}) {
+  return (
+    <View style={stepStyles.wrap} testID="welcome-step-your-info">
+      <StepDots count={5} active={4} />
+      <Text style={stepStyles.title}>From you.</Text>
+      <Text style={stepStyles.subtitle}>
+        We print "from your city" on the back. Your full address stays private.
+      </Text>
+
+      <FieldLabel>Your first name</FieldLabel>
+      <TextInput
+        value={firstName}
+        onChangeText={onFirstNameChange}
+        placeholder={presetFirstName || "Scotty"}
+        placeholderTextColor={colors.mutedInk}
+        autoCapitalize="words"
+        autoCorrect={false}
+        textContentType="givenName"
+        style={fieldStyles.input}
+        testID="welcome-your-firstname"
+      />
+
+      <AddressFields
+        address={address}
+        onChange={onAddressChange}
+        testIDPrefix="welcome-your"
+        label="Your address"
+      />
+
+      {error ? <Text style={fieldStyles.error}>{error}</Text> : null}
+
+      <PrimaryButton
+        title={saving ? "Mailing it..." : "Mail it →"}
+        onPress={onContinue}
+        disabled={!canContinue || saving}
+        style={stepStyles.continueBtn}
+        testID="welcome-your-continue"
+      />
+    </View>
+  );
+}
+
+// ============================================================================
+// STEP 7 — MAILED CELEBRATION
+// ============================================================================
+
+function MailedStep({
+  recipientName,
+  onDismiss,
+}: {
+  recipientName: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <View style={[stepStyles.wrap, { alignItems: "center" }]} testID="welcome-step-mailed">
+      <View style={mailedStyles.artFrame}>
+        <Image
+          source={HERO_MAILBOX}
+          style={mailedStyles.art}
+          resizeMode="cover"
+          accessibilityLabel="Hands at the mailbox"
+        />
+      </View>
+      <Text style={mailedStyles.kicker}>MAILED</Text>
+      <Text style={[stepStyles.title, { textAlign: "center", marginTop: 8 }]}>
+        Your card is{"\n"}on its way.
+      </Text>
+      <Text style={[stepStyles.subtitle, { textAlign: "center", maxWidth: 320, marginTop: 12 }]}>
+        {recipientName} gets it in 4–7 days, USPS time. We&apos;ll drop a pin on your map when it lands.
+      </Text>
+      <PrimaryButton
+        title="Open Mailroom →"
+        onPress={onDismiss}
+        style={mailedStyles.doneBtn}
+        testID="welcome-mailed-continue"
+      />
+    </View>
+  );
+}
+
+const mailedStyles = StyleSheet.create({
   artFrame: {
     aspectRatio: 1,
     borderRadius: 14,
@@ -893,7 +1352,134 @@ const doneStyles = StyleSheet.create({
 });
 
 // ============================================================================
-// STEP DOTS
+// SHARED — address fields, field labels, step dots, step styles
+// ============================================================================
+
+function AddressFields({
+  address,
+  onChange,
+  testIDPrefix,
+  label,
+}: {
+  address: AddressDraft;
+  onChange: (a: AddressDraft) => void;
+  testIDPrefix: string;
+  label?: string;
+}) {
+  return (
+    <>
+      <FieldLabel style={{ marginTop: 14 }}>{label ?? "Their address"}</FieldLabel>
+      <TextInput
+        value={address.line1}
+        onChangeText={(v) => onChange({ ...address, line1: v })}
+        placeholder="412 SE Belmont"
+        placeholderTextColor={colors.mutedInk}
+        autoCapitalize="words"
+        autoCorrect={false}
+        textContentType="streetAddressLine1"
+        autoComplete="address-line1"
+        style={fieldStyles.input}
+        testID={`${testIDPrefix}-line1`}
+      />
+      <TextInput
+        value={address.line2}
+        onChangeText={(v) => onChange({ ...address, line2: v })}
+        placeholder="Apt, suite (optional)"
+        placeholderTextColor={colors.mutedInk}
+        autoCapitalize="words"
+        autoCorrect={false}
+        textContentType="streetAddressLine2"
+        autoComplete="address-line2"
+        style={[fieldStyles.input, { marginTop: 8 }]}
+        testID={`${testIDPrefix}-line2`}
+      />
+      <View style={fieldStyles.row}>
+        <View style={{ flex: 2 }}>
+          <TextInput
+            value={address.city}
+            onChangeText={(v) => onChange({ ...address, city: v })}
+            placeholder="Portland"
+            placeholderTextColor={colors.mutedInk}
+            autoCapitalize="words"
+            autoCorrect={false}
+            textContentType="addressCity"
+            autoComplete="postal-address-locality"
+            style={fieldStyles.input}
+            testID={`${testIDPrefix}-city`}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <TextInput
+            value={address.state}
+            onChangeText={(v) => onChange({ ...address, state: v.toUpperCase().slice(0, 2) })}
+            placeholder="OR"
+            placeholderTextColor={colors.mutedInk}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={2}
+            textContentType="addressState"
+            autoComplete="postal-address-region"
+            style={fieldStyles.input}
+            testID={`${testIDPrefix}-state`}
+          />
+        </View>
+        <View style={{ flex: 1.2 }}>
+          <TextInput
+            value={address.zip}
+            onChangeText={(v) => onChange({ ...address, zip: v.replace(/[^\d-]/g, "").slice(0, 10) })}
+            placeholder="97214"
+            placeholderTextColor={colors.mutedInk}
+            keyboardType="number-pad"
+            textContentType="postalCode"
+            autoComplete="postal-code"
+            style={fieldStyles.input}
+            testID={`${testIDPrefix}-zip`}
+          />
+        </View>
+      </View>
+    </>
+  );
+}
+
+function FieldLabel({ children, style }: { children: React.ReactNode; style?: any }) {
+  return <Text style={[fieldStyles.label, style]}>{children}</Text>;
+}
+
+const fieldStyles = StyleSheet.create({
+  label: {
+    color: colors.mutedInk,
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    marginBottom: 6,
+    textTransform: "uppercase",
+  },
+  input: {
+    backgroundColor: "rgba(245, 240, 230, 0.6)",
+    borderColor: colors.line,
+    borderRadius: 10,
+    borderWidth: 1.2,
+    color: colors.ink,
+    fontFamily: fonts.serif,
+    fontSize: 17,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  error: {
+    color: colors.postalRed,
+    fontFamily: fonts.serifSemi,
+    fontSize: 13,
+    marginTop: 12,
+  },
+});
+
+// ============================================================================
+// STEP DOTS — visual progress indicator
 // ============================================================================
 
 function StepDots({ count, active }: { count: number; active: number }) {
@@ -940,26 +1526,17 @@ const stepStyles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 8,
   },
-  bigInput: {
-    backgroundColor: "rgba(245, 240, 230, 0.6)",
-    borderColor: colors.line,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    color: colors.ink,
-    fontFamily: fonts.serifSemi,
-    fontSize: 24,
-    marginTop: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
   continueBtn: { marginTop: 24 },
 });
 
-// (v0.6.0's strict address parser was removed in 0.6.1 — discrete City +
-// State inputs replaced it. See CityStep above.)
-
 const styles = StyleSheet.create({
-  root: { flexGrow: 1, gap: 16, paddingHorizontal: 22, paddingTop: 56, paddingBottom: 30 },
+  root: {
+    flexGrow: 1,
+    gap: 16,
+    paddingHorizontal: 22,
+    paddingTop: 56,
+    paddingBottom: 30,
+  },
   backBtn: {
     alignItems: "center",
     flexDirection: "row",
