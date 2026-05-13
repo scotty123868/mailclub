@@ -305,12 +305,28 @@ export function WelcomeSheet({
   // ----- Hero actions -------------------------------------------------------
 
   async function onAppleSignIn() {
+    // v0.7.0.8: guard against double-fire. The Apple button doesn't
+    // visually debounce on its own — a fast double-tap can kick off two
+    // signInWithApple() calls in parallel, leading to a confusing
+    // experience where the second call's credential dialog auto-cancels
+    // the first. Bail early if a sign-in is already in flight.
+    if (saving) return;
     setError(null);
     setSaving(true);
     try {
       const result = await signInWithApple();
       if (!result.ok) {
-        if (!result.cancelled) setError(result.error ?? "Apple sign-in didn&apos;t work.");
+        if (result.cancelled) {
+          // v0.7.0.8: first-time Apple Sign In on a device often shows
+          // an iOS-level consent sheet ("Allow this app to use Sign in
+          // with Apple?"). If the user dismisses or accepts that, the
+          // SDK reports `cancelled: true` and no error. Previously we
+          // silently did nothing, which felt like the button was
+          // broken. Show a gentle hint so the second tap feels natural.
+          setInfo("Tap Sign in with Apple again to continue.");
+        } else {
+          setError(result.error ?? "Apple sign-in didn&apos;t work.");
+        }
         return;
       }
       setAuthed(true);
@@ -682,6 +698,7 @@ export function WelcomeSheet({
               appleAvailable={appleAvailable}
               saving={saving}
               error={error}
+              info={info}
               pendingInviteCopy={pendingInviteCopy}
               fastForward={maybeFastForward}
             />
@@ -829,6 +846,7 @@ function HeroStep({
   appleAvailable,
   saving,
   error,
+  info,
   pendingInviteCopy,
   fastForward,
 }: {
@@ -837,6 +855,7 @@ function HeroStep({
   appleAvailable: boolean;
   saving: boolean;
   error: string | null;
+  info: string | null;
   pendingInviteCopy: string | null;
   fastForward: () => void;
 }) {
@@ -883,6 +902,11 @@ function HeroStep({
         {error ? (
           <Text style={heroStyles.error} testID="welcome-error">
             {error}
+          </Text>
+        ) : null}
+        {info && !error ? (
+          <Text style={heroStyles.infoHint} testID="welcome-info">
+            {info}
           </Text>
         ) : null}
         {!SUPABASE_CONFIGURED ? (
@@ -935,6 +959,13 @@ const heroStyles = StyleSheet.create({
     fontFamily: fonts.serifSemi,
     fontSize: 13,
     marginTop: 4,
+    textAlign: "center",
+  },
+  infoHint: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 13,
+    marginTop: 6,
     textAlign: "center",
   },
   devSkip: { alignItems: "center", marginTop: 12, opacity: 0.5 },
@@ -1101,10 +1132,10 @@ function ExplainStep({ onContinue }: { onContinue: () => void }) {
         />
       </View>
 
-      <Text style={explainStyles.kicker}>FREE · ON US</Text>
+      <Text style={explainStyles.kicker}>YOUR FIRST CARD IS ON US</Text>
 
       <Text style={[stepStyles.title, { textAlign: "center", marginTop: 6 }]}>
-        Your first postcard,{"\n"}on the house.
+        Pick a photo.{"\n"}Mail it.
       </Text>
 
       <Text
@@ -1113,7 +1144,7 @@ function ExplainStep({ onContinue }: { onContinue: () => void }) {
           { textAlign: "center", marginTop: 14, paddingHorizontal: 10 },
         ]}
       >
-        Pick a photo, write a note. We print, stamp, and mail it through USPS. Costs you nothing.
+        Pick a photo, write a note. We print it, stamp it, and drop it in the mail through USPS.
       </Text>
 
       <PrimaryButton
