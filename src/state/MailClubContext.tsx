@@ -83,6 +83,19 @@ type MailClubState = {
   freeCreditsRemaining: number;
   hasSeenFreeCreditsIntro: boolean;
   hasCompletedSignup: boolean;
+  /**
+   * v0.7: forced signup→send flow requires the user to mail a card to enter
+   * the app. This flag is set true the first time `sendPostcardAction`
+   * resolves successfully. WelcomeGate gates on
+   * (hasSeenFreeCreditsIntro && hasCompletedSignup && hasSentFirstCard) so
+   * a user who closes the app mid-signup-send returns to the same step,
+   * not the empty app shell.
+   *
+   * Backward-compat: existing v0.6.x users get this set to true on first
+   * launch of v0.7 (they're past onboarding; we infer it from
+   * `postcards.length > 0 || hasCompletedSignup`).
+   */
+  hasSentFirstCard: boolean;
   hydrated: boolean;
   authedUserId: string | null;
   voidReplies: VoidReply[];
@@ -141,6 +154,7 @@ type CacheShape = {
   freeCreditsRemaining: number;
   hasSeenFreeCreditsIntro: boolean;
   hasCompletedSignup: boolean;
+  hasSentFirstCard: boolean;
   notifications: NotificationPrefs;
   privacy: PrivacyPrefs;
 };
@@ -157,6 +171,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
   const [freeCreditsRemaining, setFreeCreditsRemaining] = useState(FREE_CREDITS);
   const [hasSeenFreeCreditsIntro, setHasSeenFreeCreditsIntro] = useState(false);
   const [hasCompletedSignup, setHasCompletedSignup] = useState(false);
+  const [hasSentFirstCard, setHasSentFirstCard] = useState(false);
   const [userInfo, setUserInfo] = useState<CurrentUser>(defaultCurrentUser);
   const [notifications, setNotifications] = useState<NotificationPrefs>(DEFAULT_NOTIFICATIONS);
   const [privacy, setPrivacy] = useState<PrivacyPrefs>(DEFAULT_PRIVACY);
@@ -182,6 +197,20 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         if (typeof stored.freeCreditsRemaining === "number") setFreeCreditsRemaining(stored.freeCreditsRemaining);
         if (typeof stored.hasSeenFreeCreditsIntro === "boolean") setHasSeenFreeCreditsIntro(stored.hasSeenFreeCreditsIntro);
         if (typeof stored.hasCompletedSignup === "boolean") setHasCompletedSignup(stored.hasCompletedSignup);
+        // v0.7 backward-compat: existing v0.6.x users won't have the
+        // hasSentFirstCard field in their stored state. Infer it from the
+        // postcard history — if they've sent anything, they've already done
+        // the "first send" by definition.
+        if (typeof stored.hasSentFirstCard === "boolean") {
+          setHasSentFirstCard(stored.hasSentFirstCard);
+        } else if (Array.isArray(stored.postcards) && stored.postcards.length > 0) {
+          setHasSentFirstCard(true);
+        } else if (stored.hasCompletedSignup === true) {
+          // Edge case: user completed v0.6 signup but hasn't sent yet. We
+          // can't force them through the v0.7 send flow on update without
+          // surprise. Grandfather them in.
+          setHasSentFirstCard(true);
+        }
         if (stored.currentUser && typeof stored.currentUser === "object") setUserInfo({ ...DEFAULT_USER, ...stored.currentUser });
         if (stored.notifications) setNotifications({ ...DEFAULT_NOTIFICATIONS, ...stored.notifications });
         if (stored.privacy) setPrivacy({ ...DEFAULT_PRIVACY, ...stored.privacy });
@@ -209,11 +238,12 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       freeCreditsRemaining,
       hasSeenFreeCreditsIntro,
       hasCompletedSignup,
+      hasSentFirstCard,
       notifications,
       privacy,
     };
     AsyncStorage.setItem(STORE_KEY, JSON.stringify(cache)).catch(() => undefined);
-  }, [userInfo, friends, postcards, voidReplies, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup, notifications, privacy]);
+  }, [userInfo, friends, postcards, voidReplies, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup, hasSentFirstCard, notifications, privacy]);
 
   // ---- 3. Auth session subscription (Supabase only) -----
   useEffect(() => {
@@ -258,6 +288,11 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         setFriends(fetchedFriends);
         setPostcards(fetchedPostcards);
         setVoidReplies(fetchedReplies);
+        // v0.7: server is the truth for postcard history. If they have any
+        // postcard rows server-side, they&apos;ve done the first send.
+        if (fetchedPostcards.length > 0 || fetchedReplies.length > 0) {
+          setHasSentFirstCard(true);
+        }
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("Initial Supabase fetch failed", err);
@@ -384,6 +419,9 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         f.id === friend.id ? { ...f, cardsSent: f.cardsSent + 1, lastInteractionAt: new Date().toISOString() } : f
       )));
     }
+    // v0.7: any successful send unlocks the rest of the app. WelcomeGate
+    // gates on this flag. Idempotent — re-flipping a true flag is a no-op.
+    if (!hasSentFirstCard) setHasSentFirstCard(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
     return { ok: true, friendName: friend?.name ?? "", creditsRemaining: credits - cost };
   }
@@ -424,13 +462,19 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         const fresh = await api.fetchPostcards();
         setPostcards(fresh);
       } catch { /* non-fatal */ }
+      // v0.7: send-via-link COUNTS as the first send. The card queues
+      // immediately and the user is unlocked into the app, even if the
+      // recipient never fills in their address. Matches user spec:
+      // "if they send someone a link to get their address that is a
+      // sent card, regardless of if the person fills in the address."
+      if (!hasSentFirstCard) setHasSentFirstCard(true);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true, claimUrl: result.claimUrl, postcardId: result.postcardId };
     } catch (err: any) {
       Alert.alert("Couldn't create the link", err?.message ?? "Try again in a moment.");
       return { ok: false, error: err?.message ?? "Unknown error" };
     }
-  }, [authedUserId, credits]);
+  }, [authedUserId, credits, hasSentFirstCard]);
 
   const sendIntoVoidAction = useCallback(async (message: string) => {
     if (credits < 1) {
@@ -678,6 +722,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     setFreeCreditsRemaining(FREE_CREDITS);
     setHasSeenFreeCreditsIntro(false);
     setHasCompletedSignup(false);
+    setHasSentFirstCard(false);
     setUserInfo(EMPTY_USER);
     setNotifications(DEFAULT_NOTIFICATIONS);
     setPrivacy(DEFAULT_PRIVACY);
@@ -918,6 +963,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     freeCreditsRemaining,
     hasSeenFreeCreditsIntro,
     hasCompletedSignup,
+    hasSentFirstCard,
     hydrated,
     authedUserId,
     voidReplies,
@@ -944,7 +990,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     resetPassword: resetPasswordAction,
     deleteAccount: deleteAccountAction,
   }), [
-    userInfo, friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup,
+    userInfo, friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup, hasSentFirstCard,
     hydrated, authedUserId, voidReplies, notifications, privacy,
     sendPostcardAction, sendPostcardViaLinkAction, sendIntoVoidAction, purchaseCreditsAction, refreshProfileAction, markFreeCreditsIntroSeenAction,
     updateAboutMeAction, removeFriendAction, addFriendByAddressAction, queueInvitationAction,

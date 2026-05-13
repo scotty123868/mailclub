@@ -3,31 +3,39 @@ import { WelcomeSheet } from "@/src/components/WelcomeSheet";
 import { useMailClub } from "@/src/state/MailClubContext";
 
 /**
- * Shows the WelcomeSheet on first launch and any time the user is in a
- * not-fully-signed-up state. Mounts as a global overlay above the tab
- * navigator.
+ * WelcomeGate — global overlay that shows the WelcomeSheet whenever the
+ * user isn&apos;t fully onboarded.
  *
- * codex Phase 6 P1: previously this gated solely on `hasSeenFreeCreditsIntro`.
- * A partially-onboarded user whose intro-seen flag was true but profile was
- * incomplete (`hasCompletedSignup === false`) would bypass the welcome
- * sheet AND be unable to use the app meaningfully. Gate on BOTH now: the
- * sheet shows if either condition is false.
+ * v0.7 contract: a user is "fully onboarded" iff ALL THREE are true:
+ *   1. hasSeenFreeCreditsIntro  (saw the intro page)
+ *   2. hasCompletedSignup        (profile row exists server-side)
+ *   3. hasSentFirstCard          (mailed or queued a card via send-link)
  *
- * CRITICAL: We wait for `hydrated === true` before rendering the sheet.
- * Without this, returning users see the welcome flash on every cold launch
- * because both flags default to false until AsyncStorage resolves.
+ * The third flag is the v0.7 keystone: the forced signup→send flow does
+ * NOT let users into the app until they&apos;ve mailed something. If any
+ * of the three are false, the welcome sheet stays mounted.
+ *
+ * codex Phase 6 P1: previously this gated solely on `hasSeenFreeCreditsIntro`,
+ * which would bypass returning-but-incomplete users straight into the
+ * empty shell of the app.
+ *
+ * CRITICAL: We wait for `hydrated === true` before rendering. Otherwise
+ * returning users see a welcome-sheet flash on every cold launch (all
+ * three flags default to false until AsyncStorage resolves).
  */
 export function WelcomeGate() {
-  const { hasSeenFreeCreditsIntro, hasCompletedSignup, hydrated } = useMailClub();
+  const {
+    hasSeenFreeCreditsIntro,
+    hasCompletedSignup,
+    hasSentFirstCard,
+    hydrated,
+  } = useMailClub();
   const [dismissedLocal, setDismissedLocal] = useState(false);
 
   if (!hydrated) return null;
-  // Show the sheet whenever the user hasn't fully onboarded. This covers:
-  //   - First launch (both flags false)
-  //   - Incomplete signup (hasCompletedSignup false, intro maybe true)
-  //   - dismissedLocal escape hatch for within-session dismissal of the
-  //     intro-only path
-  const fullyOnboarded = hasSeenFreeCreditsIntro && hasCompletedSignup;
+  // v0.7: three-flag gate. All must be true to enter the app.
+  const fullyOnboarded =
+    hasSeenFreeCreditsIntro && hasCompletedSignup && hasSentFirstCard;
   if (fullyOnboarded || dismissedLocal) return null;
 
   return (

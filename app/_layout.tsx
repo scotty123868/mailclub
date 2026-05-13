@@ -2,6 +2,12 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { LogBox, View } from "react-native";
+// v0.7: gesture-handler is now a hard dependency (constellation pan/pinch,
+// bottom-sheet on map). It needs to wrap the entire app root or any gesture
+// inside any tab will silently no-op. Per react-native-gesture-handler 2.x
+// docs: import side-effects + <GestureHandlerRootView> at root.
+import "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // Silence the dev-mode RedBox for the Stripe native-module load failure.
@@ -62,12 +68,14 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <MailClubProvider>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }} />
-        <WelcomeGate />
-      </MailClubProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <MailClubProvider>
+          <StatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false }} />
+          <WelcomeGate />
+        </MailClubProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
