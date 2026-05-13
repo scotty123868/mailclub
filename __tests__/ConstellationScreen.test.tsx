@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { render } from "@testing-library/react-native";
 import React from "react";
 import ConstellationScreen from "@/app/(tabs)/constellation";
 import { AllProviders } from "./test-utils";
@@ -30,34 +30,32 @@ function renderConstellation() {
   );
 }
 
-// v0.5.0: top filter chips (All Friends / Close / New Connections) were
-// removed. Tests that referenced those chips are gone. The insights cards
-// still cover the meaningful slices.
-describe("ConstellationScreen", () => {
-  it("renders the header + insight cards", () => {
-    const { getByText } = renderConstellation();
+// v0.7: full-screen force-directed social graph (ported from teteapp).
+// Replaces the v0.6.x insight cards (Warmest Thread / Sleeping Stars).
+// Renders nodes via react-native-svg, supports pan + pinch + double-tap
+// to reset, tapping a node opens FriendDetailSheet. Gold ring lights
+// up on reciprocated nodes (D.3 magical moment).
+describe("ConstellationScreen (v0.7 force-directed)", () => {
+  it("renders the screen + header", () => {
+    const { getByTestId, getByText } = renderConstellation();
+    expect(getByTestId("constellation-screen")).toBeTruthy();
     expect(getByText("Constellation")).toBeTruthy();
-    expect(getByText("Warmest Thread")).toBeTruthy();
-    expect(getByText("Sleeping Stars")).toBeTruthy();
   });
 
-  it("does not render the removed top filter chips", () => {
+  it("does NOT render the removed v0.6.x insight cards", () => {
+    const { queryByText, queryByTestId } = renderConstellation();
+    expect(queryByText("Warmest Thread")).toBeNull();
+    expect(queryByText("Sleeping Stars")).toBeNull();
+    expect(queryByText("New Spark")).toBeNull();
+    expect(queryByTestId("constellation-insight-warmest")).toBeNull();
+    expect(queryByTestId("constellation-insight-sleeping")).toBeNull();
+  });
+
+  it("does not render the removed v0.5.x filter chips", () => {
     const { queryByText, queryByTestId } = renderConstellation();
     expect(queryByText("All Friends")).toBeNull();
     expect(queryByText("Close Friends")).toBeNull();
     expect(queryByText("New Connections")).toBeNull();
     expect(queryByTestId("constellation-filter-close-friends")).toBeNull();
-  });
-
-  it("opens a friend detail sheet when Warmest Thread insight is tapped", () => {
-    const { getByTestId } = renderConstellation();
-    fireEvent.press(getByTestId("constellation-insight-warmest"));
-    expect(getByTestId("friend-detail-close")).toBeTruthy();
-  });
-
-  it("navigates to /friends when Sleeping Stars insight is tapped", () => {
-    const { getByTestId } = renderConstellation();
-    fireEvent.press(getByTestId("constellation-insight-sleeping"));
-    expect(expoRouter.__mockPush).toHaveBeenCalledWith("/friends");
   });
 });

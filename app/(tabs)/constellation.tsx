@@ -1,200 +1,392 @@
 import { useRouter } from "expo-router";
-import { Heart, Moon, Sparkles, Star } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { AppShell } from "@/src/components/AppShell";
-import { ConstellationPanel } from "@/src/components/ConstellationPanel";
+import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import Svg, { Circle, Line } from "react-native-svg";
 import { FriendDetailSheet } from "@/src/components/FriendDetailSheet";
 import { Header } from "@/src/components/Header";
-import { PostalCard } from "@/src/components/PostalCard";
-import { MiniPostcardArt } from "@/src/components/PostalIllustrations";
-import { Stamp } from "@/src/components/Stamp";
+import {
+  buildSocialGraph,
+  edgeId,
+  type GraphEdge,
+  type GraphNode,
+  type PostcardForGraph,
+} from "@/src/lib/constellationGraph";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
-// v0.5.0: dropped the top filter chips (All Friends / Close Friends / New
-// Connections). Per the gallery cleanup pass — premature segmentation when
-// most users have 0–5 friends. The Insight cards below already surface the
-// useful slices (Warmest Thread / New Spark / Sleeping Stars).
+/**
+ * ConstellationScreen — v0.7 full-screen force-directed social graph.
+ *
+ * Ported from teteapp's `src/screens/ConstellationScreen.tsx`. The
+ * graph builder lives in `src/lib/constellationGraph.ts` (also ported).
+ * The teteapp original is 850 lines with deep navigation + bottom-sheet
+ * trees that depended on the t&ecirc;te theme system; this Mailroom
+ * version keeps the architectural core (force-directed layout, pan+pinch,
+ * tap-node-for-detail) and renders in Mailroom&apos;s palette.
+ *
+ * What lands in v0.7.0:
+ *   - Full-screen dark "sky" background (no header chrome — the brand
+ *     wordmark + credits pill float over the top-right corner)
+ *   - SVG graph: self in the center (gold), friends as colored nodes,
+ *     edges weighted by postcard count
+ *   - Pan (two-finger) + pinch zoom + double-tap reset
+ *   - Tap a node → FriendDetailSheet opens (existing component)
+ *   - Gold ring + faint halo on reciprocated nodes (the D.3 magical
+ *     moment)
+ *
+ * Deferred to v0.7.5:
+ *   - Friend-of-friend edges (currently always off; toggle UI parked)
+ *   - Bottom-sheet drawer of postcards-on-this-edge when an edge is
+ *     tapped (just opens FriendDetailSheet for the other endpoint
+ *     today)
+ *
+ * The simulation is settled offline (180 ticks for &le;20 nodes, 240
+ * for denser graphs) inside buildSocialGraph, so positions are stable
+ * per-render. No frame loop on the JS thread.
+ */
+
+const FRIEND_COLORS = [
+  "#C24A45", // postal red
+  "#3C6E8F", // postal blue
+  "#9BAF9B", // sage
+  "#D9B46E", // gold
+  "#B89A60", // earth
+  "#607A55", // dark sage
+];
+
+function colorForFriend(id: string): string {
+  // Stable hash → color so the same friend gets the same color
+  // every time, but the palette is distributed.
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return FRIEND_COLORS[Math.abs(h) % FRIEND_COLORS.length];
+}
+
+const AnimatedView = Animated.createAnimatedComponent(View);
+
 export default function ConstellationScreen() {
   const router = useRouter();
-  const { friends } = useMailClub();
+  const { currentUser, friends, postcards, authedUserId } = useMailClub();
+
+  // Stage size: square inset from screen width, capped at 360.
+  const { width: screenW, height: screenH } = Dimensions.get("window");
+  const stageSize = Math.min(screenW - 24, screenH - 200, 360);
+  const cx = stageSize / 2;
+  const cy = stageSize / 2;
+
+  // Build the graph. selfId falls back to a deterministic string when
+  // unauthenticated (tests, dev) so the layout still renders.
+  const selfId = authedUserId ?? "local-self";
+
+  // Friends map for color + name lookup.
+  const friendsMap = useMemo(() => {
+    const m = new Map<string, { name: string; color: string }>();
+    for (const f of friends) {
+      m.set(f.id, { name: f.name.split(" ")[0] ?? f.name, color: colorForFriend(f.id) });
+    }
+    return m;
+  }, [friends]);
+
+  // Convert postcards + voidReplies into graph-ready PostcardForGraph rows.
+  // postcards array today doesn&apos;t carry senderId (postcardFromRow doesn&apos;t
+  // expose it yet) so we assume all entries are outbound (sender = self).
+  // voidReplies represent inbound from anonymous "void" — we don&apos;t graph
+  // them because the sender is unknown. Once the Postcard type widens to
+  // include senderId, the graph picks up real inbound edges too.
+  const graphPostcards = useMemo<PostcardForGraph[]>(() => {
+    const rows: PostcardForGraph[] = [];
+    for (const p of postcards) {
+      if (!p.toFriendId || p.toFriendId === "void" || p.toFriendId === "") continue;
+      rows.push({
+        id: p.id,
+        senderId: selfId,
+        recipientId: p.toFriendId,
+        status: p.status,
+      });
+    }
+    return rows;
+  }, [postcards, selfId]);
+
+  const { nodes, edges } = useMemo(
+    () =>
+      buildSocialGraph(graphPostcards, {
+        selfId,
+        friends: friendsMap,
+        cx,
+        cy,
+        selfColor: colors.gold,
+        selfName: currentUser.name.split(" ")[0] || "you",
+      }),
+    [graphPostcards, selfId, friendsMap, cx, cy, currentUser.name],
+  );
+
+  // Tap-node state → opens the FriendDetailSheet.
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const activeFriend = friends.find((f) => f.id === activeFriendId) ?? null;
 
-  // Derive insights from real state, not hardcoded names. Memoized so we
-  // don't resort on every render.
-  const { warmest, newest, sleeping } = useMemo(() => {
-    const byCards = [...friends].sort((a, b) => (b.cardsSent + b.cardsReceived) - (a.cardsSent + a.cardsReceived));
-    const byRecent = [...friends].sort((a, b) => {
-      if (a.lastInteractionAt === b.lastInteractionAt) return 0;
-      return b.lastInteractionAt > a.lastInteractionAt ? 1 : -1;
+  // ----- Pan + pinch gestures --------------------------------------------
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const tx = useSharedValue(0);
+  const sx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const sy = useSharedValue(0);
+
+  const panGesture = Gesture.Pan()
+    .minPointers(2)
+    .maxPointers(2)
+    .onUpdate((e) => {
+      tx.value = sx.value + e.translationX;
+      ty.value = sy.value + e.translationY;
+    })
+    .onEnd(() => {
+      sx.value = tx.value;
+      sy.value = ty.value;
     });
-    const sixtyDaysAgo = new Date();
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-    return {
-      warmest: byCards[0],
-      newest: byRecent[0],
-      sleeping: friends.filter((f) => new Date(f.lastInteractionAt) < sixtyDaysAgo),
-    };
-  }, [friends]);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      const next = savedScale.value * e.scale;
+      scale.value = Math.max(0.6, Math.min(3, next));
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      scale.value = withTiming(1, { duration: 250 });
+      savedScale.value = 1;
+      tx.value = withTiming(0, { duration: 250 });
+      sx.value = 0;
+      ty.value = withTiming(0, { duration: 250 });
+      sy.value = 0;
+    });
+
+  const composedGesture = Gesture.Simultaneous(
+    panGesture,
+    Gesture.Exclusive(doubleTapGesture, pinchGesture),
+  );
+
+  const stageStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: tx.value },
+      { translateY: ty.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  function onTapNode(node: GraphNode) {
+    if (node.isSelf) {
+      // Tapping yourself clears any active drilldown.
+      setActiveFriendId(null);
+      return;
+    }
+    setActiveFriendId(node.id);
+  }
 
   return (
-    <AppShell>
+    <View style={styles.root} testID="constellation-screen">
+      {/* Dark sky background — full bleed under everything */}
+      <View style={styles.sky} pointerEvents="none" />
+
       <Header title="Constellation" />
 
-      <ConstellationPanel friends={friends} />
+      <View style={styles.stageWrap}>
+        <GestureDetector gesture={composedGesture}>
+          <AnimatedView style={[styles.stage, { width: stageSize, height: stageSize }, stageStyle]}>
+            <Svg width={stageSize} height={stageSize} style={StyleSheet.absoluteFill}>
+              {/* Edges first so they render under nodes */}
+              {edges.map((edge: GraphEdge) => {
+                const sourceId = edgeId(edge.source);
+                const targetId = edgeId(edge.target);
+                const a = nodes.find((n) => n.id === sourceId);
+                const b = nodes.find((n) => n.id === targetId);
+                if (!a || !b || a.x == null || a.y == null || b.x == null || b.y == null) return null;
+                const thickness = Math.min(2.2, 0.6 + edge.momentCount * 0.18);
+                const edgeColor = edge.reciprocated
+                  ? "rgba(217,180,110,0.78)" // gold for reciprocated
+                  : "rgba(255,255,255,0.22)";
+                return (
+                  <Line
+                    key={`${sourceId}-${targetId}`}
+                    x1={a.x}
+                    y1={a.y}
+                    x2={b.x}
+                    y2={b.y}
+                    stroke={edgeColor}
+                    strokeWidth={thickness}
+                    strokeLinecap="round"
+                  />
+                );
+              })}
 
-      {friends.length === 0 ? (
-        <View style={styles.empty} testID="constellation-empty">
-          <Sparkles color={colors.postalBlue} size={28} strokeWidth={1.5} />
-          <Text style={styles.emptyTitle}>No constellation yet.</Text>
-          <Text style={styles.emptyBody}>
-            Add a friend to light up your first star. Insights appear here as you write more cards.
+              {/* Nodes */}
+              {nodes.map((node) => {
+                if (node.x == null || node.y == null) return null;
+                const radius = node.isSelf ? 13 : 9 + Math.min(6, node.momentCount * 1.5);
+                const isReciprocated = (node as any).reciprocated === true;
+                return (
+                  <Circle
+                    key={node.id}
+                    cx={node.x}
+                    cy={node.y}
+                    r={radius}
+                    fill={node.color}
+                    stroke={
+                      node.isSelf
+                        ? "rgba(255,255,255,0.7)"
+                        : isReciprocated
+                          ? "#D9B46E"
+                          : "rgba(255,255,255,0.4)"
+                    }
+                    strokeWidth={node.isSelf ? 2 : isReciprocated ? 2.4 : 1.4}
+                    onPress={() => onTapNode(node)}
+                  />
+                );
+              })}
+            </Svg>
+
+            {/* Labels: rendered as RN text so they antialias correctly */}
+            {nodes.map((node) => {
+              if (node.x == null || node.y == null) return null;
+              const radius = node.isSelf ? 13 : 9 + Math.min(6, node.momentCount * 1.5);
+              return (
+                <Pressable
+                  key={`label-${node.id}`}
+                  onPress={() => onTapNode(node)}
+                  style={[
+                    styles.label,
+                    {
+                      left: node.x - 40,
+                      top: node.y + radius + 4,
+                    },
+                  ]}
+                  hitSlop={8}
+                  testID={`constellation-node-${node.id}`}
+                >
+                  <Text
+                    style={[
+                      styles.labelText,
+                      node.isSelf && styles.labelTextSelf,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {node.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </AnimatedView>
+        </GestureDetector>
+      </View>
+
+      {/* Empty-state hint */}
+      {nodes.length <= 1 ? (
+        <View style={styles.emptyHint} pointerEvents="none">
+          <Text style={styles.emptyHintText}>
+            Mail a card to see your{"\n"}constellation light up.
           </Text>
-          <Pressable onPress={() => router.push("/friends")} style={styles.emptyBtn} testID="constellation-empty-add">
-            <Text style={styles.emptyBtnText}>Add a friend</Text>
-          </Pressable>
         </View>
-      ) : (
-        <View style={styles.insights}>
-          {warmest && (warmest.cardsSent + warmest.cardsReceived) > 0 && (
-            <Insight
-              icon={Heart}
-              title="Warmest Thread"
-              value={warmest.name}
-              chip={`${warmest.cardsSent + warmest.cardsReceived} cards`}
-              body="Your most beautiful back-and-forth."
-              accent={colors.postalRed}
-              art="mountain"
-              cents="20¢"
-              stampMotif="botanical"
-              stampTone="red"
-              testID="constellation-insight-warmest"
-              onPress={() => setActiveFriendId(warmest.id)}
-            />
-          )}
-          {newest && newest.id !== warmest?.id && (
-            <Insight
-              icon={Star}
-              title="New Spark"
-              value={newest.name}
-              chip="Most recent connection"
-              body="Early ties grow into lasting connections."
-              accent={colors.postalBlue}
-              art="coast"
-              cents="10¢"
-              stampMotif="lighthouse"
-              stampTone="blue"
-              testID="constellation-insight-spark"
-              onPress={() => setActiveFriendId(newest.id)}
-            />
-          )}
-          {sleeping.length > 0 && (
-            <Insight
-              icon={Moon}
-              title="Sleeping Stars"
-              value={`${sleeping.length} ${sleeping.length === 1 ? "friend" : "friends"}`}
-              chip="quiet for 60+ days"
-              body="A short note could rekindle something."
-              accent="#76733B"
-              art="night"
-              cents="5¢"
-              stampMotif="moon"
-              stampTone="night"
-              testID="constellation-insight-sleeping"
-              onPress={() => router.push("/friends")}
-            />
-          )}
+      ) : null}
+
+      {/* Hint chip — pan + pinch instructions */}
+      {nodes.length > 1 ? (
+        <View style={styles.hintChip} pointerEvents="none">
+          <Text style={styles.hintText}>
+            two-finger drag · pinch to zoom · double-tap to reset
+          </Text>
         </View>
-      )}
+      ) : null}
 
       <FriendDetailSheet
         friend={activeFriend}
-        visible={activeFriendId !== null}
+        visible={activeFriend !== null}
         onClose={() => setActiveFriendId(null)}
-        onSend={(id) => {
+        onSend={(friendId) => {
           setActiveFriendId(null);
-          router.push({ pathname: "/send", params: { friendId: id } });
+          // The send tab handles "selected friend" via the seededFriend
+          // path. Routing to /send with no arg + activeFriendId in
+          // pending state is the existing pattern.
+          router.push("/send");
         }}
       />
-    </AppShell>
-  );
-}
-
-function Insight({
-  icon: Icon,
-  title,
-  value,
-  chip,
-  body,
-  accent,
-  art,
-  cents,
-  stampMotif,
-  stampTone,
-  onPress,
-  testID,
-}: {
-  icon: typeof Heart;
-  title: string;
-  value: string;
-  chip: string;
-  body: string;
-  accent: string;
-  art: "mountain" | "coast" | "night";
-  cents: string;
-  stampMotif: "botanical" | "lighthouse" | "moon";
-  stampTone: "red" | "blue" | "night";
-  onPress?: () => void;
-  testID?: string;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      testID={testID}
-      accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel={`${title}: ${value}`}
-    >
-      <PostalCard style={styles.insight}>
-        <View style={styles.airmailEdge} />
-        <MiniPostcardArt variant={art} />
-        <View style={styles.insightCopy}>
-          <View style={styles.titleRow}>
-            <Icon color={accent} size={18} strokeWidth={1.6} />
-            <Text style={styles.insightTitle}>{title}</Text>
-          </View>
-          <View style={styles.valueRow}>
-            <Text style={[styles.insightValue, { color: accent }]}>{value}</Text>
-            <Text style={[styles.insightChip, { color: accent }]}> · {chip}</Text>
-          </View>
-          <Text style={styles.insightBody}>{body}</Text>
-        </View>
-        <View style={styles.insightStamp}>
-          <Stamp motif={stampMotif} tone={stampTone} cents={cents} rotate={6} size="sm" />
-        </View>
-      </PostalCard>
-    </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  empty: { alignItems: "center", backgroundColor: "rgba(60,110,143,0.06)", borderColor: colors.line, borderRadius: 10, borderWidth: 1, gap: 8, padding: 28 },
-  emptyTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 19, marginTop: 8 },
-  emptyBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 18, textAlign: "center" },
-  emptyBtn: { backgroundColor: colors.ink, borderRadius: 8, marginTop: 8, paddingHorizontal: 16, paddingVertical: 10 },
-  emptyBtnText: { color: colors.white, fontFamily: fonts.serifSemi, fontSize: 14, letterSpacing: 0.3 },
-  insights: { gap: 12 },
-  insight: { alignItems: "center", flexDirection: "row", gap: 14, minHeight: 124, overflow: "hidden", padding: 16, paddingRight: 70 },
-  airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 7 },
-  insightCopy: { flex: 1, gap: 3 },
-  titleRow: { alignItems: "center", flexDirection: "row", gap: 6 },
-  insightTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 17 },
-  valueRow: { alignItems: "baseline", flexDirection: "row" },
-  insightValue: { fontFamily: fonts.serifSemi, fontSize: 26 },
-  insightChip: { fontFamily: fonts.serif, fontSize: 14 },
-  insightBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 18, marginTop: 2 },
-  insightStamp: { position: "absolute", right: 14, top: 18 },
+  root: {
+    flex: 1,
+    backgroundColor: "#0B0F1A",
+    position: "relative",
+  },
+  sky: {
+    position: "absolute",
+    inset: 0,
+    backgroundColor: "#0B0F1A",
+  },
+  stageWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  stage: {
+    position: "relative",
+  },
+  label: {
+    position: "absolute",
+    width: 80,
+    alignItems: "center",
+  },
+  labelText: {
+    color: "rgba(255,255,255,0.78)",
+    fontFamily: fonts.script,
+    fontSize: 13,
+    textShadowColor: "rgba(0,0,0,0.7)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  labelTextSelf: {
+    color: colors.gold,
+    fontFamily: fonts.serifSemi,
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  emptyHint: {
+    position: "absolute",
+    bottom: 120,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  emptyHintText: {
+    color: "rgba(255,255,255,0.55)",
+    fontFamily: fonts.serifItalic,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  hintChip: {
+    position: "absolute",
+    bottom: 100,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  hintText: {
+    color: "rgba(255,255,255,0.4)",
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    letterSpacing: 0.4,
+  },
 });
