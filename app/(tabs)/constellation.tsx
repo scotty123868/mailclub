@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { Mail } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -7,9 +8,10 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line } from "react-native-svg";
+import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { FriendDetailSheet } from "@/src/components/FriendDetailSheet";
-import { Header } from "@/src/components/Header";
 import {
   buildSocialGraph,
   edgeId,
@@ -73,7 +75,9 @@ const AnimatedView = Animated.createAnimatedComponent(View);
 
 export default function ConstellationScreen() {
   const router = useRouter();
-  const { currentUser, friends, postcards, authedUserId } = useMailClub();
+  const insets = useSafeAreaInsets();
+  const { currentUser, friends, postcards, credits, authedUserId } = useMailClub();
+  const [creditsOpen, setCreditsOpen] = useState(false);
 
   // Stage size: square inset from screen width, capped at 360.
   const { width: screenW, height: screenH } = Dimensions.get("window");
@@ -198,7 +202,26 @@ export default function ConstellationScreen() {
       {/* Dark sky background — full bleed under everything */}
       <View style={styles.sky} pointerEvents="none" />
 
-      <Header title="Constellation" />
+      {/* v0.7.0.2: custom dark-themed header. The shared <Header /> renders
+          ink-on-paper which is invisible against the night sky, and it
+          doesn&apos;t respect safe-area top on a full-bleed dark screen so
+          the status bar overlapped the title. This dedicated header sits
+          below the status bar, uses paper-light text + a paper-light
+          credits pill that contrasts cleanly on the dark sky. */}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Text style={styles.headerTitle}>Constellation</Text>
+        <Pressable
+          onPress={() => setCreditsOpen(true)}
+          style={({ pressed }) => [styles.creditsPill, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`${credits} ${credits === 1 ? "stamp" : "stamps"}. Tap to buy more.`}
+          testID="header-credits-pill"
+          hitSlop={8}
+        >
+          <Mail color={colors.ink} size={15} strokeWidth={1.8} />
+          <Text style={styles.creditsCount}>{credits}</Text>
+        </Pressable>
+      </View>
 
       <View style={styles.stageWrap}>
         <GestureDetector gesture={composedGesture}>
@@ -311,14 +334,13 @@ export default function ConstellationScreen() {
         friend={activeFriend}
         visible={activeFriend !== null}
         onClose={() => setActiveFriendId(null)}
-        onSend={(friendId) => {
+        onSend={(_friendId) => {
           setActiveFriendId(null);
-          // The send tab handles "selected friend" via the seededFriend
-          // path. Routing to /send with no arg + activeFriendId in
-          // pending state is the existing pattern.
           router.push("/send");
         }}
       />
+
+      <CreditsSheet visible={creditsOpen} onClose={() => setCreditsOpen(false)} />
     </View>
   );
 }
@@ -334,6 +356,44 @@ const styles = StyleSheet.create({
     inset: 0,
     backgroundColor: "#0B0F1A",
   },
+
+  // Dark-themed inline header. Paper-cream credits pill + serif title in
+  // gold for legibility on the dark sky. Padding respects safe-area top.
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 22,
+    paddingBottom: 8,
+    zIndex: 10,
+  },
+  headerTitle: {
+    color: colors.paper,
+    fontFamily: fonts.serifSemi,
+    fontSize: 28,
+    letterSpacing: -0.3,
+  },
+  creditsPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.paper,
+    borderColor: colors.line,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  creditsCount: {
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 15,
+    includeFontPadding: false,
+    lineHeight: 18,
+    minWidth: 10,
+    textAlign: "center",
+  },
+
   stageWrap: {
     flex: 1,
     alignItems: "center",

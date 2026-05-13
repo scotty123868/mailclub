@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { render } from "@testing-library/react-native";
 import React from "react";
 import MapScreen from "@/app/(tabs)/map";
 import { AllProviders } from "./test-utils";
@@ -30,76 +30,33 @@ function renderMap() {
   );
 }
 
-describe("MapScreen", () => {
-  it("renders all primary sections", () => {
-    const { getByText, getAllByText, queryByText } = renderMap();
+// v0.7.0.2: Map stripped to just the map. Removed segmented filter chips
+// (Friends/Sent/Received), the 3-tile summary (Cities/Friends/Miles), and
+// the Recent Routes list. Per user: "just want the map to be the thing
+// itself, especially because the map will already be populated with
+// something once the user is forced to send."
+describe("MapScreen (v0.7.0.2)", () => {
+  it("renders the Map header", () => {
+    const { getByText } = renderMap();
     expect(getByText("Map")).toBeTruthy();
-    // 'Friends' appears in segmented control + summary stats
-    expect(getAllByText("Friends").length).toBeGreaterThanOrEqual(1);
-    expect(getByText("Sent")).toBeTruthy();
-    expect(getByText("Received")).toBeTruthy();
-    expect(getByText("Recent Routes")).toBeTruthy();
-    // v0.5.0: footer "Every line started with a real connection." was removed
-    expect(queryByText(/Every line started/i)).toBeNull();
   });
 
-  it("displays real summary stats derived from state", () => {
-    const { getByText, getAllByText } = renderMap();
-    expect(getByText("Cities")).toBeTruthy();
-    expect(getByText("Miles")).toBeTruthy();
-    expect(getAllByText("Friends").length).toBeGreaterThanOrEqual(1);
+  it("does NOT render the removed v0.6.x segmented filter chips", () => {
+    const { queryByTestId } = renderMap();
+    expect(queryByTestId("map-filter-friends")).toBeNull();
+    expect(queryByTestId("map-filter-sent")).toBeNull();
+    expect(queryByTestId("map-filter-received")).toBeNull();
   });
 
-  it("renders 3 recent routes derived from initial mock postcards", () => {
-    // Initial mock postcards: Denver→Nashville, Austin→New York, Denver→Vancouver
-    const { getByText } = renderMap();
-    expect(getByText("Denver → Nashville")).toBeTruthy();
-    expect(getByText("Austin → New York")).toBeTruthy();
-    expect(getByText("Denver → Vancouver")).toBeTruthy();
+  it("does NOT render the removed v0.6.x summary tiles (Cities/Miles)", () => {
+    const { queryByText } = renderMap();
+    expect(queryByText("Cities")).toBeNull();
+    expect(queryByText("Miles")).toBeNull();
   });
 
-  it("filter chips actually filter — Received shows the empty state", () => {
-    // v0.5.0: filter chips wired up. v0.5.0 Phase 3.5: Received hits the
-    // fetch_received_postcards RPC; with no scanned tokens for this user,
-    // we show a "nothing in your mailbox yet" empty state instead of any
-    // of the user's outbound routes.
-    const { getByText, queryByText } = renderMap();
-    fireEvent.press(getByText("Received"));
-    expect(getByText(/mailbox/i)).toBeTruthy();
-    expect(queryByText("Denver → Nashville")).toBeNull();
-  });
-
-  it("Sent and Friends filters keep the routes visible", () => {
-    const { getByText, getAllByText } = renderMap();
-    // Start on Friends, routes present
-    expect(getByText("Denver → Nashville")).toBeTruthy();
-    // Switch to Sent — routes still present (same data slice today)
-    fireEvent.press(getByText("Sent"));
-    expect(getByText("Denver → Nashville")).toBeTruthy();
-    // Back to Friends
-    fireEvent.press(getAllByText("Friends")[0]);
-    expect(getByText("Denver → Nashville")).toBeTruthy();
-  });
-
-  it("opens the route detail sheet when a route row is tapped", () => {
-    const { getAllByText, getByTestId, getByText } = renderMap();
-    // Tap the Denver → Nashville route row (any derived route id works)
-    fireEvent.press(getByText("Denver → Nashville"));
-    expect(getByTestId("route-detail-close")).toBeTruthy();
-  });
-
-  it("closes the route detail sheet via the X button", () => {
-    const { getByTestId, getByText, queryByTestId } = renderMap();
-    fireEvent.press(getByText("Austin → New York"));
-    expect(getByTestId("route-detail-close")).toBeTruthy();
-    fireEvent.press(getByTestId("route-detail-close"));
-    expect(queryByTestId("route-detail-close")).toBeNull();
-  });
-
-  it("navigates to /send when 'Send a card to this route' is tapped in the sheet", () => {
-    const { getByText } = renderMap();
-    fireEvent.press(getByText("Denver → Vancouver"));
-    fireEvent.press(getByText("Send a card to this route"));
-    expect(expoRouter.__mockPush).toHaveBeenCalledWith("/send");
+  it("does NOT render the removed v0.6.x Recent Routes list", () => {
+    const { queryByText, queryByTestId } = renderMap();
+    expect(queryByText("Recent Routes")).toBeNull();
+    expect(queryByTestId("routes-empty")).toBeNull();
   });
 });

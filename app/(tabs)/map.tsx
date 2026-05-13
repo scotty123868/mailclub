@@ -1,111 +1,69 @@
 import { useRouter } from "expo-router";
-import { Globe2, Mail, MapPin, Send, Users } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { Header } from "@/src/components/Header";
-import { CITY_COORDS, type MapRoute, MapPanel, normalizeCityKey } from "@/src/components/MapPanel";
-import { PostalCard } from "@/src/components/PostalCard";
-import { MiniPostcardArt } from "@/src/components/PostalIllustrations";
-import { CircularPostmark } from "@/src/components/PostmarkDecoration";
+import {
+  CITY_COORDS,
+  type MapRoute,
+  MapPanel,
+  normalizeCityKey,
+} from "@/src/components/MapPanel";
 import { RouteDetailSheet } from "@/src/components/RouteDetailSheet";
-import { Stamp } from "@/src/components/Stamp";
-import { fetchReceivedPostcards, type ReceivedPostcard } from "@/src/services/api";
 import { useMailClub } from "@/src/state/MailClubContext";
-import type { MailRoute as RouteRow } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
-import { fonts } from "@/src/theme/typography";
-
-type SegmentId = "Friends" | "Sent" | "Received";
-
-const segments: Array<{ id: SegmentId; icon: typeof Users }> = [
-  { id: "Friends", icon: Users },
-  { id: "Sent", icon: Send },
-  { id: "Received", icon: Mail },
-];
 
 /**
- * Map tab — v0.5.0 redesign.
+ * Map tab — v0.7.0.2.
  *
- * Per codex audit + user feedback on TestFlight 0.4.1:
- *   • Filter chips now actually filter. `selected` drives `filteredPostcards`
- *     which drives both the polylines on the map AND the Recent Routes list.
- *   • Pan/zoom enabled on the map (MapPanel's `interactive` default is true
- *     when not compact).
- *   • "Every line started with a real connection." footer card removed.
- *   • Unused imports (`Heart`, `AirmailDivider`, `currentUser`) removed.
+ * Stripped to its essence per user feedback: "I just want the map to be
+ * the thing itself, especially because there... the map will already be
+ * populated with something once the user is forced to send."
  *
- * Filter semantics, current data model (only outbound `postcards` exist):
- *   • Friends — all routes the user has connected with (= all sends today)
- *   • Sent    — same set as Friends, kept as an explicit affordance
- *   • Received — empty until v0.5.1 ships inbound postcards. We render an
- *     informative empty state instead of pretending there's data.
+ * What v0.7.0.2 removes (was in v0.6.x):
+ *   - Segmented filter chips (Friends / Sent / Received)
+ *   - 3-tile summary (Cities · Friends · Miles)
+ *   - "Recent Routes" list below the map
+ *   - "Mailroom" hexagonal button + compass decoration
+ *
+ * What remains:
+ *   - Header with credits pill
+ *   - MapPanel (full real estate of the screen body) rendering all
+ *     outbound postcard routes as polylines + city pins
+ *   - Tap a route → RouteDetailSheet
+ *
+ * v0.7.1 will add: tap pin → animated polyline to reciprocal pin + a
+ * @gorhom bottom sheet with the postcard preview (D.2 magical moment).
  */
 export default function MapScreen() {
   const router = useRouter();
-  const [selected, setSelected] = useState<SegmentId>("Friends");
   const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
   const { postcards, friends, currentUser } = useMailClub();
 
-  // Phase 3.5: receiver-side feed. Loaded on first switch to the Received
-  // filter and refreshed on every subsequent switch. fetchReceivedPostcards
-  // hits the new fetch_received_postcards RPC which RLS-scopes to the
-  // current user's scanned postcard_claims rows.
-  const [received, setReceived] = useState<ReceivedPostcard[]>([]);
-  const [receivedLoading, setReceivedLoading] = useState(false);
-  const [receivedError, setReceivedError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (selected !== "Received") return;
-    let cancelled = false;
-    setReceivedLoading(true);
-    setReceivedError(null);
-    fetchReceivedPostcards()
-      .then((rows) => {
-        if (!cancelled) setReceived(rows);
-      })
-      .catch((e) => {
-        if (!cancelled) setReceivedError(e?.message ?? "Couldn't load received mail.");
-      })
-      .finally(() => {
-        if (!cancelled) setReceivedLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [selected]);
-
-  // Apply the segment filter to the source data BEFORE deriving routes.
-  const filteredPostcards = useMemo(() => {
-    if (selected === "Received") return [];
-    return postcards;
-  }, [postcards, selected]);
-
-  // Group postcards into unique (fromCity → toCity) routes. Each route gets
-  // the most recent send date, a friend-name aggregate, and a stable id.
-  // For the Received filter, build the routes from `received` instead:
-  // sender's city → receiver's (current user's) city. One route per
-  // received card (no grouping — each scan is its own event).
-  const routes: RouteRow[] = useMemo(() => {
-    if (selected === "Received") {
-      const homeCity = currentUser?.city || "Home";
-      return received.map((r) => ({
-        id: `received-${r.postcardId}`,
-        from: r.senderCity || "Somewhere",
-        to: homeCity,
-        date: formatRouteDate(r.scannedAt || r.sentAt),
-        miles: estimateMiles(r.senderCity || "Somewhere", homeCity),
-        people: r.senderName,
-      }));
-    }
-    const groups = new Map<string, { from: string; to: string; sentAt: string; people: Set<string> }>();
-    for (const p of filteredPostcards) {
-      const key = `${p.fromCity || "Home"}→${p.toCity}`;
+  // Build the route list from outbound postcards. We aggregate
+  // (fromCity → toCity) so multiple sends along the same line collapse
+  // into one polyline. People column joins the names of recipients on
+  // that route. Geocoords come from CITY_COORDS; unknowns drop silently
+  // until backend geocoding (planned v0.7.5).
+  const routes = useMemo(() => {
+    type Group = { from: string; to: string; sentAt: string; people: Set<string> };
+    const groups = new Map<string, Group>();
+    for (const p of postcards) {
+      const friend = friends.find((f) => f.id === p.toFriendId);
+      const toCity = p.toCity || friend?.city || "";
+      if (!p.fromCity || !toCity) continue;
+      const key = `${p.fromCity}→${toCity}`;
       const existing = groups.get(key);
-      const friendName = friends.find((f) => f.id === p.toFriendId)?.name ?? p.toCity;
       if (existing) {
         if (p.sentAt > existing.sentAt) existing.sentAt = p.sentAt;
-        existing.people.add(friendName);
+        if (friend?.name) existing.people.add(friend.name);
       } else {
-        groups.set(key, { from: p.fromCity || "Home", to: p.toCity, sentAt: p.sentAt, people: new Set([friendName]) });
+        groups.set(key, {
+          from: p.fromCity,
+          to: toCity,
+          sentAt: p.sentAt,
+          people: new Set(friend?.name ? [friend.name] : []),
+        });
       }
     }
     return Array.from(groups.entries()).map(([key, g]) => ({
@@ -116,161 +74,31 @@ export default function MapScreen() {
       miles: estimateMiles(g.from, g.to),
       people: Array.from(g.people).join(", "),
     }));
-  }, [selected, received, currentUser, filteredPostcards, friends]);
+  }, [postcards, friends]);
 
-  // Polylines that the MapPanel actually draws. We only render a line when
-  // BOTH cities resolve to a known geocoord; unknowns drop silently until
-  // 0.5.1 ships real geocoding. City strings go through normalizeCityKey
-  // first so "Denver, CO" and " denver " both hit the lookup.
   const mapRoutes: MapRoute[] = useMemo(() => {
     const out: MapRoute[] = [];
     for (const r of routes) {
       const from = CITY_COORDS[normalizeCityKey(r.from)];
       const to = CITY_COORDS[normalizeCityKey(r.to)];
       if (!from || !to) continue;
-      out.push({ from, to, tone: selected === "Received" ? "received" : "sent" });
+      out.push({ from, to, tone: "sent" });
     }
     return out;
-  }, [routes, selected]);
+  }, [routes]);
 
   const activeRoute = routes.find((r) => r.id === activeRouteId) ?? null;
-
-  // Stats reflect the currently-filtered view, not the all-time totals.
-  // Received → uses the loaded `received` list. Friends/Sent → derives
-  // from the user's outbound `postcards`.
-  const stats = useMemo(() => {
-    if (selected === "Received") {
-      const cities = new Set<string>();
-      const senders = new Set<string>();
-      for (const r of received) {
-        if (r.senderCity) cities.add(r.senderCity);
-        senders.add(r.senderId);
-      }
-      return {
-        citiesCount: cities.size,
-        friendsCount: senders.size,
-        totalMiles: routes.reduce((sum, r) => sum + r.miles, 0),
-      };
-    }
-    const cities = new Set<string>();
-    for (const p of filteredPostcards) {
-      if (p.fromCity) cities.add(p.fromCity);
-      if (p.toCity) cities.add(p.toCity);
-    }
-    for (const f of friends) {
-      if (f.city) cities.add(f.city);
-    }
-    return {
-      citiesCount: cities.size,
-      friendsCount: friends.length,
-      totalMiles: routes.reduce((sum, r) => sum + r.miles, 0),
-    };
-  }, [selected, filteredPostcards, friends, routes, received]);
-
-  function formatRouteDate(iso: string): string {
-    try {
-      const d = new Date(iso);
-      return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-    } catch {
-      return iso;
-    }
-  }
-
-  // Stable pseudo-distance from a city-pair string hash, plausible 100-3000mi
-  // range. Real geo distance ships with backend geocoding in 0.5.1.
-  function estimateMiles(from: string, to: string): number {
-    if (from === to) return 0;
-    const seed = (from + to).split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 0);
-    return 100 + (seed % 2900);
-  }
 
   return (
     <AppShell>
       <Header title="Map" />
 
-      <PostalCard style={styles.segmented}>
-        {segments.map((segment) => {
-          const active = selected === segment.id;
-          const Icon = segment.icon;
-          return (
-            <Pressable
-              key={segment.id}
-              onPress={() => setSelected(segment.id)}
-              style={[styles.segment, active && styles.segmentActive]}
-              testID={`map-filter-${segment.id.toLowerCase()}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-            >
-              <Icon color={active ? colors.white : colors.postalBlue} size={18} strokeWidth={1.6} />
-              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{segment.id}</Text>
-            </Pressable>
-          );
-        })}
-      </PostalCard>
-
-      <MapPanel routes={mapRoutes} />
-
-      <PostalCard style={styles.summary}>
-        <View style={styles.summaryRow}>
-          <SummaryItem icon={Globe2} value={String(stats.citiesCount)} label="Cities" tint={colors.postalRed} />
-          <SummaryItem icon={Users} value={String(stats.friendsCount)} label="Friends" tint={colors.ink} />
-          <SummaryItem icon={Send} value={stats.totalMiles.toLocaleString()} label="Miles" tint="#607A55" />
-        </View>
-      </PostalCard>
-
-      <PostalCard style={styles.routes}>
-        <View style={styles.airmailEdge} />
-        <View style={styles.routesHeader}>
-          <Text style={styles.sectionTitle}>Recent Routes</Text>
-          <View style={styles.postmark}>
-            <CircularPostmark size={62} topText="REAL-WORLD ROUTES" bottomText="REAL FRIENDSHIPS" centerYear="" />
-          </View>
-        </View>
-        {routes.length === 0 ? (
-          <View style={styles.routesEmpty} testID="routes-empty">
-            <MapPin color={colors.postalBlue} size={26} strokeWidth={1.5} />
-            <Text style={styles.routesEmptyTitle}>
-              {selected === "Received"
-                ? (receivedLoading ? "Checking your mailbox..." : "Nothing in your mailbox yet.")
-                : "No routes yet."}
-            </Text>
-            <Text style={styles.routesEmptyBody}>
-              {selected === "Received"
-                ? (receivedError
-                    ? receivedError
-                    : "When a friend mails you a Mailroom postcard, scan the QR on the back and it'll land here.")
-                : "Send your first card, it's free, and watch the line trace itself across the map."}
-            </Text>
-          </View>
-        ) : (
-          routes.map((route, index) => (
-            <Pressable
-              key={route.id}
-              onPress={() => setActiveRouteId(route.id)}
-              style={[styles.route, index > 0 && styles.borderTop]}
-              testID={`route-row-${route.id}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Route from ${route.from} to ${route.to}`}
-            >
-              <View style={styles.routeArt}>
-                <MiniPostcardArt variant={index === 1 ? "city" : index === 2 ? "coast" : "mountain"} />
-                <View style={styles.routeStamp}>
-                  <Stamp motif={index === 0 ? "mountain" : index === 1 ? "lighthouse" : "compass"} tone={index === 1 ? "sage" : "red"} cents={`${5 + index * 5}¢`} rotate={index % 2 === 0 ? -6 : 5} size="sm" />
-                </View>
-              </View>
-              <View style={styles.routeCopy}>
-                <Text style={styles.routeTitle}>{route.from} → {route.to}</Text>
-                <Text style={styles.routeDate}>{route.date}</Text>
-                <View style={styles.peopleRow}>
-                  <Users color={colors.ink} size={12} strokeWidth={1.5} />
-                  <Text style={styles.people}>{route.people}</Text>
-                </View>
-              </View>
-              <Text style={styles.miles}>~{route.miles.toLocaleString()} mi</Text>
-            </Pressable>
-          ))
-        )}
-      </PostalCard>
+      {/* The map IS the screen. Fills the body, full-bleed within the
+          AppShell horizontal padding. No chrome above or below — that
+          was the user feedback ("just want the map to be the thing"). */}
+      <View style={styles.mapFrame}>
+        <MapPanel routes={mapRoutes} />
+      </View>
 
       <RouteDetailSheet
         route={activeRoute}
@@ -285,45 +113,35 @@ export default function MapScreen() {
   );
 }
 
-function SummaryItem({ icon: Icon, value, label, tint }: { icon: typeof Globe2; value: string; label: string; tint: string }) {
-  return (
-    <View style={styles.summaryItem}>
-      <Icon color={tint} size={18} strokeWidth={1.5} />
-      <Text style={[styles.summaryValue, { color: tint }]} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      <Text style={styles.summaryLabel} numberOfLines={1}>{label}</Text>
-    </View>
+function formatRouteDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/** Stable pseudo-distance from a city-pair string hash. Real geocoding
+ *  lands in v0.7.5. */
+function estimateMiles(from: string, to: string): number {
+  if (from === to) return 0;
+  const seed = (from + to).split("").reduce(
+    (a, c) => (a * 31 + c.charCodeAt(0)) >>> 0,
+    0,
   );
+  return 100 + (seed % 2900);
 }
 
 const styles = StyleSheet.create({
-  segmented: { flexDirection: "row", padding: 5 },
-  segment: { alignItems: "center", borderRadius: 8, flex: 1, flexDirection: "row", gap: 8, justifyContent: "center", minHeight: 47 },
-  segmentActive: { backgroundColor: colors.ink },
-  segmentText: { color: colors.mutedInk, fontFamily: fonts.serifSemi, fontSize: 16 },
-  segmentTextActive: { color: colors.white },
-  summary: { paddingVertical: 14 },
-  summaryRow: { flexDirection: "row" },
-  summaryItem: { alignItems: "center", flex: 1, gap: 4, paddingHorizontal: 6 },
-  summaryValue: { fontFamily: fonts.serifSemi, fontSize: 24, letterSpacing: -0.4 },
-  summaryLabel: { color: colors.mutedInk, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1, textTransform: "uppercase" },
-  routes: { overflow: "hidden", paddingHorizontal: 16, paddingLeft: 22, paddingVertical: 14 },
-  airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 8 },
-  routesHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingBottom: 6 },
-  sectionTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 22, letterSpacing: 0.2 },
-  postmark: { opacity: 0.65 },
-  route: { alignItems: "center", flexDirection: "row", gap: 12, paddingVertical: 14 },
-  borderTop: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth },
-  routesEmpty: { alignItems: "center", gap: 8, paddingVertical: 24 },
-  routesEmptyTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 17, marginTop: 6 },
-  routesEmptyBody: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 17, textAlign: "center" },
-  routeArt: { position: "relative" },
-  routeStamp: { position: "absolute", right: -8, top: -10 },
-  routeCopy: { flex: 1 },
-  routeTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 18 },
-  routeDate: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 2 },
-  peopleRow: { alignItems: "center", flexDirection: "row", gap: 5, marginTop: 4 },
-  people: { color: colors.ink, fontFamily: fonts.serif, fontSize: 13 },
-  miles: { color: colors.postalRed, fontFamily: fonts.serifSemi, fontSize: 16 },
+  mapFrame: {
+    flex: 1,
+    marginTop: 8,
+    overflow: "hidden",
+    borderRadius: 12,
+  },
 });

@@ -10,6 +10,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -63,6 +64,7 @@ import { fonts, type } from "@/src/theme/typography";
 type Step =
   | "hero"
   | "auth-email"
+  | "explain"      // NEW: brief "your first card is on us" interstitial
   | "photo"
   | "note"
   | "recipient"
@@ -105,6 +107,7 @@ export function WelcomeSheet({
     addFriendByAddress,
     sendPostcard,
     sendPostcardViaLink,
+    sendIntoVoid,
     hasCompletedSignup,
   } = useMailClub();
 
@@ -219,7 +222,11 @@ export function WelcomeSheet({
     email.trim().includes("@") && password.length >= 8 && !saving;
   const canAdvancePhoto = !!photoUri;
   const canAdvanceNote = message.trim().length > 0;
-  const canAdvanceRecipient = recipientKind !== null && recipientKind !== "penpal";
+  // v0.7.0.1: pen pal is unblocked. It wires to `sendIntoVoid` (the
+  // existing anonymous "send to a stranger" backend), so users can
+  // actually mail one — no matching backend needed in MVP. The card
+  // queues, eventually a Mailroom-side moderator/match assigns it.
+  const canAdvanceRecipient = recipientKind !== null;
 
   function isAddressComplete(a: AddressDraft): boolean {
     return (
@@ -230,19 +237,19 @@ export function WelcomeSheet({
     );
   }
 
-  const canAdvanceTheirInfo = (() => {
-    if (recipientKind === "friend") {
-      return theirName.trim().length > 0 && isAddressComplete(theirAddress);
-    }
-    if (recipientKind === "link") {
-      return theirName.trim().length > 0 && theirContact.trim().length > 0;
-    }
-    if (recipientKind === "self") {
-      // Self-send: we&apos;ll use the user&apos;s own address (collected next step).
-      return true;
-    }
-    return false;
-  })();
+  // v0.7.0.1: only the "friend" recipient kind needs full recipient info
+  // (name + address). All others skip their-info and go straight to
+  // your-info:
+  //   - link: dropped name + contact fields. We use the iOS Share sheet
+  //     to deliver the claim URL after creating the card. Escargot pattern.
+  //   - self: uses the user's own address (collected on your-info).
+  //   - penpal: anonymous, no recipient info. Routed through sendIntoVoid.
+  const needsTheirInfo = recipientKind === "friend";
+
+  const canAdvanceTheirInfo =
+    recipientKind === "friend"
+      ? theirName.trim().length > 0 && isAddressComplete(theirAddress)
+      : true;
 
   const canAdvanceYourInfo =
     yourFirstName.trim().length > 0 && isAddressComplete(yourAddress);
@@ -269,13 +276,11 @@ export function WelcomeSheet({
         setPresetFirstName(first);
         setYourFirstName(first);
       }
-      if (hasCompletedSignup) {
-        // Returning, fully-onboarded user — they shouldn&apos;t be here at
-        // all. WelcomeGate should close us. Nudge to photo anyway.
-        setStep("photo");
-      } else {
-        setStep("photo");
-      }
+      // v0.7.0.1: insert the "explain" interstitial after auth so the
+      // jump from sign-in to photo-pick isn&apos;t jarring. Returning
+      // users (rare, since hasCompletedSignup+hasSentFirstCard=true
+      // closes the sheet entirely) also see it briefly — not a problem.
+      setStep("explain");
     } catch (e: any) {
       setError(e?.message ?? "Something went wrong.");
     } finally {
@@ -296,16 +301,14 @@ export function WelcomeSheet({
           return;
         }
         setAuthed(true);
-        // If they already have a complete profile but no first card,
-        // skip past the photo intro; they know what they&apos;re here for.
-        setStep("photo");
+        setStep("explain");
         return;
       }
       // Sign-up path: defer the actual signup until "mailed" step so we
       // can commit profile + first card atomically. We just bank email +
       // password and move on.
       setAuthed(true);
-      setStep("photo");
+      setStep("explain");
     } catch (e: any) {
       setError(e?.message ?? "Something went wrong.");
     } finally {
@@ -397,20 +400,29 @@ export function WelcomeSheet({
           throw new Error("Couldn't mail the card.");
         }
       } else if (recipientKind === "link") {
-        // Send-link flow: card queues, recipient gets a link to enter
-        // their address, Lob ships once they do. Counts as the first
-        // send right away.
+        // Send-link flow: card queues immediately + the user gets a
+        // shareable claim URL. v0.7.0.1: instead of asking for the
+        // recipient&apos;s name + contact, we open the iOS Share sheet
+        // with the claim URL and let the user pick how to deliver it
+        // (iMessage, Mail, AirDrop, whatever). Escargot pattern.
         const sendRes = await sendPostcardViaLink({
           category: "photo",
           message: message.trim(),
           photoUri: photoUri ?? undefined,
         });
-        if (!sendRes.ok) {
+        if (!sendRes.ok || !sendRes.claimUrl) {
           throw new Error("Couldn't create the link.");
         }
-        // TODO v0.7.1: dispatch the SMS/email to `theirContact` with the
-        // claim URL. For v0.7.0 the user copies it manually from a
-        // follow-up screen. Acceptable — first send still completes.
+        try {
+          await Share.share({
+            message: `I sent you a postcard on Mailroom. Tap to claim it — ${sendRes.claimUrl}`,
+            url: sendRes.claimUrl,
+          });
+        } catch {
+          // Share sheet dismissed or unavailable — the card is queued
+          // either way. User can find the claim URL in their journal
+          // later if they want to share again.
+        }
       } else if (recipientKind === "self") {
         // Send to yourself: create a friend row with your own address
         // (so future repeat-sends to self work) and send.
@@ -438,9 +450,23 @@ export function WelcomeSheet({
         if (!sendRes.ok) {
           throw new Error("Couldn't mail the card.");
         }
+      } else if (recipientKind === "penpal") {
+        // v0.7.0.1: pen pal is wired through sendIntoVoid — the existing
+        // anonymous "send to a stranger" backend. The card queues; a
+        // Mailroom-curated recipient is assigned later. From the
+        // sender&apos;s POV: card is mailed, app opens, they&apos;re in.
+        const note = message.trim();
+        const voidRes = await sendIntoVoid(
+          // Include the user&apos;s first name in the message so the
+          // recipient knows who sent it.
+          note,
+        );
+        if (!voidRes.ok) {
+          throw new Error("Couldn't send to a pen pal. Try again in a moment.");
+        }
       } else {
-        // penpal — not wired in v0.7.0
-        throw new Error("Pen pal matching ships in v0.7.5.");
+        // Unknown recipient kind — defensive.
+        throw new Error("Pick a recipient first.");
       }
 
       setStep("mailed");
@@ -456,21 +482,23 @@ export function WelcomeSheet({
   function back() {
     setError(null);
     if (step === "auth-email") setStep("hero");
-    else if (step === "photo") setStep(authed ? "hero" : "auth-email");
+    else if (step === "explain") setStep(authed ? "hero" : "auth-email");
+    else if (step === "photo") setStep("explain");
     else if (step === "note") setStep("photo");
     else if (step === "recipient") setStep("note");
     else if (step === "their-info") setStep("recipient");
     else if (step === "your-info") {
-      // If "self" skipped their-info, back goes to recipient.
-      setStep(recipientKind === "self" ? "recipient" : "their-info");
+      // Only "friend" goes through their-info. Everything else skips
+      // straight from recipient → your-info, so back goes to recipient.
+      setStep(needsTheirInfo ? "their-info" : "recipient");
     } else if (step === "mailed") setStep("your-info");
   }
 
   function next() {
     setError(null);
-    if (step === "recipient") {
-      if (recipientKind === "self") setStep("your-info");
-      else setStep("their-info");
+    if (step === "explain") setStep("photo");
+    else if (step === "recipient") {
+      setStep(needsTheirInfo ? "their-info" : "your-info");
     } else if (step === "their-info") {
       setStep("your-info");
     }
@@ -539,6 +567,10 @@ export function WelcomeSheet({
             />
           ) : null}
 
+          {step === "explain" ? (
+            <ExplainStep onContinue={() => setStep("photo")} />
+          ) : null}
+
           {step === "photo" ? (
             <PhotoStep
               photoUri={photoUri}
@@ -566,7 +598,7 @@ export function WelcomeSheet({
             />
           ) : null}
 
-          {step === "their-info" ? (
+          {step === "their-info" && needsTheirInfo ? (
             <TheirInfoStep
               kind={recipientKind ?? "friend"}
               theirName={theirName}
@@ -868,6 +900,75 @@ const emailStyles = StyleSheet.create({
 });
 
 // ============================================================================
+// STEP 1.5 — EXPLAIN (post-auth interstitial)
+// ============================================================================
+//
+// v0.7.0.2: bridges the "Sign in → Pick the photo" gap, which felt jarring
+// in user testing. Brief Recraft hero, the WHAT and the HOW in two lines,
+// "Got it" continue. No step dots — this isn't part of the data-collection
+// flow, it's the welcome to the data-collection flow.
+
+function ExplainStep({ onContinue }: { onContinue: () => void }) {
+  return (
+    <View style={[stepStyles.wrap, { gap: 0 }]} testID="welcome-step-explain">
+      <View style={explainStyles.artFrame}>
+        <Image
+          source={HERO_MAILBOX}
+          style={explainStyles.art}
+          resizeMode="cover"
+          accessibilityLabel="A hand reaching into a mailbox"
+        />
+      </View>
+
+      <Text style={explainStyles.kicker}>YOUR FIRST CARD IS ON US</Text>
+
+      <Text style={[stepStyles.title, { textAlign: "center", marginTop: 6 }]}>
+        Pick a photo.{"\n"}Mail it.
+      </Text>
+
+      <Text
+        style={[
+          stepStyles.subtitle,
+          { textAlign: "center", marginTop: 14, paddingHorizontal: 10 },
+        ]}
+      >
+        Pick a photo, write a note. We print it, stamp it, and drop it in the
+        mail through USPS.
+      </Text>
+
+      <PrimaryButton
+        title="Got it →"
+        onPress={onContinue}
+        style={explainStyles.gotItBtn}
+        testID="welcome-explain-continue"
+      />
+    </View>
+  );
+}
+
+const explainStyles = StyleSheet.create({
+  artFrame: {
+    aspectRatio: 1,
+    borderRadius: 18,
+    overflow: "hidden",
+    width: "70%",
+    alignSelf: "center",
+    marginTop: 8,
+    marginBottom: 18,
+  },
+  art: { width: "100%", height: "100%" },
+  kicker: {
+    color: colors.postalRed,
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  gotItBtn: { marginTop: 32 },
+});
+
+// ============================================================================
 // STEP 2 — PHOTO PICK
 // ============================================================================
 
@@ -946,9 +1047,9 @@ function NoteStep({
   return (
     <View style={stepStyles.wrap} testID="welcome-step-note">
       <StepDots count={5} active={1} />
-      <Text style={stepStyles.title}>What&apos;s the memory?</Text>
+      <Text style={stepStyles.title}>Write them a note.</Text>
       <Text style={stepStyles.subtitle}>
-        A line or two. It&apos;s a postcard, not an email.
+        A line or two on the back. It&apos;s a postcard, not an email.
       </Text>
       <TextInput
         value={message}
@@ -1053,11 +1154,10 @@ function RecipientStep({
         kind="penpal"
         selected={kind === "penpal"}
         title="A pen pal"
-        sub="Send one, get one from a stranger (coming soon)"
+        sub="Send one, get one from a stranger"
         Icon={UsersIcon}
         onPress={() => onPick("penpal")}
         testID="welcome-recipient-penpal"
-        disabled
       />
 
       <PrimaryButton
@@ -1355,6 +1455,25 @@ const mailedStyles = StyleSheet.create({
 // SHARED — address fields, field labels, step dots, step styles
 // ============================================================================
 
+/**
+ * AddressFields — v0.7.0.1: ONE smart autofill textbox.
+ *
+ * Previously: 4 separate fields (Street, City, State, ZIP). User feedback:
+ * jarring, lots of taps, and the per-field autofill was inconsistent. Now
+ * it&apos;s a single multiline textbox with `textContentType="fullStreetAddress"`
+ * so iOS QuickType offers the user&apos;s Contact address as one-tap autofill.
+ *
+ * Free-form input → parsed on blur into structured fields via
+ * `parseFreeFormAddress`. Pattern-matches:
+ *   "5209 Dorset Ave, Boise, ID 83706"           — canonical
+ *   "5209 Dorset Ave Apt 4B, Boise, ID 83706"    — apt baked into line1
+ *   "5209 Dorset Ave, Boise, ID, 83706"          — extra comma
+ *   "Boise, ID"                                  — city + state only (Lob fails later)
+ * If parse fails entirely, line1 = the raw input + city/state empty, which
+ * blocks Continue. The validator in WelcomeSheet (`isAddressComplete`)
+ * gates on city + state + valid zip — so users can&apos;t move forward
+ * with a half-parsed address.
+ */
 function AddressFields({
   address,
   onChange,
@@ -1366,79 +1485,127 @@ function AddressFields({
   testIDPrefix: string;
   label?: string;
 }) {
+  // Derive the displayed string from the structured fields when they exist.
+  // When the user types, we hold the raw text in local state — parse on
+  // blur to update the structured fields, but never overwrite the user&apos;s
+  // typed text mid-edit.
+  const [raw, setRaw] = useState<string>(() => addressToText(address));
+
+  useEffect(() => {
+    // If the parent updates address (e.g., reset after sign-out), refresh
+    // the raw text from it. But ONLY when the structured form changes —
+    // not on every keystroke.
+    const expected = addressToText(address);
+    setRaw((prev) => (prev === expected ? prev : expected));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address.line1, address.line2, address.city, address.state, address.zip]);
+
   return (
     <>
       <FieldLabel style={{ marginTop: 14 }}>{label ?? "Their address"}</FieldLabel>
       <TextInput
-        value={address.line1}
-        onChangeText={(v) => onChange({ ...address, line1: v })}
-        placeholder="412 SE Belmont"
+        value={raw}
+        onChangeText={(v) => {
+          setRaw(v);
+          // Parse on every change so the validator updates live. If
+          // parse fails, fields stay empty and Continue stays grey.
+          const parsed = parseFreeFormAddress(v);
+          if (parsed) onChange(parsed);
+          else onChange({ line1: v.trim(), line2: "", city: "", state: "", zip: "" });
+        }}
+        placeholder="5209 Dorset Ave, Boise, ID 83706"
         placeholderTextColor={colors.mutedInk}
         autoCapitalize="words"
         autoCorrect={false}
-        textContentType="streetAddressLine1"
-        autoComplete="address-line1"
-        style={fieldStyles.input}
-        testID={`${testIDPrefix}-line1`}
+        // The magic line: iOS QuickType pulls the user&apos;s saved
+        // Contact address as a one-tap autofill on this field.
+        textContentType="fullStreetAddress"
+        autoComplete="postal-address"
+        multiline
+        style={[fieldStyles.input, { minHeight: 64, textAlignVertical: "top" }]}
+        testID={`${testIDPrefix}-address`}
       />
-      <TextInput
-        value={address.line2}
-        onChangeText={(v) => onChange({ ...address, line2: v })}
-        placeholder="Apt, suite (optional)"
-        placeholderTextColor={colors.mutedInk}
-        autoCapitalize="words"
-        autoCorrect={false}
-        textContentType="streetAddressLine2"
-        autoComplete="address-line2"
-        style={[fieldStyles.input, { marginTop: 8 }]}
-        testID={`${testIDPrefix}-line2`}
-      />
-      <View style={fieldStyles.row}>
-        <View style={{ flex: 2 }}>
-          <TextInput
-            value={address.city}
-            onChangeText={(v) => onChange({ ...address, city: v })}
-            placeholder="Portland"
-            placeholderTextColor={colors.mutedInk}
-            autoCapitalize="words"
-            autoCorrect={false}
-            textContentType="addressCity"
-            autoComplete="postal-address-locality"
-            style={fieldStyles.input}
-            testID={`${testIDPrefix}-city`}
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <TextInput
-            value={address.state}
-            onChangeText={(v) => onChange({ ...address, state: v.toUpperCase().slice(0, 2) })}
-            placeholder="OR"
-            placeholderTextColor={colors.mutedInk}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={2}
-            textContentType="addressState"
-            autoComplete="postal-address-region"
-            style={fieldStyles.input}
-            testID={`${testIDPrefix}-state`}
-          />
-        </View>
-        <View style={{ flex: 1.2 }}>
-          <TextInput
-            value={address.zip}
-            onChangeText={(v) => onChange({ ...address, zip: v.replace(/[^\d-]/g, "").slice(0, 10) })}
-            placeholder="97214"
-            placeholderTextColor={colors.mutedInk}
-            keyboardType="number-pad"
-            textContentType="postalCode"
-            autoComplete="postal-code"
-            style={fieldStyles.input}
-            testID={`${testIDPrefix}-zip`}
-          />
-        </View>
-      </View>
+      <Text style={fieldStyles.helper}>
+        Street, city, state, ZIP. Your saved address (Contacts / iCloud) shows up in the QuickType bar.
+      </Text>
     </>
   );
+}
+
+/** Convert a structured AddressDraft into the display string we use in
+ *  the single-textbox field. */
+function addressToText(a: AddressDraft): string {
+  const parts: string[] = [];
+  if (a.line1) parts.push(a.line1);
+  if (a.line2) parts.push(a.line2);
+  if (a.city) parts.push(a.city);
+  const stateZip = [a.state, a.zip].filter(Boolean).join(" ");
+  if (stateZip) parts.push(stateZip);
+  return parts.join(", ");
+}
+
+/** Forgiving free-form address parser. Returns null if it can&apos;t
+ *  extract a usable address (city + state at minimum). */
+function parseFreeFormAddress(input: string): AddressDraft | null {
+  const cleaned = input.trim().replace(/\s+/g, " ");
+  if (!cleaned) return null;
+
+  // Path A: comma-separated. Try "..., City, ST ZIP" or "..., City, ST, ZIP".
+  const parts = cleaned.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    // Last part might be "STATE ZIP" combined.
+    const lastPart = parts[parts.length - 1];
+    const combined = lastPart.match(/^([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
+    if (combined && parts.length >= 2) {
+      const state = combined[1].toUpperCase();
+      const zip = combined[2];
+      const city = parts[parts.length - 2] ?? "";
+      const before = parts.slice(0, Math.max(0, parts.length - 2));
+      return {
+        line1: before[0] ?? "",
+        line2: before.length > 1 ? before.slice(1).join(", ") : "",
+        city,
+        state,
+        zip,
+      };
+    }
+    // State and ZIP as separate parts: "..., City, ST, ZIP".
+    if (parts.length >= 3) {
+      const lastIsZip = /^\d{5}(?:-\d{4})?$/.test(lastPart);
+      const secondLastIsState = /^[A-Z]{2}$/i.test(parts[parts.length - 2]);
+      if (lastIsZip && secondLastIsState) {
+        const state = parts[parts.length - 2].toUpperCase();
+        const zip = lastPart;
+        const city = parts[parts.length - 3] ?? "";
+        const before = parts.slice(0, Math.max(0, parts.length - 3));
+        return {
+          line1: before[0] ?? "",
+          line2: before.length > 1 ? before.slice(1).join(", ") : "",
+          city,
+          state,
+          zip,
+        };
+      }
+    }
+  }
+
+  // Path B: no comma-separated structure. Try to match "...City ST ZIP"
+  // at the end of the string.
+  const trailing = cleaned.match(/^(.+?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i);
+  if (trailing) {
+    const mid = trailing[1].trim();
+    const state = trailing[2].toUpperCase();
+    const zip = trailing[3];
+    const words = mid.split(/\s+/);
+    if (words.length >= 2) {
+      // Heuristic: take the last word as the city, everything before as line1.
+      const city = words[words.length - 1];
+      const line1 = words.slice(0, -1).join(" ");
+      return { line1, line2: "", city, state, zip };
+    }
+  }
+
+  return null;
 }
 
 function FieldLabel({ children, style }: { children: React.ReactNode; style?: any }) {
@@ -1469,6 +1636,13 @@ const fieldStyles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     marginTop: 8,
+  },
+  helper: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 6,
   },
   error: {
     color: colors.postalRed,
