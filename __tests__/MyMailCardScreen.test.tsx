@@ -76,22 +76,21 @@ describe("MyMailCardScreen", () => {
     expect(queryByTestId("credits-buy-btn")).toBeNull();
   });
 
-  it("renders Constellation + Mail Map preview cards", () => {
-    const { getByText } = renderMyCard();
-    expect(getByText("Your Constellation")).toBeTruthy();
-    expect(getByText("Mail Map")).toBeTruthy();
+  // v0.6.1: Constellation + Mail Map preview cards removed. Send Mail +
+  // Add Friend buttons removed. Both were redundant shortcuts to other
+  // tabs and felt like clutter on the profile screen.
+  it("does NOT render the removed Constellation/Map preview cards", () => {
+    const { queryByText, queryByTestId } = renderMyCard();
+    expect(queryByText("Your Constellation")).toBeNull();
+    expect(queryByText("Mail Map")).toBeNull();
+    expect(queryByTestId("preview-constellation")).toBeNull();
+    expect(queryByTestId("preview-map")).toBeNull();
   });
 
-  it("Send Mail button navigates to /send", () => {
-    const { getByText } = renderMyCard();
-    fireEvent.press(getByText("Send Mail"));
-    expect(expoRouter.__mockPush).toHaveBeenCalledWith("/send");
-  });
-
-  it("Add Friend button navigates to /friends", () => {
-    const { getByText } = renderMyCard();
-    fireEvent.press(getByText("Add Friend"));
-    expect(expoRouter.__mockPush).toHaveBeenCalledWith("/friends");
+  it("does NOT render the removed Send Mail / Add Friend bottom buttons", () => {
+    const { queryByText } = renderMyCard();
+    expect(queryByText("Send Mail")).toBeNull();
+    expect(queryByText("Add Friend")).toBeNull();
   });
 
   it("opens the SettingsSheet when the header gear is tapped", () => {
@@ -113,11 +112,11 @@ describe("MyMailCardScreen", () => {
     expect(getByText("Buy stamps")).toBeTruthy();
   });
 
-  it("preview cards navigate to constellation + map", () => {
+  it("metric tiles still navigate to their respective tabs", () => {
     const { getByTestId } = renderMyCard();
-    fireEvent.press(getByTestId("preview-constellation"));
-    expect(expoRouter.__mockPush).toHaveBeenCalledWith("/constellation");
-    fireEvent.press(getByTestId("preview-map"));
+    fireEvent.press(getByTestId("metric-friends"));
+    expect(expoRouter.__mockPush).toHaveBeenCalledWith("/friends");
+    fireEvent.press(getByTestId("metric-cities"));
     expect(expoRouter.__mockPush).toHaveBeenCalledWith("/map");
   });
 });

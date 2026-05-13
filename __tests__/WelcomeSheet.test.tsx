@@ -9,13 +9,15 @@ beforeEach(async () => {
 });
 
 /**
- * v0.6.0 WelcomeSheet is a multi-page sign-up flow:
+ * v0.6.1 WelcomeSheet is a streamlined multi-page sign-up flow:
  *   1. hero        — Apple Sign In + email fallback link + brand art
  *   1b. auth-email — email + password fields (sign-up or sign-in)
  *   2. name        — single-field name input
- *   3. explain     — pause page, "Got it"
- *   4. address     — single-bar address with parser, calls completeSignup
- *   5. done        — celebration, dismisses on tap
+ *   3. city        — City + State two-field input (replaced single-bar parser)
+ *   4. done        — celebration, dismisses on tap
+ *
+ * v0.6.1 removed the "Mailroom mails real postcards" pause page (was too
+ * text-heavy and redundant with the hero tagline).
  *
  * Tests focus on step rendering + navigation. The deep auth + signup logic
  * lives in MailClubContext and has its own test suite (MailClubContext.test).
@@ -29,8 +31,17 @@ describe("WelcomeSheet (multi-page signup)", () => {
     );
     expect(getByTestId("welcome-step-hero")).toBeTruthy();
     expect(queryByTestId("welcome-step-name")).toBeNull();
-    expect(queryByTestId("welcome-step-address")).toBeNull();
+    expect(queryByTestId("welcome-step-city")).toBeNull();
     expect(queryByTestId("welcome-step-done")).toBeNull();
+  });
+
+  it("no longer renders the deleted 'explain' pause page", () => {
+    const { queryByTestId } = render(
+      <AllProviders>
+        <WelcomeSheet visible={true} onComplete={() => {}} />
+      </AllProviders>
+    );
+    expect(queryByTestId("welcome-step-explain")).toBeNull();
   });
 
   it("renders nothing when not visible", () => {

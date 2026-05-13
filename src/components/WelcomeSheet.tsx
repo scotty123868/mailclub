@@ -1,5 +1,5 @@
 import * as AppleAuthentication from "expo-apple-authentication";
-import { ArrowLeft, ArrowRight, Mail } from "lucide-react-native";
+import { ArrowLeft, ArrowRight } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
   Image,
@@ -23,38 +23,36 @@ import { colors } from "@/src/theme/colors";
 import { fonts, type } from "@/src/theme/typography";
 
 /**
- * WelcomeSheet — v0.6.0 multi-page sign-up.
+ * WelcomeSheet — v0.6.1 streamlined sign-up.
  *
- * Per the SIGNUP_AND_PENPAL_GALLERY.html review:
+ * Per user feedback after v0.6.0 TestFlight (build 6):
+ *   - The "Mailroom mails real postcards" pause page was too text-heavy and
+ *     redundant with the hero tagline. DELETED.
+ *   - The single-bar address input with strict comma parsing was blocking
+ *     users from completing signup. iOS QuickType only suggests addresses
+ *     if the user has one saved in Contacts, which most don't. REPLACED
+ *     with separate City + State fields (the only two we actually persist
+ *     to the profile in v0.6.x — line1/zip were thrown away anyway).
+ *
+ * Step machine now:
  *   1. hero        — brand art, "Mail a photo for less than a stamp.", Apple
  *                    Sign In primary + "Sign up with email" secondary
  *   1b. auth-email — email + password fallback (sign-up or sign-in)
  *   2. name        — "What should your friends call you?" single input
- *   3. explain     — "Mailroom mails real postcards." pause page
- *   4. address     — "Where do you mail from?" single-bar input (iOS
- *                    autofill via textContentType=fullStreetAddress; we
- *                    parse on submit, store city/state on profile, retain
- *                    full address client-side for the receive-mail loop)
- *   5. done        — "3 stamps, on us." celebration + first-send CTA
+ *   3. city        — "Where do you mail from?" City + State, two fields
+ *   4. done        — "3 stamps, on us." celebration + first-send CTA
+ *
+ * Full street/zip will be collected later when the user first receives a
+ * card via the magic-link reciprocation loop (Phase 7).
  *
  * Auth contract is unchanged. The context still exposes:
  *   - signInWithApple(), returns { ok, isNewUser, fullName, email }
  *   - signInWithEmail(email, password)
  *   - signUpWithEmail(email, password)
  *   - completeSignup({ name, city, state, birthday?, email?, password? })
- *
- * We call completeSignup at the END of the flow (after the address page) so
- * every signup hits the same code path that 0.5.x users went through. This
- * preserves backwards-compat: existing users signing back in via Apple skip
- * the whole multi-page flow because `hasCompletedSignup` becomes true and
- * WelcomeGate hides the sheet immediately.
- *
- * Birthday is intentionally DROPPED from signup. The Friend type still has
- * birthday for adding individual friends; current-user profile field stays
- * in the type but is no longer set during onboarding.
  */
 
-type Step = "hero" | "auth-email" | "name" | "explain" | "address" | "done";
+type Step = "hero" | "auth-email" | "name" | "city" | "done";
 
 const HERO_FOLK_MAP = require("@/assets/onboarding/hero-folk-map.png");
 const HERO_MAILBOX = require("@/assets/onboarding/hero-mailbox.png");
@@ -74,9 +72,11 @@ export function WelcomeSheet({
 
   // -- Profile data -------------------------------------------------------
   const [name, setName] = useState("");
-  const [addressLine, setAddressLine] = useState(""); // single-bar raw
-  const [parsedCity, setParsedCity] = useState("");
-  const [parsedState, setParsedState] = useState("");
+  // v0.6.1: city + state directly. The strict comma-parser of 0.6.0 was
+  // blocking users — switched to discrete fields that iOS can autofill
+  // individually via textContentType.
+  const [city, setCity] = useState("");
+  const [stateAbbr, setStateAbbr] = useState("");
 
   // -- Email fallback path ------------------------------------------------
   const [emailMode, setEmailMode] = useState<"signup" | "signin">("signup");
@@ -139,9 +139,8 @@ export function WelcomeSheet({
     if (!visible) {
       setStep("hero");
       setName("");
-      setAddressLine("");
-      setParsedCity("");
-      setParsedState("");
+      setCity("");
+      setStateAbbr("");
       setEmail("");
       setPassword("");
       setEmailMode("signup");
@@ -164,11 +163,9 @@ export function WelcomeSheet({
   // -- Validators ---------------------------------------------------------
 
   const canAdvanceName = name.trim().length > 0;
-  // Address parser: accepts "Line 1, City, ST ZIP" or "Line 1, City, ST, ZIP".
-  // Stores parsed parts so the address page can show inline validation +
-  // store the canonical pieces on submit.
-  const parsedAddress = parseAddress(addressLine);
-  const canAdvanceAddress = parsedAddress !== null;
+  const trimmedState = stateAbbr.trim().toUpperCase();
+  const canAdvanceCity =
+    city.trim().length > 0 && /^[A-Z]{2}$/.test(trimmedState);
   const canAdvanceEmail =
     email.trim().includes("@") && password.length >= 8 && !saving;
 
@@ -266,17 +263,10 @@ export function WelcomeSheet({
     setError(null);
     setSaving(true);
     try {
-      // Save the parsed address pieces. completeSignup currently only writes
-      // city + state to the profile; the full street/zip are kept locally
-      // for now until the 0.6.x profile-address migration lands.
-      const parsed = parseAddress(addressLine);
-      const city = parsed?.city || parsedCity;
-      const state = parsed?.state || parsedState;
-
       await completeSignup({
-        name,
-        city,
-        state,
+        name: name.trim(),
+        city: city.trim(),
+        state: trimmedState,
         // Birthday intentionally omitted. Friend-birthday collection still
         // happens on Add Friend.
         email: appleSignedIn ? undefined : email.trim() || undefined,
@@ -302,10 +292,9 @@ export function WelcomeSheet({
 
   function back() {
     if (step === "name") setStep(appleSignedIn ? "hero" : "auth-email");
-    else if (step === "explain") setStep("name");
-    else if (step === "address") setStep("explain");
+    else if (step === "city") setStep("name");
     else if (step === "auth-email") setStep("hero");
-    else if (step === "done") setStep("address");
+    else if (step === "done") setStep("city");
     // step === "hero" → no-op; the sheet is modal
   }
 
@@ -369,20 +358,17 @@ export function WelcomeSheet({
               name={name}
               onNameChange={setName}
               canContinue={canAdvanceName}
-              onContinue={() => setStep("explain")}
+              onContinue={() => setStep("city")}
             />
           ) : null}
 
-          {step === "explain" ? (
-            <ExplainStep onContinue={() => setStep("address")} />
-          ) : null}
-
-          {step === "address" ? (
-            <AddressStep
-              addressLine={addressLine}
-              onAddressChange={setAddressLine}
-              parsed={parsedAddress}
-              canContinue={canAdvanceAddress}
+          {step === "city" ? (
+            <CityStep
+              city={city}
+              onCityChange={setCity}
+              stateAbbr={stateAbbr}
+              onStateChange={setStateAbbr}
+              canContinue={canAdvanceCity}
               onContinue={finish}
               saving={saving}
               error={error}
@@ -705,7 +691,7 @@ function NameStep({
 }) {
   return (
     <View style={stepStyles.wrap} testID="welcome-step-name">
-      <StepDots count={4} active={0} />
+      <StepDots count={3} active={0} />
       <Text style={stepStyles.title}>What should{"\n"}your friends call you?</Text>
       <Text style={stepStyles.subtitle}>
         Just a first name is fine. We'll print it on the back of the postcards you send.
@@ -737,111 +723,89 @@ function NameStep({
 }
 
 // ============================================================================
-// STEP 3 — EXPLAIN
+// STEP 3 — CITY + STATE
 // ============================================================================
+//
+// v0.6.1: replaced the single-bar address parser with discrete City + State
+// fields. We only ever persisted city + state in v0.6.x anyway (line1/zip
+// were thrown away), and iOS only auto-suggests addresses if one is saved
+// in Contacts — most users got stuck. Two fields, two textContentTypes,
+// done. Full address can be collected later when the first reply needs
+// somewhere to land (Phase 7).
 
-function ExplainStep({ onContinue }: { onContinue: () => void }) {
-  return (
-    <View style={stepStyles.wrap} testID="welcome-step-explain">
-      <StepDots count={4} active={1} />
-      <Text style={stepStyles.title}>Mailroom mails{"\n"}real postcards.</Text>
-      <Text style={[stepStyles.subtitle, { fontSize: 15, lineHeight: 24, marginTop: 18 }]}>
-        Pick a photo. Write a few words. We print it, stamp it, and mail it through USPS. Costs 80¢
-        each, less than the stamp would be on its own.
-        {"\n\n"}
-        <Text style={{ color: colors.ink, fontFamily: fonts.serifSemi }}>
-          We give you 3 to start, on us.
-        </Text>
-      </Text>
-      <View style={explainStyles.quietRow}>
-        <Mail color={colors.mutedInk} size={20} strokeWidth={1.6} />
-        <Text style={explainStyles.quietText}>No feed. No algorithm.{"\n"}Just real mail to real people.</Text>
-      </View>
-      <PrimaryButton
-        title="Got it →"
-        onPress={onContinue}
-        style={stepStyles.continueBtn}
-        testID="welcome-explain-continue"
-      />
-    </View>
-  );
-}
-
-const explainStyles = StyleSheet.create({
-  quietRow: {
-    alignItems: "center",
-    backgroundColor: "rgba(245, 240, 230, 0.5)",
-    borderColor: colors.line,
-    borderRadius: 12,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 14,
-    marginTop: 32,
-    padding: 18,
-  },
-  quietText: { color: colors.ink, fontFamily: fonts.serifItalic, fontSize: 14, lineHeight: 20 },
-});
-
-// ============================================================================
-// STEP 4 — ADDRESS
-// ============================================================================
-
-function AddressStep({
-  addressLine,
-  onAddressChange,
-  parsed,
+function CityStep({
+  city,
+  onCityChange,
+  stateAbbr,
+  onStateChange,
   canContinue,
   onContinue,
   saving,
   error,
 }: {
-  addressLine: string;
-  onAddressChange: (v: string) => void;
-  parsed: ParsedAddress | null;
+  city: string;
+  onCityChange: (v: string) => void;
+  stateAbbr: string;
+  onStateChange: (v: string) => void;
   canContinue: boolean;
   onContinue: () => void;
   saving: boolean;
   error: string | null;
 }) {
   return (
-    <View style={stepStyles.wrap} testID="welcome-step-address">
-      <StepDots count={4} active={2} />
+    <View style={stepStyles.wrap} testID="welcome-step-city">
+      <StepDots count={3} active={1} />
       <Text style={stepStyles.title}>Where do you{"\n"}mail from?</Text>
       <Text style={stepStyles.subtitle}>
-        Friends will see "from {parsed?.city || "your city"}" on the postcards you send. Your full
-        address stays private.
-      </Text>
-      <TextInput
-        value={addressLine}
-        onChangeText={onAddressChange}
-        placeholder="5209 Dorset Ave, Boise, ID 83706"
-        placeholderTextColor={colors.mutedInk}
-        autoFocus
-        autoCapitalize="words"
-        autoCorrect={false}
-        textContentType="fullStreetAddress"
-        autoComplete="postal-address"
-        style={[stepStyles.bigInput, { fontSize: 17 }]}
-        testID="welcome-address"
-        returnKeyType="done"
-        onSubmitEditing={canContinue && !saving ? onContinue : undefined}
-        multiline={false}
-      />
-      <Text style={addressStyles.helper}>
-        Street, city, state, ZIP — comma-separated. iOS may suggest saved addresses if you have any.
+        Friends will see "from {city.trim() || "your city"}" on the postcards you send. Your full
+        address stays private — we ask for it later, only when someone mails you back.
       </Text>
 
-      {parsed ? (
-        <View style={addressStyles.parsedRow}>
-          <Text style={addressStyles.parsedCheck}>✓</Text>
-          <Text style={addressStyles.parsedText}>
-            {parsed.line1}, {parsed.city}, {parsed.state} {parsed.zip}
-          </Text>
+      <View style={cityStyles.row}>
+        <View style={cityStyles.cityCol}>
+          <Text style={cityStyles.label}>City</Text>
+          <TextInput
+            value={city}
+            onChangeText={onCityChange}
+            placeholder="Boise"
+            placeholderTextColor={colors.mutedInk}
+            autoFocus
+            autoCapitalize="words"
+            autoCorrect={false}
+            textContentType="addressCity"
+            autoComplete="postal-address-locality"
+            style={cityStyles.input}
+            testID="welcome-city"
+            returnKeyType="next"
+            maxLength={64}
+          />
         </View>
-      ) : null}
+        <View style={cityStyles.stateCol}>
+          <Text style={cityStyles.label}>State</Text>
+          <TextInput
+            value={stateAbbr}
+            onChangeText={(v) => onStateChange(v.toUpperCase().slice(0, 2))}
+            placeholder="ID"
+            placeholderTextColor={colors.mutedInk}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            textContentType="addressState"
+            autoComplete="postal-address-region"
+            style={cityStyles.input}
+            testID="welcome-state"
+            returnKeyType="done"
+            maxLength={2}
+            onSubmitEditing={canContinue && !saving ? onContinue : undefined}
+          />
+        </View>
+      </View>
+
+      <Text style={cityStyles.helper}>
+        Two-letter state code, like CA or NY.
+      </Text>
 
       {error ? (
-        <Text style={addressStyles.error} testID="welcome-address-error">
+        <Text style={cityStyles.error} testID="welcome-city-error">
           {error}
         </Text>
       ) : null}
@@ -851,27 +815,29 @@ function AddressStep({
         onPress={onContinue}
         disabled={!canContinue || saving}
         style={stepStyles.continueBtn}
-        testID="welcome-address-continue"
+        testID="welcome-city-continue"
       />
     </View>
   );
 }
 
-const addressStyles = StyleSheet.create({
-  helper: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 17, marginTop: 8 },
-  parsedRow: {
-    alignItems: "center",
-    backgroundColor: "rgba(96,122,85,0.10)",
-    borderColor: "rgba(96,122,85,0.4)",
-    borderRadius: 10,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
-    padding: 12,
+const cityStyles = StyleSheet.create({
+  row: { flexDirection: "row", gap: 12, marginTop: 20 },
+  cityCol: { flex: 3, gap: 6 },
+  stateCol: { flex: 1, gap: 6, minWidth: 80 },
+  label: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 13 },
+  input: {
+    backgroundColor: "rgba(245, 240, 230, 0.6)",
+    borderColor: colors.line,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
-  parsedCheck: { color: "#3F5A3A", fontFamily: fonts.serifSemi, fontSize: 18 },
-  parsedText: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 14, lineHeight: 18 },
+  helper: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 17, marginTop: 8 },
   error: { color: colors.postalRed, fontFamily: fonts.serifSemi, fontSize: 13, marginTop: 12 },
 });
 
@@ -989,61 +955,8 @@ const stepStyles = StyleSheet.create({
   continueBtn: { marginTop: 24 },
 });
 
-// ============================================================================
-// ADDRESS PARSER
-// ============================================================================
-
-type ParsedAddress = {
-  line1: string;
-  city: string;
-  state: string;
-  zip: string;
-};
-
-/**
- * Parse a single-bar address into structured pieces. Accepts the canonical
- * USPS format with commas:
- *   "5209 Dorset Ave, Boise, ID 83706"
- *   "123 Main St, Apt 4B, Brooklyn, NY 11211"  (apt in second comma slot)
- *
- * Returns null if the input doesn't parse cleanly. The UI uses this both
- * to validate (gate the Continue button) and to surface a green-check
- * confirmation row showing what we parsed.
- *
- * Not USPS-authoritative — Lob's address verification API runs server-side
- * on send. This is just enough to extract city + state for the profile so
- * we have something to show on the postcard back's FROM line.
- */
-function parseAddress(input: string): ParsedAddress | null {
-  if (!input || !input.trim()) return null;
-  const parts = input
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  if (parts.length < 3) return null;
-
-  // The state + ZIP live in the LAST part: "ST ZIP" or "ST ZIP-NNNN".
-  const lastPart = parts[parts.length - 1];
-  const stateZipMatch = lastPart.match(/^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
-  if (!stateZipMatch) return null;
-
-  // The city is the second-to-last part.
-  const city = parts[parts.length - 2];
-  if (!city) return null;
-
-  // Everything before the city is line 1 (and optional line 2). We join
-  // them back with commas so a 3-part address with apt still preserves
-  // the apt info in line1.
-  const line1 = parts.slice(0, parts.length - 2).join(", ");
-
-  return {
-    line1,
-    city,
-    state: stateZipMatch[1].toUpperCase(),
-    zip: stateZipMatch[2],
-  };
-}
+// (v0.6.0's strict address parser was removed in 0.6.1 — discrete City +
+// State inputs replaced it. See CityStep above.)
 
 const styles = StyleSheet.create({
   root: { flexGrow: 1, gap: 16, paddingHorizontal: 22, paddingTop: 56, paddingBottom: 30 },

@@ -43,8 +43,20 @@ export function SettingsSheet({
           text: "Sign out",
           style: "destructive",
           onPress: async () => {
-            await signOut();
-            onClose();
+            // v0.6.1 codex Phase 6.5 P0: always close the sheet, even if
+            // sign-out throws. Previously a Haptics failure (iOS sim) would
+            // throw before onClose fired, leaving the user looking at the
+            // Settings sheet with no apparent reaction — "sign out failed".
+            try {
+              await signOut();
+            } catch (err: any) {
+              Alert.alert(
+                "Couldn't sign out cleanly",
+                err?.message ?? "Your local data was cleared, but the server session may still be active. Try again or relaunch the app.",
+              );
+            } finally {
+              onClose();
+            }
           },
         },
       ]

@@ -1,18 +1,15 @@
 import { useRouter } from "expo-router";
-import { Cake, Globe2, Image as ImageIcon, LucideIcon, Mail, MapPinned, Pencil, Send, Star, Tag, UserPlus, Users } from "lucide-react-native";
+import { Cake, Globe2, Image as ImageIcon, LucideIcon, Mail, Pencil, Send, Star, Tag, Users } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { AppShell } from "@/src/components/AppShell";
-import { PrimaryButton, SecondaryButton } from "@/src/components/Buttons";
-import { ConstellationPanel } from "@/src/components/ConstellationPanel";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { EditAboutMeSheet } from "@/src/components/EditAboutMeSheet";
 import { AboutAppSheet } from "@/src/components/AboutAppSheet";
 import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { Header } from "@/src/components/Header";
 import { MailHistorySheet } from "@/src/components/MailHistorySheet";
-import { MapPanel } from "@/src/components/MapPanel";
 import { MetricStrip } from "@/src/components/MetricStrip";
 import { NotificationsSheet } from "@/src/components/NotificationsSheet";
 import { OnboardingFreeCreditsBanner } from "@/src/components/OnboardingFreeCreditsBanner";
@@ -24,16 +21,20 @@ import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
 /**
- * My Card tab — v0.5.0.
+ * My Card tab — v0.6.1.
  *
- * Cleanups per the send-flow gallery decisions:
- *   • "First Card Ideas" 4-circle grid removed. The empty-state CTA in the
- *     send flow (and the on-page Send/Add Friend buttons here) absorb that
- *     intent.
- *   • Inline `CreditsBalance` "3 credits · + Buy" row removed. The stamps
- *     pill in the Header is now the only path into the Buy Stamps sheet.
- *   • Header title shortened to "My Card" (was "My Mail Card"). Same screen,
- *     less of a mouthful.
+ * v0.6.1 cleanup: the bottom Send Mail / Add Friend buttons + the Constellation
+ * / Map preview-card grid were all just navigation shortcuts to other tabs
+ * (Send, Friends, Constellation, Map are all in the tab bar). User feedback
+ * after build 6: "the stuff at the bottom of the profile page just redirects
+ * to the other tabs. maybe redundant." Removed both. The MetricStrip at the
+ * top remains — those metric tiles are status indicators that happen to be
+ * tappable shortcuts, not pure navigation.
+ *
+ * Older cleanups still in effect:
+ *   • "First Card Ideas" 4-circle grid removed.
+ *   • Inline `CreditsBalance` row removed. The stamps pill in the Header
+ *     is now the only path into the Buy Stamps sheet.
  *   • The CreditsSheet stays mounted on this screen only so that opening
  *     "Buy stamps" from the Settings sheet still works.
  */
@@ -102,32 +103,6 @@ export default function MyMailCardScreen() {
         </PostalCard>
       </Pressable>
 
-      <View style={styles.previewGrid}>
-        <Pressable onPress={() => router.push("/constellation")} style={styles.previewPress} testID="preview-constellation">
-          <View style={styles.previewCard}>
-            <ConstellationPanel compact friends={friends} />
-            <View style={styles.previewText}>
-              <Text style={styles.previewTitleLight}>Your Constellation</Text>
-              <Text style={styles.previewBodyLight}>The people who light up your world.</Text>
-            </View>
-          </View>
-        </Pressable>
-        <Pressable onPress={() => router.push("/map")} style={styles.previewPress} testID="preview-map">
-          <View style={styles.previewCard}>
-            <MapPanel compact />
-            <View style={styles.previewText}>
-              <Text style={styles.previewTitleLight}>Mail Map</Text>
-              <Text style={styles.previewBodyLight}>Where your postcards have traveled.</Text>
-            </View>
-          </View>
-        </Pressable>
-      </View>
-
-      <View style={styles.actions}>
-        <PrimaryButton title="Send Mail" icon={MapPinned} onPress={() => router.push("/send")} style={styles.actionButton} />
-        <SecondaryButton title="Add Friend" icon={UserPlus} onPress={() => router.push("/friends")} style={styles.actionButton} />
-      </View>
-
       <CreditsSheet visible={creditsOpen} onClose={() => setCreditsOpen(false)} />
       <SettingsSheet
         visible={settingsOpen}
@@ -188,12 +163,4 @@ const styles = StyleSheet.create({
   infoText: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 16, lineHeight: 22 },
   infoLabel: { fontFamily: fonts.serifBold },
   italic: { color: "#607A55", fontFamily: fonts.serifItalic },
-  previewGrid: { flexDirection: "row", gap: 12 },
-  previewPress: { flex: 1 },
-  previewCard: { borderRadius: 8, height: 158, overflow: "hidden" },
-  previewText: { bottom: 12, left: 12, position: "absolute", right: 12 },
-  previewTitleLight: { color: colors.white, fontFamily: fonts.serifSemi, fontSize: 19 },
-  previewBodyLight: { color: "rgba(255,255,255,0.88)", fontFamily: fonts.sans, fontSize: 12, lineHeight: 16, marginTop: 4 },
-  actions: { flexDirection: "row", gap: 12 },
-  actionButton: { flex: 1 },
 });

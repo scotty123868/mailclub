@@ -4,7 +4,7 @@ import * as Haptics from "expo-haptics";
 import { Sparkles, X } from "lucide-react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { CREDIT_PACKS, type CreditPack } from "@/src/data/credits";
-import { isStripeConfigured, loadStripeSdk, purchasePack } from "@/src/services/payments";
+import { isStripeConfigured, loadStripeSdk, purchasePack, stripeLoadError } from "@/src/services/payments";
 import { StripeShell } from "@/src/services/StripeShell";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
@@ -45,7 +45,11 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
     try {
       const result = await purchasePack(pack);
       if (result.ok) {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        try {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch {
+          // simulator without haptic engine — non-fatal
+        }
         await refreshProfile();
         Alert.alert(
           "You're in!",
@@ -55,10 +59,28 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
       } else if (result.reason === "cancelled") {
         // No alert on cancel — user knows what they did.
       } else {
-        Alert.alert(
-          "Couldn't complete the purchase",
-          result.message ?? "Try again or use a different card.",
-        );
+        // v0.6.1: distinguish failure modes so the user knows what to do
+        // next instead of seeing a generic "Couldn't complete" alert.
+        const title =
+          result.reason === "config"
+            ? "Purchases aren't ready yet"
+            : result.reason === "unavailable"
+              ? "Payments are unavailable on this device"
+              : result.reason === "network"
+                ? "Couldn't reach the payment server"
+                : result.reason === "declined"
+                  ? "Card was declined"
+                  : "Couldn't complete the purchase";
+        const body =
+          result.message ??
+          (result.reason === "config"
+            ? "Stripe isn't configured for this build. We're on it."
+            : result.reason === "unavailable"
+              ? "Try restarting the app, or update to the latest version."
+              : result.reason === "network"
+                ? "Check your connection and try again."
+                : "Try again or use a different card.");
+        Alert.alert(title, body);
       }
     } catch (err: any) {
       Alert.alert("Something went wrong", err?.message ?? "Try again.");
@@ -102,7 +124,8 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
             <View style={styles.warnBanner} testID="credits-stripe-sdk-missing">
               <Text style={styles.warnTitle}>Purchases aren't available on this device.</Text>
               <Text style={styles.warnBody}>
-                The Stripe payment library couldn't load on this iOS version. Try updating the app or restarting your device.
+                The Stripe payment library couldn't load. Try updating the app or restarting your device.
+                {stripeLoadError() ? `\n\nDetails: ${stripeLoadError()}` : null}
               </Text>
             </View>
           ) : null}

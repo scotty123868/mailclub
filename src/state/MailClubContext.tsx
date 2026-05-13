@@ -684,13 +684,33 @@ export function MailClubProvider({ children }: PropsWithChildren) {
   }
 
   const signOutAction = useCallback(async () => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // v0.6.1 codex Phase 6.5 P0: previously this awaited Haptics first and
+    // threw on iOS simulators / devices where the haptic engine is
+    // unavailable. The throw bubbled up to SettingsSheet's Alert callback
+    // and silently aborted everything after it — the local state never
+    // cleared and the user saw nothing happen. "Sign out failed" from the
+    // user's POV. Defensive: each step is independently caught so one
+    // failure doesn't cascade. Local state reset is the contract that
+    // matters; everything else is best-effort cleanup.
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      // simulators / devices without a haptic engine
+    }
     resetLocalState();
-    await AsyncStorage.removeItem(STORE_KEY);
+    try {
+      await AsyncStorage.removeItem(STORE_KEY);
+    } catch {
+      // storage failure — local state is in-memory reset already
+    }
     // Phase 3.5: clear any pending invite so it doesn't carry across user
     // identities. If a different user signs in next, they shouldn't
     // inherit the previous user's pre-signup QR scan.
-    await clearPendingInvite();
+    try {
+      await clearPendingInvite();
+    } catch {
+      // ignore
+    }
     if (SUPABASE_CONFIGURED) {
       try {
         await api.signOut();

@@ -40,6 +40,15 @@ export function CreditsPill() {
   );
 }
 
+// Geometry note: the stamp tile and count text both want to sit centered on
+// the same horizontal line. RN text has implicit top/bottom padding ("font
+// padding" on Android, ascender/descender on iOS) so we can't just match
+// fontSize to tile height and hope. The reliable pattern: set lineHeight to
+// match the tile height, set includeFontPadding=false (Android), and use
+// textAlignVertical: center. Then drop the count's minWidth/textAlign quirks
+// that were nudging it off-center.
+const TILE_H = 22;
+
 const styles = StyleSheet.create({
   pill: {
     alignItems: "center",
@@ -48,31 +57,36 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    gap: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
   pillPressed: { opacity: 0.6 },
   stampTile: {
     alignItems: "center",
     backgroundColor: colors.postalRed,
     borderRadius: 3,
-    height: 20,
+    height: TILE_H,
     justifyContent: "center",
-    width: 16,
+    width: 18,
   },
   stampDenom: {
     color: colors.white,
     fontFamily: fonts.serifSemi,
-    fontSize: 9,
+    fontSize: 10,
+    includeFontPadding: false,
     letterSpacing: -0.4,
+    lineHeight: TILE_H,
+    textAlign: "center",
+    textAlignVertical: "center",
   },
   count: {
     color: colors.ink,
     fontFamily: fonts.serifSemi,
     fontSize: 16,
-    marginRight: 2,
-    minWidth: 14,
+    includeFontPadding: false,
+    lineHeight: TILE_H,
     textAlign: "center",
+    textAlignVertical: "center",
   },
 });
