@@ -24,6 +24,10 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { PrimaryButton } from "@/src/components/Buttons";
+import {
+  fetchAddressSuggestions,
+  type AddressSuggestion,
+} from "@/src/services/addressAutocomplete";
 import { isAppleSignInAvailable } from "@/src/services/apple-auth";
 import { lookupReciprocation } from "@/src/services/api";
 import { SUPABASE_CONFIGURED } from "@/src/services/supabase";
@@ -927,10 +931,10 @@ function ExplainStep({ onContinue }: { onContinue: () => void }) {
         />
       </View>
 
-      <Text style={explainStyles.kicker}>YOUR FIRST CARD IS ON US</Text>
+      <Text style={explainStyles.kicker}>FREE · ON US</Text>
 
       <Text style={[stepStyles.title, { textAlign: "center", marginTop: 6 }]}>
-        Pick a photo.{"\n"}Mail it.
+        Your first postcard,{"\n"}on the house.
       </Text>
 
       <Text
@@ -939,8 +943,7 @@ function ExplainStep({ onContinue }: { onContinue: () => void }) {
           { textAlign: "center", marginTop: 14, paddingHorizontal: 10 },
         ]}
       >
-        Pick a photo, write a note. We print it, stamp it, and drop it in the
-        mail through USPS.
+        Pick a photo, write a note. We print, stamp, and mail it through USPS. Costs you nothing.
       </Text>
 
       <PrimaryButton
@@ -1656,23 +1659,29 @@ const mailedStyles = StyleSheet.create({
 // ============================================================================
 
 /**
- * AddressFields — v0.7.0.1: ONE smart autofill textbox.
+ * AddressFields — v0.7.0.3: smart autofill textbox + live suggestions.
  *
- * Previously: 4 separate fields (Street, City, State, ZIP). User feedback:
- * jarring, lots of taps, and the per-field autofill was inconsistent. Now
- * it&apos;s a single multiline textbox with `textContentType="fullStreetAddress"`
- * so iOS QuickType offers the user&apos;s Contact address as one-tap autofill.
+ * Single multiline textbox. Three layers of address help, smallest →
+ * biggest commitment:
  *
- * Free-form input → parsed on blur into structured fields via
- * `parseFreeFormAddress`. Pattern-matches:
- *   "5209 Dorset Ave, Boise, ID 83706"           — canonical
- *   "5209 Dorset Ave Apt 4B, Boise, ID 83706"    — apt baked into line1
- *   "5209 Dorset Ave, Boise, ID, 83706"          — extra comma
- *   "Boise, ID"                                  — city + state only (Lob fails later)
- * If parse fails entirely, line1 = the raw input + city/state empty, which
- * blocks Continue. The validator in WelcomeSheet (`isAddressComplete`)
- * gates on city + state + valid zip — so users can&apos;t move forward
- * with a half-parsed address.
+ *   1. iOS QuickType autofill (instant, free)
+ *      `textContentType="fullStreetAddress"` makes iOS offer the user&apos;s
+ *      saved Contact address as a one-tap autofill on the QuickType bar.
+ *
+ *   2. Live Nominatim suggestions (debounced 350ms, free OSM API)
+ *      As the user types past 4 chars, we hit Nominatim to suggest US
+ *      addresses. Suggestions appear in a dropdown below the textbox.
+ *      Tap a suggestion → field fills + structured fields populate.
+ *
+ *   3. Forgiving on-the-fly parser
+ *      Even without a suggestion, the user&apos;s free-form input is
+ *      parsed live via parseFreeFormAddress. Handles Google-format
+ *      ("Chevy Chase Maryland 20815, USA"), canonical USPS format
+ *      ("Chevy Chase, MD 20815"), and full-state variants.
+ *
+ * Validator (isAddressComplete in WelcomeSheet) gates Continue on
+ * city + state + valid zip. If none of the three layers land a usable
+ * parse, Continue stays grey.
  */
 function AddressFields({
   address,
@@ -1685,20 +1694,57 @@ function AddressFields({
   testIDPrefix: string;
   label?: string;
 }) {
-  // Derive the displayed string from the structured fields when they exist.
-  // When the user types, we hold the raw text in local state — parse on
-  // blur to update the structured fields, but never overwrite the user&apos;s
-  // typed text mid-edit.
   const [raw, setRaw] = useState<string>(() => addressToText(address));
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   useEffect(() => {
-    // If the parent updates address (e.g., reset after sign-out), refresh
-    // the raw text from it. But ONLY when the structured form changes —
-    // not on every keystroke.
     const expected = addressToText(address);
     setRaw((prev) => (prev === expected ? prev : expected));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address.line1, address.line2, address.city, address.state, address.zip]);
+
+  // Debounced Nominatim lookup. 350ms after the last keystroke we hit
+  // the API. Aborts in-flight on new keystrokes so only the latest
+  // query&apos;s results show up.
+  useEffect(() => {
+    if (raw.trim().length < 4) {
+      setSuggestions([]);
+      setLoadingSuggestions(false);
+      return;
+    }
+    setLoadingSuggestions(true);
+    const ac = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const rows = await fetchAddressSuggestions(raw, { signal: ac.signal });
+        setSuggestions(rows);
+      } catch {
+        // aborted or network error — fall through silently
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    }, 350);
+    return () => {
+      clearTimeout(t);
+      ac.abort();
+    };
+  }, [raw]);
+
+  function applySuggestion(s: AddressSuggestion) {
+    const next: AddressDraft = {
+      line1: s.line1,
+      line2: "",
+      city: s.city,
+      state: s.state,
+      zip: s.zip,
+    };
+    setRaw(addressToText(next));
+    setShowSuggestions(false);
+    setSuggestions([]);
+    onChange(next);
+  }
 
   return (
     <>
@@ -1707,26 +1753,46 @@ function AddressFields({
         value={raw}
         onChangeText={(v) => {
           setRaw(v);
-          // Parse on every change so the validator updates live. If
-          // parse fails, fields stay empty and Continue stays grey.
+          setShowSuggestions(true);
           const parsed = parseFreeFormAddress(v);
           if (parsed) onChange(parsed);
           else onChange({ line1: v.trim(), line2: "", city: "", state: "", zip: "" });
         }}
+        onFocus={() => setShowSuggestions(true)}
         placeholder="5209 Dorset Ave, Boise, ID 83706"
         placeholderTextColor={colors.mutedInk}
         autoCapitalize="words"
         autoCorrect={false}
-        // The magic line: iOS QuickType pulls the user&apos;s saved
-        // Contact address as a one-tap autofill on this field.
         textContentType="fullStreetAddress"
         autoComplete="postal-address"
         multiline
         style={[fieldStyles.input, { minHeight: 64, textAlignVertical: "top" }]}
         testID={`${testIDPrefix}-address`}
       />
+
+      {showSuggestions && suggestions.length > 0 ? (
+        <View style={fieldStyles.suggestions} testID={`${testIDPrefix}-suggestions`}>
+          {suggestions.map((s, i) => (
+            <Pressable
+              key={`${s.label}-${i}`}
+              onPress={() => applySuggestion(s)}
+              style={({ pressed }) => [
+                fieldStyles.suggestionRow,
+                pressed && fieldStyles.suggestionRowPressed,
+                i < suggestions.length - 1 && fieldStyles.suggestionRowBorder,
+              ]}
+              testID={`${testIDPrefix}-suggestion-${i}`}
+            >
+              <Text style={fieldStyles.suggestionText} numberOfLines={2}>
+                {s.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
       <Text style={fieldStyles.helper}>
-        Street, city, state, ZIP. Your saved address (Contacts / iCloud) shows up in the QuickType bar.
+        {loadingSuggestions ? "Looking up addresses..." : "Start typing — we'll suggest addresses."}
       </Text>
     </>
   );
@@ -1744,64 +1810,147 @@ function addressToText(a: AddressDraft): string {
   return parts.join(", ");
 }
 
-/** Forgiving free-form address parser. Returns null if it can&apos;t
- *  extract a usable address (city + state at minimum). */
+/** Map US state names to 2-letter codes. Lowercase keys for
+ *  case-insensitive matching. */
+const STATE_NAME_TO_CODE: Record<string, string> = {
+  alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR",
+  california: "CA", colorado: "CO", connecticut: "CT",
+  delaware: "DE", "district of columbia": "DC", florida: "FL",
+  georgia: "GA", hawaii: "HI", idaho: "ID", illinois: "IL",
+  indiana: "IN", iowa: "IA", kansas: "KS", kentucky: "KY",
+  louisiana: "LA", maine: "ME", maryland: "MD", massachusetts: "MA",
+  michigan: "MI", minnesota: "MN", mississippi: "MS", missouri: "MO",
+  montana: "MT", nebraska: "NE", nevada: "NV", "new hampshire": "NH",
+  "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+  "north carolina": "NC", "north dakota": "ND", ohio: "OH",
+  oklahoma: "OK", oregon: "OR", pennsylvania: "PA", "rhode island": "RI",
+  "south carolina": "SC", "south dakota": "SD", tennessee: "TN",
+  texas: "TX", utah: "UT", vermont: "VT", virginia: "VA",
+  washington: "WA", "west virginia": "WV", wisconsin: "WI",
+  wyoming: "WY",
+};
+
+const ALL_STATE_PATTERNS: Array<{ pattern: RegExp; code: string }> = (() => {
+  // Build a list of regex patterns for both full state names and 2-letter
+  // codes, longest-first so "New York" matches before "New".
+  const entries: Array<{ name: string; code: string }> = [];
+  for (const [name, code] of Object.entries(STATE_NAME_TO_CODE)) {
+    entries.push({ name, code });
+    entries.push({ name: code.toLowerCase(), code }); // 2-letter form
+  }
+  entries.sort((a, b) => b.name.length - a.name.length);
+  return entries.map(({ name, code }) => ({
+    pattern: new RegExp(`\\b${name.replace(/\s+/g, "\\s+")}\\b`, "i"),
+    code,
+  }));
+})();
+
+/** Strip a trailing country marker from a freeform address. Returns the
+ *  cleaned input. Handles "USA", "U.S.A.", "United States", "United States of America". */
+function stripCountry(input: string): string {
+  return input
+    .replace(/,?\s*(United States of America|United States|U\.?S\.?A\.?)\s*$/i, "")
+    .trim()
+    .replace(/,$/, "")
+    .trim();
+}
+
+/** Find a "City State ZIP" pattern anywhere at the END of `s`. Returns
+ *  the city, 2-letter state code, and zip if matched; null otherwise.
+ *  Handles state as either a 2-letter code OR a full state name. */
+function extractCityStateZip(
+  s: string,
+): { city: string; state: string; zip: string; rest: string } | null {
+  // Trailing ZIP — required.
+  const zipMatch = s.match(/\b(\d{5}(?:-\d{4})?)\s*$/);
+  if (!zipMatch) return null;
+  const zip = zipMatch[1];
+  const beforeZip = s.slice(0, zipMatch.index).trim().replace(/,$/, "").trim();
+  if (!beforeZip) return null;
+
+  // Walk the state patterns (longest-first) trying to find one at the END of
+  // beforeZip. The remainder before the state is the city.
+  for (const { pattern, code } of ALL_STATE_PATTERNS) {
+    // Need pattern at the end of the string.
+    const endPattern = new RegExp(pattern.source + "\\s*$", "i");
+    const m = beforeZip.match(endPattern);
+    if (m && m.index !== undefined) {
+      const cityPart = beforeZip.slice(0, m.index).trim().replace(/,$/, "").trim();
+      if (!cityPart) continue;
+      return { city: cityPart, state: code, zip, rest: "" };
+    }
+  }
+  return null;
+}
+
+/**
+ * Forgiving free-form address parser. v0.7.0.3: handles the format
+ * Google's autofill / iOS autocomplete spits out:
+ *   "5209 Dorset Avenue, Chevy Chase Maryland 20815, USA"
+ *   "412 SE Belmont, Portland, OR 97214"
+ *   "412 SE Belmont, Portland, Oregon, 97214"
+ *   "5209 Dorset Ave Apt 4B, Boise, ID 83706"
+ *
+ * Strategy: strip trailing country marker, then comma-split. The LAST
+ * non-country chunk gets scanned for "City State ZIP" — state can be
+ * the 2-letter code OR the full state name. Everything before that
+ * chunk is line1 (+ optional line2 if there are extra comma chunks).
+ *
+ * Returns null if it can&apos;t extract a usable address.
+ */
 function parseFreeFormAddress(input: string): AddressDraft | null {
-  const cleaned = input.trim().replace(/\s+/g, " ");
+  let cleaned = input.trim().replace(/\s+/g, " ");
+  if (!cleaned) return null;
+  cleaned = stripCountry(cleaned);
   if (!cleaned) return null;
 
-  // Path A: comma-separated. Try "..., City, ST ZIP" or "..., City, ST, ZIP".
   const parts = cleaned.split(",").map((s) => s.trim()).filter(Boolean);
-  if (parts.length >= 2) {
-    // Last part might be "STATE ZIP" combined.
-    const lastPart = parts[parts.length - 1];
-    const combined = lastPart.match(/^([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
-    if (combined && parts.length >= 2) {
-      const state = combined[1].toUpperCase();
-      const zip = combined[2];
-      const city = parts[parts.length - 2] ?? "";
-      const before = parts.slice(0, Math.max(0, parts.length - 2));
-      return {
-        line1: before[0] ?? "",
-        line2: before.length > 1 ? before.slice(1).join(", ") : "",
-        city,
-        state,
-        zip,
-      };
-    }
-    // State and ZIP as separate parts: "..., City, ST, ZIP".
-    if (parts.length >= 3) {
-      const lastIsZip = /^\d{5}(?:-\d{4})?$/.test(lastPart);
-      const secondLastIsState = /^[A-Z]{2}$/i.test(parts[parts.length - 2]);
-      if (lastIsZip && secondLastIsState) {
-        const state = parts[parts.length - 2].toUpperCase();
-        const zip = lastPart;
-        const city = parts[parts.length - 3] ?? "";
-        const before = parts.slice(0, Math.max(0, parts.length - 3));
+
+  // Strategy A: scan from the END of the joined string for "City State ZIP".
+  // This handles "Line1, City State ZIP" (Google format) AND
+  // "Line1, City, State ZIP" (canonical) AND "Line1, City, State, ZIP".
+  const joined = parts.join(", ");
+  const extracted = extractCityStateZip(joined);
+  if (extracted) {
+    // What&apos;s left in `joined` BEFORE city is line1 + optional line2.
+    const beforeCityIdx = joined.toLowerCase().lastIndexOf(extracted.city.toLowerCase());
+    const beforeCity =
+      beforeCityIdx > 0
+        ? joined.slice(0, beforeCityIdx).trim().replace(/,$/, "").trim()
+        : "";
+    // beforeCity may itself contain commas (line1, line2). Split it.
+    const beforeParts = beforeCity.split(",").map((s) => s.trim()).filter(Boolean);
+    const line1 = beforeParts[0] ?? "";
+    const line2 = beforeParts.length > 1 ? beforeParts.slice(1).join(", ") : "";
+    return {
+      line1,
+      line2,
+      city: extracted.city,
+      state: extracted.state,
+      zip: extracted.zip,
+    };
+  }
+
+  // Strategy B fallback: maybe state and zip are in separate comma chunks
+  // and there&apos;s no inline pattern match. "Line1, City, ST, ZIP" or
+  // "Line1, City, Maryland, 20815".
+  if (parts.length >= 3) {
+    const last = parts[parts.length - 1];
+    const lastIsZip = /^\d{5}(?:-\d{4})?$/.test(last);
+    if (lastIsZip) {
+      const stateChunk = parts[parts.length - 2].toLowerCase();
+      const stateCode = STATE_NAME_TO_CODE[stateChunk] ?? (/^[a-z]{2}$/.test(stateChunk) ? stateChunk.toUpperCase() : null);
+      if (stateCode) {
+        const city = parts[parts.length - 3];
+        const before = parts.slice(0, parts.length - 3);
         return {
           line1: before[0] ?? "",
           line2: before.length > 1 ? before.slice(1).join(", ") : "",
           city,
-          state,
-          zip,
+          state: stateCode,
+          zip: last,
         };
       }
-    }
-  }
-
-  // Path B: no comma-separated structure. Try to match "...City ST ZIP"
-  // at the end of the string.
-  const trailing = cleaned.match(/^(.+?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i);
-  if (trailing) {
-    const mid = trailing[1].trim();
-    const state = trailing[2].toUpperCase();
-    const zip = trailing[3];
-    const words = mid.split(/\s+/);
-    if (words.length >= 2) {
-      // Heuristic: take the last word as the city, everything before as line1.
-      const city = words[words.length - 1];
-      const line1 = words.slice(0, -1).join(" ");
-      return { line1, line2: "", city, state, zip };
     }
   }
 
@@ -1849,6 +1998,35 @@ const fieldStyles = StyleSheet.create({
     fontFamily: fonts.serifSemi,
     fontSize: 13,
     marginTop: 12,
+  },
+  // Address-autocomplete suggestion dropdown. Sits directly under the
+  // textbox. Native white panel with hairline dividers between rows.
+  suggestions: {
+    backgroundColor: colors.white,
+    borderColor: colors.line,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    marginTop: -2,
+    overflow: "hidden",
+  },
+  suggestionRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  suggestionRowPressed: {
+    backgroundColor: colors.paper,
+  },
+  suggestionRowBorder: {
+    borderBottomColor: colors.line,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  suggestionText: {
+    color: colors.ink,
+    fontFamily: fonts.serif,
+    fontSize: 14,
+    lineHeight: 18,
   },
 });
 
