@@ -1,0 +1,1717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mailroom v0.7 — redesign gallery</title>
+<style>
+  /* --------------------------------------------------------------------
+     Type + palette — Notion's discipline applied to Mailroom's warmth.
+     Notion uses Inter (sans) + Lyon Display-ish serif for headings,
+     a tight cool-gray ramp, lots of whitespace, and one accent at most.
+     We borrow the rhythm and replace the cool grays with Mailroom's
+     cream-paper world.
+     -------------------------------------------------------------------- */
+  :root {
+    --paper: #F8F1E3;
+    --paper-soft: #FDF8EB;
+    --paper-dark: #ECE2CD;
+    --ink: #2D3344;
+    --muted: #6F6757;
+    --line: #D9CDB4;
+    --postal-red: #C24A45;
+    --postal-blue: #3C6E8F;
+    --sage: #607A55;
+    --gold: #B89A60;
+    --white: #FFFEFA;
+    --serif: 'Lyon Display', 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --script: 'Caveat', 'Brush Script MT', cursive;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #EFE7D2;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* --------------------------------------------------------------------
+     Page chrome
+     -------------------------------------------------------------------- */
+  .page {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 56px 36px 96px;
+  }
+  .kicker {
+    color: var(--postal-red);
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: 56px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0 0 24px;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.1;
+    margin: 0 0 12px;
+  }
+  h3 {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    margin: 0 0 8px;
+  }
+  h4 {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+  p { margin: 0 0 14px; color: var(--ink); max-width: 76ch; }
+  p.lead { font-size: 19px; line-height: 1.55; color: #41475a; max-width: 76ch; }
+  hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 56px 0;
+  }
+  a { color: var(--postal-blue); }
+
+  /* --------------------------------------------------------------------
+     Principles block
+     -------------------------------------------------------------------- */
+  .principles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin: 40px 0;
+  }
+  .principle {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px;
+  }
+  .principle .num {
+    font-family: var(--serif);
+    font-size: 36px;
+    color: var(--postal-red);
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+  .principle h4 { margin-bottom: 6px; color: var(--ink); }
+  .principle p { font-size: 14px; color: var(--muted); line-height: 1.5; margin: 0; }
+
+  /* --------------------------------------------------------------------
+     Direction column
+     -------------------------------------------------------------------- */
+  .direction {
+    background: var(--paper-soft);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 36px 28px 28px;
+    margin-bottom: 36px;
+  }
+  .direction-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .direction-head h2 .label {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 100px;
+    padding: 4px 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    margin-right: 12px;
+  }
+  .direction-meta { flex: 1 1 320px; }
+  .direction-meta p { font-size: 15.5px; color: #41475a; max-width: 65ch; }
+  .recommend-pill {
+    background: linear-gradient(135deg, #d97757 0%, #C24A45 100%);
+    color: white;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    letter-spacing: 0.04em;
+    display: inline-block;
+  }
+
+  /* phone row */
+  .phones {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+  .phone-wrap { text-align: center; }
+  .phone-caption {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--sans);
+    margin-top: 10px;
+    line-height: 1.4;
+  }
+  .phone-caption b { color: var(--ink); font-weight: 600; }
+
+  /* --------------------------------------------------------------------
+     Phone frame — simplified iPhone proportions, 280x600
+     -------------------------------------------------------------------- */
+  .phone {
+    width: 100%;
+    aspect-ratio: 9 / 19.5;
+    background: var(--paper);
+    border-radius: 32px;
+    border: 1px solid #C5B894;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.6) inset,
+      0 18px 36px rgba(45,51,68,0.12),
+      0 4px 12px rgba(45,51,68,0.08);
+    position: relative;
+    overflow: hidden;
+    font-size: 11px;
+  }
+  .phone .notch {
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 38%;
+    height: 14px;
+    background: #1a1d28;
+    border-radius: 10px;
+    z-index: 30;
+  }
+  .phone .status {
+    position: absolute;
+    top: 9px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--ink);
+    z-index: 20;
+  }
+  .phone .screen {
+    position: absolute;
+    inset: 26px 0 0;
+    overflow: hidden;
+  }
+  .phone .content {
+    position: absolute;
+    inset: 0 0 56px;
+    overflow: hidden;
+    padding: 8px 14px 0;
+  }
+  .phone .tabbar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 56px;
+    background: var(--white);
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 4px 8px;
+  }
+  .phone .tabbar.dark {
+    background: var(--ink);
+    border-top-color: rgba(255,255,255,0.08);
+  }
+  .phone .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    color: var(--muted);
+    font-size: 8.5px;
+    font-weight: 600;
+  }
+  .phone .tab.active { color: var(--postal-blue); }
+  .phone .tab .icon {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    background: currentColor;
+    opacity: 0.9;
+    -webkit-mask: var(--icon) center / contain no-repeat;
+            mask: var(--icon) center / contain no-repeat;
+  }
+  .phone .tab.fab {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 100px;
+    flex: 0 0 auto;
+    width: 46px; height: 46px;
+    align-self: center;
+    margin-top: -16px;
+    font-size: 16px;
+    padding: 0;
+    box-shadow: 0 6px 16px rgba(45,51,68,0.30);
+  }
+
+  /* --------------------------------------------------------------------
+     Phone content primitives
+     -------------------------------------------------------------------- */
+  .h-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 0 6px;
+  }
+  .wordmark {
+    font-family: var(--script);
+    font-size: 22px;
+    color: var(--ink);
+    line-height: 1;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 100px;
+    padding: 3px 8px;
+    font-size: 9px;
+    font-weight: 600;
+  }
+  .pill .stamp {
+    background: var(--postal-red);
+    color: white;
+    font-size: 7px;
+    padding: 1px 3px;
+    border-radius: 2px;
+    font-weight: 700;
+  }
+  .sendbar {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 4px 0 12px;
+    font-family: var(--serif);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .sendbar .arrow {
+    font-family: var(--sans);
+    font-size: 14px;
+  }
+  .sendbar-light {
+    background: var(--white);
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+  }
+  .week-strip {
+    margin-top: 4px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .week-strip:last-child { border-bottom: none; }
+  .week-label {
+    font-family: var(--sans);
+    font-size: 8.5px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .week-cards {
+    display: flex;
+    gap: 6px;
+    overflow: hidden;
+  }
+  .card {
+    flex: 0 0 56px;
+    height: 38px;
+    border-radius: 4px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+  .card.photo-mtn { background: linear-gradient(135deg, #97aebe, #5f7a8c 60%, #3b5469); }
+  .card.photo-desert { background: linear-gradient(160deg, #d8a87a, #b46d44 60%, #8a4928); }
+  .card.photo-coast { background: linear-gradient(180deg, #9ccad9, #6da3b8 60%, #2c5267); }
+  .card.photo-forest { background: linear-gradient(150deg, #8ba978, #4f6b3e 60%, #2c3f1f); }
+  .card.photo-sunset { background: linear-gradient(180deg, #f4cf7a, #d97757 70%, #8d3f3a); }
+  .card.photo-snow { background: linear-gradient(200deg, #e3eaf2, #95a8bd 80%, #5b6f87); }
+  .card .stampdot {
+    position: absolute;
+    top: 3px; right: 3px;
+    width: 9px; height: 11px;
+    background: var(--postal-red);
+    border-radius: 1.5px;
+  }
+  .card.in {
+    box-shadow: inset 0 0 0 1.5px var(--postal-blue);
+  }
+  .card .label {
+    position: absolute;
+    bottom: 2px; left: 4px;
+    font-family: var(--script);
+    color: white;
+    font-size: 9px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    line-height: 1;
+  }
+  .empty-week-tile {
+    flex: 0 0 56px;
+    height: 38px;
+    border-radius: 4px;
+    border: 1.5px dashed var(--line);
+    background: var(--paper-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-family: var(--script);
+    font-size: 11px;
+  }
+  .empty-week-tile.cta {
+    background: var(--ink);
+    color: var(--paper);
+    border: 1.5px solid var(--ink);
+    font-family: var(--serif);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .legend {
+    display: flex;
+    gap: 14px;
+    margin-top: 8px;
+    font-size: 8.5px;
+    color: var(--muted);
+    font-family: var(--sans);
+  }
+  .legend-swatch {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-right: 4px;
+  }
+  .legend-swatch.sent { background: var(--white); border: 1px solid var(--line); }
+  .legend-swatch.recv { background: var(--white); border: 1.5px solid var(--postal-blue); }
+
+  /* --- empty state hero --- */
+  .empty-hero {
+    margin: 18px 0;
+    text-align: center;
+  }
+  .empty-hero .fan {
+    margin: 8px auto 16px;
+    width: 120px;
+    height: 100px;
+    position: relative;
+  }
+  .empty-hero .fan-card {
+    position: absolute;
+    width: 64px;
+    height: 86px;
+    border-radius: 4px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+    top: 7px;
+    left: 28px;
+  }
+  .empty-hero .fan-card:nth-child(1) { transform: rotate(-14deg) translateX(-14px); background: var(--paper-soft); }
+  .empty-hero .fan-card:nth-child(2) { transform: rotate(-2deg); }
+  .empty-hero .fan-card:nth-child(3) { transform: rotate(12deg) translateX(14px); background: var(--paper-dark); }
+  .empty-title {
+    font-family: var(--serif);
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.15;
+    margin: 6px 8px 8px;
+  }
+  .empty-sub {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.4;
+    margin: 0 14px 14px;
+  }
+  .empty-cta {
+    display: inline-block;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 13px;
+    padding: 10px 22px;
+    border-radius: 100px;
+  }
+
+  /* --- camera-style send screen --- */
+  .camera {
+    position: absolute;
+    inset: 26px 0 56px;
+    background: #1a1d28;
+    display: flex;
+    flex-direction: column;
+  }
+  .camera .frame {
+    flex: 1;
+    background: linear-gradient(150deg, #8ba978, #4f6b3e 60%, #2c3f1f);
+    margin: 14px 14px 0;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .camera .frame::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(120% 100% at 50% 80%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 100%);
+  }
+  .camera .frame .scene {
+    position: absolute;
+    bottom: 16px;
+    left: 12px;
+    right: 12px;
+    color: white;
+    font-family: var(--script);
+    font-size: 18px;
+    line-height: 1.1;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    z-index: 2;
+  }
+  .camera .actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 14px 0 12px;
+  }
+  .camera .shutter {
+    width: 44px; height: 44px;
+    border-radius: 100px;
+    background: white;
+    border: 3px solid rgba(255,255,255,0.4);
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.5) inset;
+  }
+  .camera .roll, .camera .friend {
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 14px;
+  }
+  .camera .roll { background: linear-gradient(135deg, #d97757, #C24A45); }
+
+  /* --- profile simplified --- */
+  .profile-hero {
+    text-align: center;
+    padding: 18px 8px 14px;
+  }
+  .avatar {
+    width: 68px; height: 68px;
+    border-radius: 100px;
+    background: linear-gradient(135deg, #d97757, #B89A60);
+    margin: 0 auto 10px;
+    border: 2px solid var(--white);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    color: white;
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 64px;
+  }
+  .profile-name {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.1;
+    margin-bottom: 4px;
+  }
+  .profile-city {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 12px;
+    color: var(--postal-blue);
+  }
+  .profile-bio {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 11.5px;
+    color: var(--ink);
+    line-height: 1.4;
+    margin: 14px 0;
+  }
+  .stat-row {
+    display: flex;
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .stat {
+    flex: 1;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 6px;
+    text-align: center;
+  }
+  .stat .n {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .stat .l {
+    font-family: var(--sans);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  /* --- send flow steps --- */
+  .send-stage {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .send-stage h5 {
+    font-family: var(--sans);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 6px;
+  }
+  .send-photo-pick {
+    height: 80px;
+    background:
+      linear-gradient(150deg, #8ba978, #4f6b3e 60%, #2c3f1f);
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+  .send-photo-pick::after {
+    content: '\1F4F7';
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 28px;
+    color: rgba(255,255,255,0.5);
+  }
+  .friend-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--paper-soft);
+    border: 1px solid var(--line);
+    border-radius: 100px;
+    padding: 4px 8px 4px 4px;
+    font-size: 10px;
+    font-family: var(--serif);
+    margin: 2px 4px 2px 0;
+  }
+  .friend-pill .dot {
+    width: 16px; height: 16px;
+    border-radius: 100px;
+    background: linear-gradient(135deg, #d97757, #B89A60);
+    color: white;
+    font-size: 9px;
+    font-weight: 600;
+    display: grid; place-items: center;
+    font-family: var(--serif);
+  }
+  .friend-pill.stranger {
+    background: linear-gradient(135deg, rgba(60,110,143,0.12), rgba(184,154,96,0.18));
+    border-color: var(--postal-blue);
+  }
+  .friend-pill.stranger .dot {
+    background: linear-gradient(135deg, var(--postal-blue), var(--sage));
+  }
+  .msg-box {
+    background: var(--paper-soft);
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
+    min-height: 56px;
+    font-family: var(--script);
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .ctabtn {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 100px;
+    padding: 11px 14px;
+    text-align: center;
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  /* --- people screen merged --- */
+  .people-toggle {
+    display: flex;
+    background: var(--paper-soft);
+    border: 1px solid var(--line);
+    border-radius: 100px;
+    padding: 3px;
+    margin: 4px 0 10px;
+  }
+  .people-toggle .seg {
+    flex: 1;
+    text-align: center;
+    padding: 6px 0;
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    border-radius: 100px;
+  }
+  .people-toggle .seg.active {
+    background: var(--white);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .friend-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .friend-row:last-child { border-bottom: none; }
+  .friend-row .av {
+    width: 28px; height: 28px;
+    border-radius: 100px;
+    background: linear-gradient(135deg, #d97757, #B89A60);
+    color: white;
+    font-family: var(--serif);
+    font-size: 12px;
+    font-weight: 600;
+    display: grid; place-items: center;
+  }
+  .friend-row .av.blue { background: linear-gradient(135deg, #3C6E8F, #6F92AE); }
+  .friend-row .av.green { background: linear-gradient(135deg, #607A55, #8FAA78); }
+  .friend-row .info { flex: 1; }
+  .friend-row .nm {
+    font-family: var(--serif);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+  .friend-row .ct {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .friend-row .send-btn {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 100px;
+    padding: 4px 10px;
+    font-family: var(--serif);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  /* --- magical moments --- */
+  .moments {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin: 24px 0 0;
+  }
+  .moment {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+  }
+  .moment .glyph {
+    font-size: 26px;
+    margin-bottom: 8px;
+    line-height: 1;
+  }
+  .moment h4 { color: var(--ink); margin-bottom: 6px; }
+  .moment p { font-size: 13.5px; color: #444b5a; margin: 0; line-height: 1.5; }
+
+  /* --- cut/keep table --- */
+  table.cut-keep {
+    width: 100%;
+    margin-top: 18px;
+    border-collapse: collapse;
+    font-family: var(--sans);
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .cut-keep th, .cut-keep td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    font-size: 13.5px;
+    vertical-align: top;
+  }
+  .cut-keep th {
+    background: var(--paper-soft);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .cut-keep tr:last-child td { border-bottom: none; }
+  .cut-keep .verdict {
+    font-weight: 700;
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 100px;
+    display: inline-block;
+  }
+  .v-cut { background: rgba(194,74,69,0.12); color: var(--postal-red); }
+  .v-move { background: rgba(60,110,143,0.12); color: var(--postal-blue); }
+  .v-keep { background: rgba(96,122,85,0.15); color: var(--sage); }
+  .v-new  { background: rgba(184,154,96,0.18); color: #8a722e; }
+
+  /* --- footer recommendation --- */
+  .reco {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 18px;
+    padding: 40px 32px;
+    margin-top: 56px;
+  }
+  .reco h2 { font-family: var(--serif); color: white; }
+  .reco p { color: rgba(255,255,255,0.85); max-width: 76ch; }
+  .reco .next {
+    margin-top: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .reco .next li {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 100px;
+    padding: 8px 14px;
+    font-size: 13px;
+    list-style: none;
+    font-family: var(--sans);
+  }
+  .reco ol { padding-left: 20px; margin: 8px 0 0; }
+  .reco li { margin-bottom: 6px; }
+
+  /* responsive */
+  @media (max-width: 1100px) {
+    .principles, .moments { grid-template-columns: repeat(2, 1fr); }
+    .phones { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .page { padding: 28px 16px; }
+    h1 { font-size: 38px; }
+    .principles, .moments, .phones { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ============================================================== -->
+  <!-- BRIEF                                                            -->
+  <!-- ============================================================== -->
+  <header>
+    <div class="kicker">Mailroom v0.7 · design exploration</div>
+    <h1>Mail a shared memory.<br>Make that the whole app.</h1>
+    <p class="lead">
+      v0.6.x lets users browse the app for a while before sending anything.
+      They can wander into the Constellation, the Map, the friends list,
+      the profile, the about-me editor &mdash; and never get to the point.
+      The product&apos;s job is one thing: mail a real postcard of a shared
+      memory. Everything else is scaffolding. v0.7 makes that the
+      gravitational center of the app.
+    </p>
+    <p class="lead">
+      Below: design principles, three concrete layout directions with
+      mockups, a clear what-to-cut table, four magical moments worth
+      building, and a recommendation.
+    </p>
+  </header>
+
+  <!-- ============================================================== -->
+  <!-- PRINCIPLES                                                       -->
+  <!-- ============================================================== -->
+  <hr>
+  <div class="kicker">First principles</div>
+  <h2>Notion&apos;s discipline. Snapchat&apos;s obviousness. Postal warmth.</h2>
+  <div class="principles">
+    <div class="principle">
+      <div class="num">1</div>
+      <h4>The send button is the camera</h4>
+      <p>Snapchat opens straight to the shutter. Mailroom should open straight to "mail something." Send isn&apos;t a destination, it&apos;s the home state.</p>
+    </div>
+    <div class="principle">
+      <div class="num">2</div>
+      <h4>The profile is your archive</h4>
+      <p>Not a CV with interests/birthday/about-me. A journal of the memories you&apos;ve sent and received, stacked week by week. Empty weeks read as "send something."</p>
+    </div>
+    <div class="principle">
+      <div class="num">3</div>
+      <h4>Cut everything that doesn&apos;t serve the first send</h4>
+      <p>Constellation, map, address book are great surfaces for returning users. They are friction for first-time users. Hide them until earned.</p>
+    </div>
+    <div class="principle">
+      <div class="num">4</div>
+      <h4>Say the why out loud, once</h4>
+      <p>"Mail a shared memory." That&apos;s the tagline, the empty-state copy, the send-confirmation copy, the share copy. Same five words, everywhere.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- DIRECTION 1 — SEND BAR (gentle push)                             -->
+  <!-- ============================================================== -->
+  <hr>
+
+  <div class="direction">
+    <div class="direction-head">
+      <div class="direction-meta">
+        <div class="kicker">Direction 1</div>
+        <h2><span class="label">Send Bar</span> The gentle push.</h2>
+        <p>
+          4 tabs (<b>Postcards · People · Map · Profile</b>). The Postcards
+          tab is your home. Persistent black <b>"Mail a memory →"</b> bar
+          pinned at the top of every Postcards view. Below it: your week-by-week
+          journal. About-me is moved entirely into Settings as a single
+          bio textarea. <b>Constellation lives inside the People tab as a
+          view toggle</b> (List · Constellation), so it&apos;s never more than
+          one tap deeper than today.
+        </p>
+        <p>
+          <b>Best for:</b> users who like the browseable feel of v0.6.x but
+          need a clear, persistent reminder of what the app is FOR.
+        </p>
+      </div>
+    </div>
+
+    <div class="phones">
+
+      <!-- D1 phone 1: Mail tab with weeks -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="h-row">
+                <span class="wordmark">Mailroom</span>
+                <span class="pill"><span class="stamp">1&cent;</span> 3</span>
+              </div>
+              <div class="sendbar">
+                Mail a memory <span class="arrow">&rarr;</span>
+              </div>
+
+              <div class="week-strip">
+                <div class="week-label">This week &middot; May 10</div>
+                <div class="week-cards">
+                  <div class="card photo-coast"><div class="stampdot"></div><div class="label">Maya</div></div>
+                  <div class="card photo-mtn in"><div class="stampdot" style="background:var(--postal-blue)"></div><div class="label">from Sam</div></div>
+                  <div class="empty-week-tile">+</div>
+                </div>
+              </div>
+
+              <div class="week-strip">
+                <div class="week-label">Last week</div>
+                <div class="week-cards">
+                  <div class="card photo-sunset"><div class="stampdot"></div><div class="label">Dad</div></div>
+                  <div class="card photo-desert"><div class="stampdot"></div></div>
+                </div>
+              </div>
+
+              <div class="week-strip">
+                <div class="week-label">Apr 26</div>
+                <div class="week-cards">
+                  <div class="card photo-forest"><div class="stampdot"></div></div>
+                  <div class="card photo-snow in"><div class="stampdot" style="background:var(--postal-blue)"></div></div>
+                  <div class="card photo-coast"><div class="stampdot"></div></div>
+                </div>
+              </div>
+
+              <div class="legend">
+                <span><span class="legend-swatch sent"></span>sent</span>
+                <span><span class="legend-swatch recv"></span>received</span>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab active">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+            <div class="tab">&#128506;<div style="font-size:8px;margin-top:1px">Map</div></div>
+            <div class="tab">&#9737;<div style="font-size:8px;margin-top:1px">You</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Postcards tab.</b> Persistent send bar pinned at the top, week-by-week journal underneath. Inbound cards get a blue ring.</div>
+      </div>
+
+      <!-- D1 phone 2: Empty state -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="h-row">
+                <span class="wordmark">Mailroom</span>
+                <span class="pill"><span class="stamp">1&cent;</span> 3</span>
+              </div>
+              <div class="sendbar">
+                Mail a memory <span class="arrow">&rarr;</span>
+              </div>
+
+              <div class="empty-hero">
+                <div class="fan">
+                  <div class="fan-card"></div>
+                  <div class="fan-card"></div>
+                  <div class="fan-card"></div>
+                </div>
+                <div class="empty-title">Your story starts<br>with one card.</div>
+                <div class="empty-sub">Pick a photo from a moment that meant<br>something. Mail it to whoever it&apos;s about.</div>
+                <div class="empty-cta">Mail my first card &rarr;</div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab active">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+            <div class="tab">&#128506;<div style="font-size:8px;margin-top:1px">Map</div></div>
+            <div class="tab">&#9737;<div style="font-size:8px;margin-top:1px">You</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Empty state.</b> No noise. Three blank postcards fanned out, a one-line promise, one button. That&apos;s the whole screen until you send card #1.</div>
+      </div>
+
+      <!-- D1 phone 3: Send flow modal -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="h-row">
+                <span style="font-family:var(--serif);font-weight:600;font-size:14px;">New postcard</span>
+                <span style="font-family:var(--sans);font-size:11px;color:var(--muted)">Cancel</span>
+              </div>
+
+              <div class="send-stage">
+                <h5>The memory</h5>
+                <div class="send-photo-pick"></div>
+              </div>
+
+              <div class="send-stage">
+                <h5>To &mdash; pick a friend or a pen pal</h5>
+                <span class="friend-pill"><span class="dot">M</span> Maya</span>
+                <span class="friend-pill"><span class="dot">D</span> Dad</span>
+                <span class="friend-pill stranger"><span class="dot">?</span> Pen pal</span>
+                <span class="friend-pill">+ new</span>
+              </div>
+
+              <div class="send-stage">
+                <h5>Your note</h5>
+                <div class="msg-box">that hike we kept saying we&apos;d do &mdash;</div>
+              </div>
+
+              <div class="ctabtn">Mail it &mdash; 1 stamp &rarr;</div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab active">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+            <div class="tab">&#128506;<div style="font-size:8px;margin-top:1px">Map</div></div>
+            <div class="tab">&#9737;<div style="font-size:8px;margin-top:1px">You</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Send modal.</b> Three blocks in vertical order: photo, recipient, note. Pen Pal is a first-class recipient option (stranger-send wired up).</div>
+      </div>
+
+      <!-- D1 phone 4: Profile simplified -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="profile-hero">
+                <div class="avatar">S</div>
+                <div class="profile-name">Scotty</div>
+                <div class="profile-city">&#10752; Boise, ID</div>
+              </div>
+              <div class="profile-bio">
+                Trail runner, espresso evangelist, kid&apos;s soccer coach. Mail me anything you took a photo of and meant to talk about.
+              </div>
+              <div class="stat-row">
+                <div class="stat"><div class="n">14</div><div class="l">sent</div></div>
+                <div class="stat"><div class="n">9</div><div class="l">received</div></div>
+                <div class="stat"><div class="n">7</div><div class="l">weeks in a row</div></div>
+              </div>
+              <div style="background:var(--white);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;font-family:var(--serif);font-size:12px;">
+                Settings <span style="color:var(--muted)">&rsaquo;</span>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+            <div class="tab">&#128506;<div style="font-size:8px;margin-top:1px">Map</div></div>
+            <div class="tab active">&#9737;<div style="font-size:8px;margin-top:1px">You</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Profile, condensed.</b> Avatar, name, city, one bio line, three honest numbers, settings entry. No about-me grid. <i>Weeks-in-a-row</i> is the streak that makes you want to send.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- DIRECTION 2 — FLOATING SEND (Escargot pattern)                   -->
+  <!-- ============================================================== -->
+  <div class="direction">
+    <div class="direction-head">
+      <div class="direction-meta">
+        <div class="kicker">Direction 2 &middot; <span class="recommend-pill">recommended</span></div>
+        <h2><span class="label">Floating Send</span> The Escargot move.</h2>
+        <p>
+          4 tabs (<b>Postcards · People · Map · You</b>) plus an oversized
+          <b>floating send button</b> dead-center of the tab bar, slightly
+          raised. The button is the loudest thing on screen at all times.
+          The Postcards tab is the journal of everything you&apos;ve sent and
+          received. <b>Constellation lives inside the People tab as a view
+          toggle</b> — same beautiful visualization, just one tap deeper
+          instead of consuming a whole tab slot. Profile is just bio +
+          streak + settings.
+        </p>
+        <p>
+          <b>Why this wins:</b> matches the pattern your Escargot screenshot uses
+          and that Snap, Instagram, BeReal all share: the create action is
+          a button, not a tab. Users never lose the path to sending.
+        </p>
+      </div>
+    </div>
+
+    <div class="phones">
+
+      <!-- D2 phone 1: Mail journal with FAB -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="h-row">
+                <span class="wordmark">Mailroom</span>
+                <span class="pill"><span class="stamp">1&cent;</span> 3</span>
+              </div>
+
+              <div style="font-family:var(--serif);font-size:18px;font-weight:600;margin:4px 0 10px;letter-spacing:-0.01em;">
+                Your mail journal.
+              </div>
+
+              <div class="week-strip">
+                <div class="week-label">This week</div>
+                <div class="week-cards">
+                  <div class="card photo-coast"><div class="stampdot"></div><div class="label">Maya</div></div>
+                  <div class="card photo-mtn in"><div class="stampdot" style="background:var(--postal-blue)"></div><div class="label">from Sam</div></div>
+                  <div class="empty-week-tile">+</div>
+                </div>
+              </div>
+
+              <div class="week-strip">
+                <div class="week-label">May 3</div>
+                <div class="week-cards">
+                  <div class="card photo-sunset"><div class="stampdot"></div><div class="label">Dad</div></div>
+                  <div class="card photo-desert in"><div class="stampdot" style="background:var(--postal-blue)"></div></div>
+                </div>
+              </div>
+
+              <div class="week-strip">
+                <div class="week-label">Apr 26</div>
+                <div class="week-cards">
+                  <div class="card photo-forest"><div class="stampdot"></div></div>
+                  <div class="card photo-snow"><div class="stampdot"></div></div>
+                  <div class="card photo-coast in"><div class="stampdot" style="background:var(--postal-blue)"></div></div>
+                </div>
+              </div>
+
+              <div class="week-strip">
+                <div class="week-label">Apr 19</div>
+                <div class="week-cards">
+                  <div class="card photo-mtn"><div class="stampdot"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab active">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+            <div class="tab fab">+</div>
+            <div class="tab">&#128506;<div style="font-size:8px;margin-top:1px">Map</div></div>
+            <div class="tab">&#9737;<div style="font-size:8px;margin-top:1px">You</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Journal + FAB.</b> The black circle in the middle of the tab bar is the send button. Always there, never hidden, never one of four equal options &mdash; it&apos;s the only thing.</div>
+      </div>
+
+      <!-- D2 phone 2: Empty journal with FAB -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="h-row">
+                <span class="wordmark">Mailroom</span>
+                <span class="pill"><span class="stamp">1&cent;</span> 3</span>
+              </div>
+
+              <div class="empty-hero" style="margin-top:36px;">
+                <div class="fan">
+                  <div class="fan-card"></div>
+                  <div class="fan-card"></div>
+                  <div class="fan-card"></div>
+                </div>
+                <div class="empty-title">Mail a shared<br>memory.</div>
+                <div class="empty-sub">The one you took a photo of, the one<br>you keep almost texting about. Tap the <b style="font-style:normal">+</b>.</div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab active">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+            <div class="tab fab" style="box-shadow:0 0 0 6px rgba(45,51,68,0.12),0 6px 16px rgba(45,51,68,0.30);">+</div>
+            <div class="tab">&#128506;<div style="font-size:8px;margin-top:1px">Map</div></div>
+            <div class="tab">&#9737;<div style="font-size:8px;margin-top:1px">You</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Empty journal.</b> No CTA on the screen &mdash; the CTA IS the FAB. We pulse it once with a soft halo so first-time users can&apos;t miss it.</div>
+      </div>
+
+      <!-- D2 phone 3: Camera-style send -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status" style="color:white;"><span>9:41</span><span>5G</span></div>
+          <div class="camera">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px 0;color:white;">
+              <span style="font-family:var(--sans);font-size:11px;font-weight:600;">&times; close</span>
+              <span style="font-family:var(--serif);font-size:14px;font-weight:600;">New postcard</span>
+              <span style="font-family:var(--sans);font-size:11px;font-weight:600;color:rgba(255,255,255,0.55)">next</span>
+            </div>
+            <div class="frame">
+              <div class="scene">A morning we<br>actually said yes to.</div>
+            </div>
+            <div class="actions">
+              <div class="roll">&#9783;</div>
+              <div class="shutter"></div>
+              <div class="friend">&#128101;</div>
+            </div>
+          </div>
+          <div class="tabbar dark" style="background:#1a1d28;">
+            <div class="tab" style="color:rgba(255,255,255,0.55);">photo</div>
+            <div class="tab" style="color:rgba(255,255,255,0.55);">to</div>
+            <div class="tab fab" style="background:white;color:#1a1d28;">&rarr;</div>
+            <div class="tab" style="color:rgba(255,255,255,0.55);">note</div>
+            <div class="tab" style="color:rgba(255,255,255,0.55);">mail</div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Send, opened.</b> Tapping the FAB drops you into a near-fullscreen camera/picker. Roll on the left, shutter centered, pick-a-friend on the right. Snapchat geometry, postcard outcome.</div>
+      </div>
+
+      <!-- D2 phone 4: People tab with Constellation toggle -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="h-row">
+                <span class="wordmark">Mailroom</span>
+                <span class="pill"><span class="stamp">1&cent;</span> 3</span>
+              </div>
+
+              <div style="font-family:var(--serif);font-size:18px;font-weight:600;margin:4px 0 8px;letter-spacing:-0.01em;">
+                Your people.
+              </div>
+
+              <div class="people-toggle">
+                <div class="seg">List</div>
+                <div class="seg active">Constellation</div>
+              </div>
+
+              <!-- Constellation visualization, simplified -->
+              <div style="position:relative; height:170px; background:radial-gradient(ellipse at center, rgba(60,110,143,0.10) 0%, rgba(45,51,68,0.04) 60%, transparent 100%); border-radius:12px; margin-bottom:8px; overflow:hidden;">
+                <!-- center dot = me -->
+                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:18px; height:18px; border-radius:100px; background:linear-gradient(135deg, #d97757, #B89A60); border:2px solid white; box-shadow:0 0 0 3px rgba(60,110,143,0.15);"></div>
+                <div style="position:absolute; top:54%; left:50%; transform:translateX(-50%); font-family:var(--sans); font-size:8px; font-weight:600; color:var(--ink); margin-top:14px;">you</div>
+                <!-- orbiting friends -->
+                <div style="position:absolute; top:22%; left:32%; width:14px; height:14px; border-radius:100px; background:linear-gradient(135deg, #3C6E8F, #6F92AE); border:1.5px solid white;"></div>
+                <div style="position:absolute; top:25%; left:34%; font-family:var(--script); font-size:9px; color:var(--ink); margin-top:14px;">Maya</div>
+                <div style="position:absolute; top:18%; right:28%; width:12px; height:12px; border-radius:100px; background:linear-gradient(135deg, #607A55, #8FAA78); border:1.5px solid white;"></div>
+                <div style="position:absolute; top:21%; right:24%; font-family:var(--script); font-size:9px; color:var(--ink); margin-top:14px;">Dad</div>
+                <div style="position:absolute; bottom:28%; left:24%; width:11px; height:11px; border-radius:100px; background:linear-gradient(135deg, #d97757, #B89A60); border:1.5px solid white;"></div>
+                <div style="position:absolute; bottom:24%; left:22%; font-family:var(--script); font-size:9px; color:var(--ink);">Sam</div>
+                <div style="position:absolute; bottom:24%; right:30%; width:10px; height:10px; border-radius:100px; background:linear-gradient(135deg, #3C6E8F, #6F92AE); border:1.5px solid white;"></div>
+                <div style="position:absolute; bottom:20%; right:26%; font-family:var(--script); font-size:9px; color:var(--ink);">Jules</div>
+                <!-- thin lines from center -->
+                <svg style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;" viewBox="0 0 200 170" preserveAspectRatio="none">
+                  <line x1="100" y1="85" x2="64" y2="38" stroke="rgba(45,51,68,0.18)" stroke-width="0.5"/>
+                  <line x1="100" y1="85" x2="144" y2="32" stroke="rgba(45,51,68,0.18)" stroke-width="0.5"/>
+                  <line x1="100" y1="85" x2="48" y2="125" stroke="rgba(45,51,68,0.18)" stroke-width="0.5"/>
+                  <line x1="100" y1="85" x2="140" y2="130" stroke="rgba(45,51,68,0.18)" stroke-width="0.5"/>
+                </svg>
+              </div>
+
+              <div style="font-family:var(--serif);font-style:italic;font-size:11px;color:var(--muted);text-align:center;margin-bottom:8px;line-height:1.4;">
+                4 people in your orbit. Tap one to mail them.
+              </div>
+
+              <!-- Pen pal CTA -->
+              <div style="background:linear-gradient(135deg, rgba(60,110,143,0.10), rgba(184,154,96,0.14)); border:1px solid var(--postal-blue); border-radius:10px; padding:8px 10px; display:flex; align-items:center; gap:8px;">
+                <div style="width:22px;height:22px;border-radius:100px;background:linear-gradient(135deg, var(--postal-blue), var(--sage));color:white;font-family:var(--serif);font-size:11px;font-weight:600;display:grid;place-items:center;">?</div>
+                <div style="flex:1;">
+                  <div style="font-family:var(--serif);font-size:11px;font-weight:600;">Find a pen pal</div>
+                  <div style="font-family:var(--serif);font-style:italic;font-size:9.5px;color:var(--muted);">someone new, picked by vibe</div>
+                </div>
+                <span style="color:var(--postal-blue);font-family:var(--sans);font-size:13px;">&rsaquo;</span>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab active">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+            <div class="tab fab">+</div>
+            <div class="tab">&#128506;<div style="font-size:8px;margin-top:1px">Map</div></div>
+            <div class="tab">&#9737;<div style="font-size:8px;margin-top:1px">You</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>People tab &middot; Constellation view.</b> The toggle at the top swaps between List and Constellation. Constellation isn&apos;t deleted &mdash; it lives here, one tap from every screen. Bottom card is the new Pen Pal entry point.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- DIRECTION 3 — THREE TABS (Snap-style radical condense)           -->
+  <!-- ============================================================== -->
+  <div class="direction">
+    <div class="direction-head">
+      <div class="direction-meta">
+        <div class="kicker">Direction 3</div>
+        <h2><span class="label">Three Tabs</span> Hyper-condense.</h2>
+        <p>
+          Three tabs: <b>Send · Postcards · People</b>. Send is the default tab on
+          launch &mdash; the app opens to the photo picker. Mail is the journal.
+          People merges Friends + Map + Constellation behind a segmented
+          toggle. Profile is the avatar in the top-right of every screen.
+          About-me is gone; bio lives in Settings.
+        </p>
+        <p>
+          <b>Best for:</b> "obviousness and ease" maxed out. The user can&apos;t
+          open the app without seeing the send action first. But it
+          demotes the journal and map from tabs, which is a bigger leap
+          from v0.6.x.
+        </p>
+      </div>
+    </div>
+
+    <div class="phones">
+
+      <!-- D3 phone 1: Send tab as default -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="h-row">
+                <span class="wordmark">Mailroom</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <span class="pill"><span class="stamp">1&cent;</span> 3</span>
+                  <span class="avatar" style="width:24px;height:24px;line-height:20px;font-size:11px;border-width:1.5px;">S</span>
+                </div>
+              </div>
+
+              <div style="font-family:var(--serif);font-size:22px;font-weight:600;margin:8px 0 6px;letter-spacing:-0.01em;line-height:1.1;">
+                Pick a photo.<br>Mail it.
+              </div>
+              <div style="font-family:var(--serif);font-style:italic;font-size:11.5px;color:var(--muted);margin-bottom:14px;line-height:1.4;">
+                The one you keep meaning to send.
+              </div>
+
+              <div class="send-photo-pick" style="height:160px;"></div>
+
+              <div style="display:flex;gap:6px;margin:8px 0 12px;overflow-x:auto;">
+                <div class="card photo-coast" style="flex:0 0 48px;height:32px;"></div>
+                <div class="card photo-mtn" style="flex:0 0 48px;height:32px;"></div>
+                <div class="card photo-sunset" style="flex:0 0 48px;height:32px;"></div>
+                <div class="card photo-desert" style="flex:0 0 48px;height:32px;"></div>
+                <div class="card photo-forest" style="flex:0 0 48px;height:32px;"></div>
+              </div>
+
+              <div class="ctabtn">Continue &rarr;</div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab active">&#128247;<div style="font-size:8px;margin-top:1px">Send</div></div>
+            <div class="tab">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Default screen.</b> The app opens here. Photo picker is the first thing the user sees, every time. Recent shots scroll below. Avatar in top-right opens settings.</div>
+      </div>
+
+      <!-- D3 phone 2: Mail journal -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="h-row">
+                <span class="wordmark">Mailroom</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <span class="pill"><span class="stamp">1&cent;</span> 3</span>
+                  <span class="avatar" style="width:24px;height:24px;line-height:20px;font-size:11px;border-width:1.5px;">S</span>
+                </div>
+              </div>
+
+              <div style="font-family:var(--serif);font-size:18px;font-weight:600;margin:4px 0 8px;letter-spacing:-0.01em;">
+                23 memories &middot; 7 week streak
+              </div>
+
+              <div class="week-strip">
+                <div class="week-label">This week</div>
+                <div class="week-cards">
+                  <div class="card photo-coast"><div class="stampdot"></div><div class="label">Maya</div></div>
+                  <div class="card photo-mtn in"><div class="stampdot" style="background:var(--postal-blue)"></div></div>
+                  <div class="empty-week-tile cta">Send →</div>
+                </div>
+              </div>
+              <div class="week-strip">
+                <div class="week-label">May 3</div>
+                <div class="week-cards">
+                  <div class="card photo-sunset"><div class="stampdot"></div></div>
+                  <div class="card photo-desert in"><div class="stampdot" style="background:var(--postal-blue)"></div></div>
+                </div>
+              </div>
+              <div class="week-strip">
+                <div class="week-label">Apr 26</div>
+                <div class="week-cards">
+                  <div class="card photo-forest"><div class="stampdot"></div></div>
+                  <div class="card photo-snow"><div class="stampdot"></div></div>
+                  <div class="card photo-coast in"><div class="stampdot" style="background:var(--postal-blue)"></div></div>
+                </div>
+              </div>
+              <div class="week-strip">
+                <div class="week-label">Apr 19</div>
+                <div class="week-cards">
+                  <div class="card photo-mtn"><div class="stampdot"></div></div>
+                  <div class="empty-week-tile cta">Send →</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab">&#128247;<div style="font-size:8px;margin-top:1px">Send</div></div>
+            <div class="tab active">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Postcards tab.</b> Empty trailing tile in each week is a one-tap shortcut back to Send, pre-filled to that week&apos;s date. Empty weeks aren&apos;t blank &mdash; they&apos;re invitations.</div>
+      </div>
+
+      <!-- D3 phone 3: People merged -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content">
+              <div class="h-row">
+                <span class="wordmark">Mailroom</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <span class="pill"><span class="stamp">1&cent;</span> 3</span>
+                  <span class="avatar" style="width:24px;height:24px;line-height:20px;font-size:11px;border-width:1.5px;">S</span>
+                </div>
+              </div>
+
+              <div class="people-toggle">
+                <div class="seg active">People</div>
+                <div class="seg">Map</div>
+                <div class="seg">Constellation</div>
+              </div>
+
+              <div class="friend-row"><div class="av">M</div><div class="info"><div class="nm">Maya</div><div class="ct">Portland, OR &middot; 3 cards</div></div><div class="send-btn">mail →</div></div>
+              <div class="friend-row"><div class="av blue">D</div><div class="info"><div class="nm">Dad</div><div class="ct">Denver, CO &middot; 2 cards</div></div><div class="send-btn">mail →</div></div>
+              <div class="friend-row"><div class="av green">S</div><div class="info"><div class="nm">Sam</div><div class="ct">Brooklyn, NY &middot; 1 card</div></div><div class="send-btn">mail →</div></div>
+              <div class="friend-row"><div class="av">J</div><div class="info"><div class="nm">Jules</div><div class="ct">Austin, TX &middot; new pen pal</div></div><div class="send-btn">mail →</div></div>
+              <div class="friend-row"><div class="av blue">?</div><div class="info"><div class="nm">A pen pal</div><div class="ct" style="color:var(--postal-blue)">match by mood, vibe, city</div></div><div class="send-btn">mail →</div></div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab">&#128247;<div style="font-size:8px;margin-top:1px">Send</div></div>
+            <div class="tab">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab active">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>People merged.</b> Friends list with toggle for Map and Constellation views. Each row has a one-tap Mail. The last row is "A pen pal" &mdash; the stranger-send entry point.</div>
+      </div>
+
+      <!-- D3 phone 4: Settings sheet -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="status"><span>9:41</span><span>5G</span></div>
+          <div class="screen">
+            <div class="content" style="background:rgba(45,51,68,0.35);padding:60px 14px 0;">
+              <!-- pseudo-modal -->
+              <div style="background:var(--paper);border-radius:18px 18px 0 0;margin:0 -14px;padding:14px 16px 80px;height:100%;">
+                <div style="text-align:center;font-family:var(--serif);font-size:16px;font-weight:600;margin-bottom:14px;">Settings</div>
+
+                <div class="profile-hero" style="padding:6px 0 8px;">
+                  <div class="avatar" style="width:54px;height:54px;font-size:21px;line-height:50px;">S</div>
+                  <div class="profile-name" style="font-size:17px;">Scotty</div>
+                  <div class="profile-city">Boise, ID</div>
+                </div>
+
+                <div class="profile-bio" style="font-size:11.5px;">
+                  Trail runner, espresso evangelist. <span style="color:var(--postal-blue);font-style:normal;font-family:var(--sans);font-size:10px;font-weight:600;">edit</span>
+                </div>
+
+                <div style="background:var(--white);border:1px solid var(--line);border-radius:10px;overflow:hidden;">
+                  <div style="padding:10px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;font-family:var(--serif);font-size:12px;">Notifications <span style="color:var(--muted)">2 on</span></div>
+                  <div style="padding:10px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;font-family:var(--serif);font-size:12px;">Privacy <span style="color:var(--muted)">friends only</span></div>
+                  <div style="padding:10px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;font-family:var(--serif);font-size:12px;">Buy stamps <span class="pill" style="background:var(--postal-red);color:white;border:none;padding:2px 6px;font-size:9px;">$5 / 5</span></div>
+                  <div style="padding:10px 12px;display:flex;justify-content:space-between;font-family:var(--serif);font-size:12px;color:var(--postal-red);">Sign out</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab">&#128247;<div style="font-size:8px;margin-top:1px">Send</div></div>
+            <div class="tab">&#9993;<div style="font-size:8px;margin-top:1px">Postcards</div></div>
+            <div class="tab">&#128101;<div style="font-size:8px;margin-top:1px">People</div></div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>Settings as a sheet.</b> Tap the top-right avatar from any screen. Bio editor is one textarea. About-me grid (interests, send-me, currently-into, birthday) is deleted entirely.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- CUT / KEEP TABLE                                                 -->
+  <!-- ============================================================== -->
+  <hr>
+  <div class="kicker">What changes</div>
+  <h2>What to cut, what to move, what to keep.</h2>
+  <p class="lead">
+    The audit below is identical across all three directions &mdash; just the
+    delivery differs. v0.7 ships less, not more.
+  </p>
+
+  <table class="cut-keep">
+    <tr>
+      <th>Surface</th>
+      <th>Verdict</th>
+      <th>Why</th>
+    </tr>
+    <tr>
+      <td><b>About me</b> grid (interests / send-me / birthday / currently-into)</td>
+      <td><span class="verdict v-cut">cut</span></td>
+      <td>Four optional fields that gate nothing and feel like a profile-completion chore. Replace with one bio textarea behind Settings.</td>
+    </tr>
+    <tr>
+      <td><b>Bio</b> &mdash; single textarea</td>
+      <td><span class="verdict v-new">new</span></td>
+      <td>One free-form sentence about you. Lives in Settings &gt; Edit Bio. Shows on your profile + on the back of cards you send (optional).</td>
+    </tr>
+    <tr>
+      <td><b>Profile</b> as primary surface</td>
+      <td><span class="verdict v-move">move</span></td>
+      <td>Profile is now a thin sheet: avatar, bio, three stats, link to Settings. The mail journal moves to its own Postcards tab.</td>
+    </tr>
+    <tr>
+      <td><b>Postcards journal</b> (week-by-week gallery)</td>
+      <td><span class="verdict v-new">new (revived)</span></td>
+      <td>Owns the <b>Postcards</b> tab (renamed from "Mail" so it doesn&apos;t collide with the verb "mail it" used in the send flow). Each row is a week, horizontally scrollable. Inbound has a blue ring, outbound a red stamp. Empty trailing tile is a CTA back to Send.</td>
+    </tr>
+    <tr>
+      <td><b>Constellation</b></td>
+      <td><span class="verdict v-keep">keep (moved)</span></td>
+      <td><b>Not deleted.</b> The visualization stays exactly as it is &mdash; it moves inside the <b>People</b> tab as one of the segmented view modes (List · Constellation). Same visual; same data; same magic. Just one tap deeper instead of consuming a top-level tab slot. Bonus: more users discover it because the toggle is right above the friend list.</td>
+    </tr>
+    <tr>
+      <td><b>Map</b></td>
+      <td><span class="verdict v-keep">keep</span></td>
+      <td>Strongest moat surface &mdash; a real visual reward for sending. Stays as a top-level tab in Directions 1 + 2; folds into People in Direction 3.</td>
+    </tr>
+    <tr>
+      <td><b>Pen pal / send-to-stranger</b></td>
+      <td><span class="verdict v-new">new</span></td>
+      <td>You called it out &mdash; never wired up. First-class recipient option in the Send modal AND as a row in the People list. Match by mood, vibe, or city. Opt-in to receive.</td>
+    </tr>
+    <tr>
+      <td><b>"First Card Ideas" / category grid</b></td>
+      <td><span class="verdict v-cut">cut</span></td>
+      <td>Already cut in v0.5.0. Stays cut. A photo + a note is the whole product.</td>
+    </tr>
+    <tr>
+      <td><b>"Mailroom mails real postcards" pause page</b></td>
+      <td><span class="verdict v-cut">cut</span></td>
+      <td>Already cut in v0.6.1 build 8. Hero tagline does the same work in two seconds.</td>
+    </tr>
+    <tr>
+      <td><b>Send Mail / Add Friend buttons on profile</b></td>
+      <td><span class="verdict v-cut">cut</span></td>
+      <td>Already cut in v0.6.1 build 8. Redundant with tab bar / FAB.</td>
+    </tr>
+    <tr>
+      <td><b>"Friends" tab name &rarr; "People"</b></td>
+      <td><span class="verdict v-move">rename</span></td>
+      <td>The tab&apos;s job widens slightly: friend list <i>plus</i> Constellation view <i>plus</i> the new Pen Pal entry point. "People" covers all three; "Friends" is too narrow.</td>
+    </tr>
+    <tr>
+      <td><b>Streak indicator</b> ("7 weeks in a row")</td>
+      <td><span class="verdict v-new">new</span></td>
+      <td>The single metric most likely to drive habitual sending. Shown in profile + at the top of the Postcards journal. Soft framing, not a chore.</td>
+    </tr>
+  </table>
+
+  <!-- ============================================================== -->
+  <!-- MAGICAL MOMENTS                                                  -->
+  <!-- ============================================================== -->
+  <hr>
+  <div class="kicker">Magical moments</div>
+  <h2>Four small things that make this feel alive.</h2>
+  <p class="lead">
+    None of these are screens. They&apos;re micro-moments inside screens that
+    earn the brand and reward sending. Cheap to build, disproportionately
+    sticky.
+  </p>
+  <div class="moments">
+    <div class="moment">
+      <div class="glyph">&#9993;</div>
+      <h4>The fold</h4>
+      <p>On tap-Mail-it: the photo + note compose into a postcard, then a paper-fold animation folds the card into an envelope. ~700ms. The same moment you&apos;ve been waiting all your life to see in an app.</p>
+    </div>
+    <div class="moment">
+      <div class="glyph">&#128205;</div>
+      <h4>The pin drops</h4>
+      <p>When Lob confirms a card is in transit, a postal-red dot animates onto the Map at the destination city. When delivered, the dot solidifies. A small thing. Users will keep checking.</p>
+    </div>
+    <div class="moment">
+      <div class="glyph">&#127775;</div>
+      <h4>The reciprocation badge</h4>
+      <p>When someone you mailed first mails you back, their card lands in your journal with a soft gold ring + "Your pen pal" stamp. The loop closing is the dopamine.</p>
+    </div>
+    <div class="moment">
+      <div class="glyph">&#128172;</div>
+      <h4>The empty-week whisper</h4>
+      <p>If you go a week without sending, the trailing tile in this week&apos;s row morphs from a quiet dashed plus into a soft black tile that says &ldquo;Mail someone &rarr;&rdquo;. No notification. Just a nudge inside the journal you&apos;ll already check.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- RECOMMENDATION                                                   -->
+  <!-- ============================================================== -->
+  <div class="reco">
+    <div class="kicker" style="color:rgba(255,255,255,0.6)">Recommendation</div>
+    <h2>Ship Direction 2: Floating Send.</h2>
+    <p>
+      Direction 2 lands on the right tradeoff. It keeps the surfaces you said
+      &ldquo;have a time and place&rdquo; (Mail, Friends, Map, You) as tabs &mdash; so
+      users who want to wander still can &mdash; while making the send action
+      the loudest, biggest, most-pressed thing on every screen. It&apos;s the
+      Escargot pattern, the Snapchat pattern, the Instagram pattern. It&apos;s
+      a known win.
+    </p>
+    <p>
+      Direction 3 is more aggressive and more in line with your Snapchat
+      analogy, but demoting the journal and the map from tabs is a big
+      structural reshuffle that affects the constellation, the city-map
+      moat, and existing user muscle memory. It&apos;s a v0.8 evolution, not
+      a v0.7 release.
+    </p>
+    <p>
+      Direction 1 is the safest. The send bar at the top is honest and
+      visible, but a bar is always weaker than a button.
+    </p>
+
+    <h4 style="color:rgba(255,255,255,0.6); margin-top:24px;">Concrete v0.7 scope, in order</h4>
+    <ol>
+      <li>Build the floating Send FAB + camera-style modal (replaces the current Send screen + its 4-step gallery).</li>
+      <li>Move the existing mail history to be the Postcards tab&apos;s journal (week-by-week, sent + received unified).</li>
+      <li>Delete About-me grid. Replace with a single Bio textarea in Settings &gt; Edit Bio.</li>
+      <li>Wire stranger / pen-pal send: a recipient row in the send modal + a People-list row that opens a "match a pen pal" sheet.</li>
+      <li>Add streak count to profile + Mail header.</li>
+      <li>Build the four magical moments: fold, pin drop, reciprocation badge, empty-week whisper.</li>
+      <li>Constellation kept &mdash; moves inside the renamed <b>People</b> tab as a segmented view toggle (List &middot; Constellation). Map stays as its own top-level tab.</li>
+    </ol>
+
+    <ul class="next">
+      <li>Single tagline everywhere: <b>&ldquo;Mail a shared memory.&rdquo;</b></li>
+      <li>One bio textarea, no profile grid</li>
+      <li>Floating Send is the camera</li>
+      <li>Empty weeks recruit</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

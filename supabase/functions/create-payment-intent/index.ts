@@ -116,37 +116,40 @@ serve(async (req) => {
       { apiVersion: "2024-12-18.acacia" },
     );
 
-    // 5. PaymentIntent with Stripe Tax enabled.
+    // 5. PaymentIntent creation.
     //
-    // `automatic_tax: { enabled: true }` makes Stripe compute the correct
-    // state sales tax based on the customer's billing address (collected by
-    // the Payment Sheet) and the tax registrations you've set up in the
-    // Stripe Dashboard. The user sees a Subtotal / Tax / Total breakdown
-    // inside the sheet — no UI work on our side.
+    // Stripe Tax (automatic_tax) is GATED behind the STRIPE_TAX_ENABLED env
+    // var, off by default. Enabling it without first activating Stripe Tax
+    // in the dashboard AND adding state registrations causes EVERY
+    // PaymentIntent to throw with a tax_failed error — observed in
+    // v0.7 Phase A.6 smoke test on 2026-05-13.
     //
-    // PREREQUISITES (Stripe Dashboard, one-time):
-    //   1. Stripe Tax → Activate
-    //   2. Stripe Tax → Registrations → add each US state where you have
-    //      economic nexus (start with your home state; add others as
-    //      thresholds trigger).
-    //   3. Products → set the tax category for stamps to "Services -
-    //      Postage/shipping" (or similar physical-postal category).
+    // To turn it on later (when you're ready to charge sales tax):
+    //   1. Stripe Dashboard → Tax → Activate
+    //   2. Add registrations for each US state where you have nexus
+    //   3. Set product tax category for stamps (e.g. "Services - Postage")
+    //   4. supabase secrets set STRIPE_TAX_ENABLED=true
+    //   5. supabase functions deploy create-payment-intent
     //
-    // Until those are set, `automatic_tax` may surface a tax_failed error.
-    // Catch it server-side if you ship before registrations are done.
-    const paymentIntent = await stripe.paymentIntents.create({
+    // For now (test mode + early TestFlight), no sales tax is collected.
+    const taxEnabled = (Deno.env.get("STRIPE_TAX_ENABLED") ?? "").toLowerCase() === "true";
+    const paymentIntentParams: any = {
       amount: pack.amountCents,
       currency: "usd",
       customer: stripeCustomerId,
       automatic_payment_methods: { enabled: true },
-      automatic_tax: { enabled: true },
       description: pack.description,
       metadata: {
         supabase_user_id: user.id,
         pack_id: packId,
         credits: String(pack.credits),
       },
-    });
+    };
+    if (taxEnabled) {
+      paymentIntentParams.automatic_tax = { enabled: true };
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
     return json({
       paymentIntent: paymentIntent.client_secret,
@@ -155,7 +158,12 @@ serve(async (req) => {
       publishableKey: Deno.env.get("STRIPE_PUBLISHABLE_KEY") ?? "",
     });
   } catch (err) {
-    return json({ error: err?.message ?? "Internal error" }, 500);
+    // Log to function logs for dashboard visibility, then return a
+    // structured error so the client can surface something useful.
+    const msg = (err as any)?.message ?? String(err);
+    const code = (err as any)?.code ?? null;
+    console.error("create-payment-intent error:", { code, message: msg });
+    return json({ error: msg, code }, 500);
   }
 });
 

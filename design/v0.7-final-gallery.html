@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mailroom v0.7 — final design (sign-off)</title>
+<style>
+  :root {
+    --paper: #F8F1E3;
+    --paper-soft: #FDF8EB;
+    --paper-dark: #ECE2CD;
+    --ink: #2D3344;
+    --ink-soft: #41475a;
+    --muted: #6F6757;
+    --line: #D9CDB4;
+    --postal-red: #C24A45;
+    --postal-blue: #3C6E8F;
+    --sage: #607A55;
+    --gold: #B89A60;
+    --white: #FFFEFA;
+    --serif: 'Lyon Display', 'Cormorant Garamond', Georgia, serif;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --script: 'Caveat', 'Brush Script MT', cursive;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #EFE7D2; color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1480px; margin: 0 auto; padding: 56px 36px 96px; }
+  .kicker {
+    color: var(--postal-red); font-family: var(--sans);
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: 60px; font-weight: 600;
+    letter-spacing: -0.02em; line-height: 1.04; margin: 0 0 24px;
+  }
+  h2 {
+    font-family: var(--serif); font-size: 38px; font-weight: 600;
+    letter-spacing: -0.015em; line-height: 1.1; margin: 0 0 12px;
+  }
+  h3 {
+    font-family: var(--serif); font-size: 24px; font-weight: 600;
+    letter-spacing: -0.005em; margin: 0 0 8px;
+  }
+  h4 {
+    font-family: var(--sans); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 8px;
+  }
+  p { margin: 0 0 14px; color: var(--ink); max-width: 76ch; }
+  p.lead { font-size: 19px; line-height: 1.55; color: var(--ink-soft); max-width: 76ch; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 56px 0; }
+  .label-pill {
+    font-family: var(--sans); font-size: 11px; font-weight: 700;
+    background: var(--ink); color: var(--paper);
+    border-radius: 100px; padding: 4px 10px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    vertical-align: middle; margin-right: 12px; display: inline-block;
+  }
+  .signoff-box {
+    background: linear-gradient(135deg, var(--ink) 0%, #1c2031 100%);
+    color: var(--paper);
+    border-radius: 18px; padding: 32px 28px;
+    margin: 32px 0;
+  }
+  .signoff-box h3 { color: white; }
+  .signoff-box p { color: rgba(255,255,255,0.85); }
+  .signoff-box ul { padding-left: 18px; }
+  .signoff-box li { color: rgba(255,255,255,0.92); margin-bottom: 6px; }
+
+  /* --------- principles ---------- */
+  .principles {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 18px; margin: 36px 0;
+  }
+  .principle {
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: 12px; padding: 22px;
+  }
+  .principle .num {
+    font-family: var(--serif); font-size: 36px;
+    color: var(--postal-red); line-height: 1; margin-bottom: 12px;
+  }
+  .principle h4 { margin-bottom: 6px; color: var(--ink); }
+  .principle p { font-size: 13.5px; color: var(--muted); line-height: 1.5; margin: 0; }
+
+  /* --------- phones ----------- */
+  .phone {
+    width: 100%; aspect-ratio: 9 / 19.5;
+    background: var(--paper); border-radius: 32px;
+    border: 1px solid #C5B894;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.6) inset,
+      0 18px 36px rgba(45,51,68,0.12),
+      0 4px 12px rgba(45,51,68,0.08);
+    position: relative; overflow: hidden; font-size: 11px;
+  }
+  .phone .notch {
+    position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
+    width: 38%; height: 14px; background: #1a1d28;
+    border-radius: 10px; z-index: 30;
+  }
+  .phone .status {
+    position: absolute; top: 9px; left: 14px; right: 14px;
+    display: flex; justify-content: space-between;
+    font-size: 9px; font-weight: 600; color: var(--ink); z-index: 20;
+  }
+  .phone .screen { position: absolute; inset: 26px 0 0; overflow: hidden; }
+  .phone .content {
+    position: absolute; inset: 0 0 56px;
+    overflow: hidden; padding: 8px 14px 0;
+  }
+  .phone .content.fullbleed { padding: 0; }
+  .phone .tabbar {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 56px; background: var(--white);
+    border-top: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-around;
+    padding: 0 4px 8px;
+  }
+  .phone .tab {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 2px;
+    color: var(--muted); font-size: 8.5px; font-weight: 600;
+  }
+  .phone .tab.active { color: var(--postal-blue); }
+  .phone .tab.fab {
+    background: var(--ink); color: var(--paper);
+    border-radius: 100px;
+    flex: 0 0 auto; width: 48px; height: 48px;
+    align-self: center; margin-top: -16px;
+    font-size: 22px; font-weight: 300; padding: 0;
+    box-shadow: 0 6px 16px rgba(45,51,68,0.30);
+    line-height: 1;
+    display: grid; place-items: center;
+  }
+  .phone .tab svg.tabicon { display: block; }
+  /* Inline SVG icons to mirror the real Lucide icons used in
+     src/components/BottomTabs.tsx — Map, Sparkles, Send, Users, User.
+     Same icon family, same stroke weight, just rendered as inline SVG
+     for the static mockups. */
+
+  /* --------- pill (NEW credits) ---------- */
+  .creditpill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: 100px; padding: 5px 11px 5px 8px;
+    font-size: 14px; font-weight: 600;
+    font-family: var(--serif); color: var(--ink);
+    line-height: 1;
+  }
+  /* alignment: svg + number must sit on the SAME visual baseline.
+     Without explicit line-height:1 on both, the serif glyph's
+     ascender/descender padding pushes the number a pixel below
+     the SVG&apos;s optical center. With line-height:1 + display:block
+     on the svg, both sit dead-center inside the pill. */
+  .creditpill svg { display: block; flex-shrink: 0; }
+  .creditpill > span {
+    line-height: 1;
+    display: inline-block;
+    position: relative;
+    top: 0.5px; /* serif "3" has heavier bottom; nudges optical center */
+  }
+  /* size variants for in-phone use */
+  .creditpill.small { padding: 3px 9px 3px 6px; font-size: 11px; gap: 4px; }
+
+  /* before/after creditpill comparison block */
+  .pill-compare {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: 14px; padding: 24px; margin: 24px 0;
+  }
+  .pill-compare-cell { text-align: center; }
+  .pill-compare-cell h4 { color: var(--ink); margin-bottom: 14px; }
+  .pill-compare-cell .demo {
+    background: var(--paper-soft);
+    border: 1px dashed var(--line); border-radius: 10px;
+    padding: 22px; margin-bottom: 10px;
+    display: flex; justify-content: center; align-items: center;
+  }
+  .pill-compare-cell .note {
+    color: var(--muted); font-style: italic;
+    font-family: var(--serif); font-size: 13px; line-height: 1.4;
+  }
+
+  /* OLD stamp tile (for compare) */
+  .old-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: 100px; padding: 4px 9px;
+  }
+  .old-pill .tile {
+    background: var(--postal-red); color: white;
+    font-family: var(--serif); font-size: 10px;
+    font-weight: 600;
+    width: 18px; height: 22px;
+    display: grid; place-items: center;
+    border-radius: 3px;
+  }
+  .old-pill .num {
+    font-family: var(--serif); font-weight: 600; font-size: 16px;
+  }
+
+  /* --------- common content elements ---------- */
+  .h-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 2px 0 6px;
+  }
+  .wordmark {
+    font-family: var(--script); font-size: 22px;
+    color: var(--ink); line-height: 1;
+  }
+  .ctabtn {
+    background: var(--ink); color: var(--paper);
+    border-radius: 100px; padding: 11px 14px;
+    text-align: center;
+    font-family: var(--serif); font-weight: 600; font-size: 13px;
+  }
+  .ctabtn.disabled {
+    background: var(--paper-dark); color: var(--muted);
+  }
+  .ctabtn.ghost {
+    background: transparent; color: var(--ink);
+    border: 1.5px solid var(--ink);
+  }
+  .stepdots {
+    display: flex; gap: 4px; margin-bottom: 14px;
+  }
+  .stepdots .d {
+    height: 4px; flex: 1; border-radius: 100px;
+    background: var(--line);
+  }
+  .stepdots .d.active { background: var(--ink); }
+  .stepdots .d.done { background: var(--postal-blue); }
+
+  /* signup flow specific */
+  .signup-flow {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 18px; margin: 36px 0 8px;
+  }
+  .flow-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 18px; margin-bottom: 12px;
+  }
+  .phone-wrap { text-align: center; position: relative; }
+  .phone-caption {
+    font-size: 12px; color: var(--muted);
+    font-family: var(--sans); margin-top: 10px; line-height: 1.4;
+  }
+  .phone-caption b { color: var(--ink); font-weight: 600; }
+  .step-arrow {
+    display: none; /* not used */
+  }
+  .step-num {
+    position: absolute; top: -10px; left: -8px;
+    width: 26px; height: 26px;
+    background: var(--ink); color: var(--paper);
+    font-family: var(--serif); font-size: 14px; font-weight: 600;
+    border-radius: 100px;
+    display: grid; place-items: center; z-index: 10;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  }
+
+  /* --------- form fields in mockups ---------- */
+  .field-label {
+    font-family: var(--sans); font-size: 9px;
+    font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .field-input {
+    background: var(--white); border: 1.5px solid var(--line);
+    border-radius: 8px; padding: 9px 10px;
+    font-family: var(--serif); font-size: 13px;
+    color: var(--ink); line-height: 1.2;
+  }
+  .field-input.filled { color: var(--ink); }
+  .field-input.placeholder { color: var(--muted); font-style: italic; }
+  .photo-pick {
+    height: 130px; border-radius: 8px;
+    background: linear-gradient(150deg, #8ba978, #4f6b3e 60%, #2c3f1f);
+    position: relative;
+  }
+  .photo-pick::after {
+    content: '\1F4F7';
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    font-size: 26px; color: rgba(255,255,255,0.6);
+  }
+  .photo-pick.empty {
+    background: var(--paper-soft);
+    border: 1.5px dashed var(--line);
+  }
+  .photo-pick.empty::after {
+    content: 'Pick a photo';
+    color: var(--muted); font-size: 11px;
+    font-family: var(--serif); font-style: italic;
+  }
+
+  /* recipient cards */
+  .recip-option {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--white); border: 1.5px solid var(--line);
+    border-radius: 10px; padding: 10px 12px;
+    margin-bottom: 6px;
+  }
+  .recip-option.selected {
+    border-color: var(--ink); border-width: 2px;
+    background: var(--paper-soft);
+  }
+  .recip-option .dot {
+    width: 22px; height: 22px; border-radius: 100px;
+    background: linear-gradient(135deg, #d97757, #B89A60);
+    color: white; font-family: var(--serif); font-size: 11px;
+    font-weight: 600; display: grid; place-items: center;
+  }
+  .recip-option .dot.self { background: linear-gradient(135deg, var(--postal-red), #8d3f3a); }
+  .recip-option .dot.link { background: linear-gradient(135deg, var(--postal-blue), var(--sage)); }
+  .recip-option .info { flex: 1; }
+  .recip-option .nm {
+    font-family: var(--serif); font-size: 12px; font-weight: 600;
+    line-height: 1.1;
+  }
+  .recip-option .sub {
+    font-family: var(--serif); font-style: italic;
+    font-size: 10px; color: var(--muted); margin-top: 1px;
+  }
+
+  /* week strip / journal */
+  .week-strip {
+    margin-top: 4px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .week-strip:last-child { border-bottom: none; }
+  .week-label {
+    font-family: var(--sans); font-size: 8.5px; font-weight: 700;
+    color: var(--muted); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 5px;
+  }
+  .week-cards { display: flex; gap: 6px; overflow: hidden; }
+  .card {
+    flex: 0 0 56px; height: 38px;
+    border-radius: 4px;
+    background: var(--white); border: 1px solid var(--line);
+    position: relative; overflow: hidden;
+  }
+  .card.photo-mtn { background: linear-gradient(135deg, #97aebe, #5f7a8c 60%, #3b5469); }
+  .card.photo-desert { background: linear-gradient(160deg, #d8a87a, #b46d44 60%, #8a4928); }
+  .card.photo-coast { background: linear-gradient(180deg, #9ccad9, #6da3b8 60%, #2c5267); }
+  .card.photo-forest { background: linear-gradient(150deg, #8ba978, #4f6b3e 60%, #2c3f1f); }
+  .card.photo-sunset { background: linear-gradient(180deg, #f4cf7a, #d97757 70%, #8d3f3a); }
+  .card.photo-snow { background: linear-gradient(200deg, #e3eaf2, #95a8bd 80%, #5b6f87); }
+  .card .stampdot {
+    position: absolute; top: 3px; right: 3px;
+    width: 9px; height: 11px;
+    background: var(--postal-red); border-radius: 1.5px;
+  }
+  .card.in { box-shadow: inset 0 0 0 1.5px var(--postal-blue); }
+  .card.queued {
+    background: var(--paper-soft);
+    border: 1.5px dashed var(--postal-blue);
+  }
+  .card.queued::after {
+    content: 'queued';
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    font-family: var(--sans); font-size: 7px;
+    font-weight: 700; color: var(--postal-blue);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .card .label {
+    position: absolute; bottom: 2px; left: 4px;
+    font-family: var(--script); color: white;
+    font-size: 9px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5); line-height: 1;
+  }
+  .empty-week-tile {
+    flex: 0 0 56px; height: 38px;
+    border-radius: 4px;
+    border: 1.5px dashed var(--line);
+    background: var(--paper-soft);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-family: var(--script); font-size: 11px;
+  }
+  .empty-week-tile.cta {
+    background: var(--ink); color: var(--paper);
+    border: 1.5px solid var(--ink);
+    font-family: var(--serif); font-size: 11px; font-weight: 600;
+  }
+
+  /* profile-specific (stats + journal) */
+  .avatar {
+    width: 60px; height: 60px;
+    border-radius: 100px;
+    background: linear-gradient(135deg, #d97757, #B89A60);
+    margin: 0 auto 8px;
+    border: 2px solid var(--white);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    color: white; font-family: var(--serif); font-size: 24px;
+    font-weight: 600; line-height: 56px; text-align: center;
+  }
+  .profile-name {
+    font-family: var(--serif); font-size: 19px; font-weight: 600;
+    line-height: 1.1; text-align: center;
+  }
+  .profile-city {
+    font-family: var(--serif); font-style: italic; font-size: 11px;
+    color: var(--postal-blue); text-align: center; margin-top: 2px;
+  }
+  .profile-bio {
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 11px;
+    font-family: var(--serif); font-style: italic; font-size: 11px;
+    color: var(--ink); line-height: 1.4; margin: 10px 0;
+  }
+  .stat-row { display: flex; gap: 6px; margin: 8px 0; }
+  .stat {
+    flex: 1; background: var(--white); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 4px; text-align: center;
+  }
+  .stat .n {
+    font-family: var(--serif); font-size: 16px; font-weight: 600; line-height: 1;
+  }
+  .stat .l {
+    font-family: var(--sans); font-size: 7.5px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); margin-top: 3px;
+  }
+
+  /* people toggle */
+  .people-toggle {
+    display: flex; background: var(--paper-soft);
+    border: 1px solid var(--line); border-radius: 100px;
+    padding: 3px; margin: 4px 0 10px;
+  }
+  .people-toggle .seg {
+    flex: 1; text-align: center; padding: 6px 0;
+    font-family: var(--sans); font-size: 10px; font-weight: 600;
+    color: var(--muted); border-radius: 100px;
+  }
+  .people-toggle .seg.active {
+    background: var(--white); color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  /* swipeable dots indicator (Map+Constellation option B) */
+  .swipedots {
+    display: flex; gap: 6px; justify-content: center;
+    padding: 8px 0 4px;
+  }
+  .swipedots .d {
+    width: 5px; height: 5px;
+    background: var(--line); border-radius: 100px;
+  }
+  .swipedots .d.active { background: var(--ink); width: 12px; }
+
+  /* magical moments TODO */
+  .todo {
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: 14px; padding: 24px 28px;
+    margin: 24px 0;
+  }
+  .todo-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .todo-item:last-child { border-bottom: none; }
+  .todo-check {
+    width: 22px; height: 22px;
+    border: 1.5px solid var(--ink);
+    border-radius: 6px; flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .todo-body { flex: 1; }
+  .todo-title {
+    font-family: var(--serif); font-size: 17px; font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .todo-desc {
+    font-size: 14px; color: var(--ink-soft); margin: 0;
+    line-height: 1.5;
+  }
+  .todo-meta {
+    display: flex; gap: 10px; margin-top: 6px;
+    font-size: 11px; color: var(--muted);
+    font-family: var(--sans);
+  }
+  .todo-meta b { color: var(--ink); font-weight: 700; }
+
+  /* tab options A/B comparison */
+  .tab-options {
+    display: grid; grid-template-columns: 1fr;
+    gap: 24px; margin-top: 24px;
+  }
+  .tab-option .phones-mini { max-width: 560px; margin-left: auto; margin-right: auto; }
+  .tab-option {
+    background: var(--paper-soft); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px;
+  }
+  .tab-option h3 { color: var(--ink); }
+  .tab-option .opt-pill {
+    display: inline-block; background: var(--ink); color: var(--paper);
+    font-family: var(--sans); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 100px;
+    margin-bottom: 10px;
+  }
+  .tab-option.recommended { border-color: var(--postal-red); border-width: 2px; }
+  .tab-option.recommended .opt-pill { background: var(--postal-red); }
+  .tab-option ul { padding-left: 18px; }
+  .tab-option li { margin-bottom: 4px; font-size: 14px; color: var(--ink-soft); }
+  .tab-option .phones-mini {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 14px; margin-top: 16px;
+  }
+
+  /* cut/keep table */
+  table.cut-keep {
+    width: 100%; margin-top: 18px;
+    border-collapse: collapse; font-family: var(--sans);
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: 12px; overflow: hidden;
+  }
+  .cut-keep th, .cut-keep td {
+    padding: 12px 16px; text-align: left;
+    border-bottom: 1px solid var(--line);
+    font-size: 13.5px; vertical-align: top;
+  }
+  .cut-keep th {
+    background: var(--paper-soft); font-weight: 700;
+    font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .cut-keep tr:last-child td { border-bottom: none; }
+  .cut-keep .verdict {
+    font-weight: 700; font-size: 11.5px;
+    padding: 3px 8px; border-radius: 100px;
+    display: inline-block; white-space: nowrap;
+  }
+  .v-cut { background: rgba(194,74,69,0.12); color: var(--postal-red); }
+  .v-move { background: rgba(60,110,143,0.12); color: var(--postal-blue); }
+  .v-keep { background: rgba(96,122,85,0.15); color: var(--sage); }
+  .v-new  { background: rgba(184,154,96,0.18); color: #8a722e; }
+
+  /* build order */
+  .build-order ol { padding-left: 28px; }
+  .build-order li {
+    margin-bottom: 10px; font-size: 15px; line-height: 1.55;
+    color: var(--ink-soft);
+  }
+  .build-order li b { color: var(--ink); }
+  .build-order li .est {
+    display: inline-block;
+    background: var(--paper-dark); color: var(--ink);
+    font-family: var(--sans); font-size: 10.5px; font-weight: 700;
+    padding: 2px 7px; border-radius: 4px;
+    margin-left: 8px;
+    letter-spacing: 0.03em;
+  }
+
+  @media (max-width: 1240px) {
+    .principles { grid-template-columns: repeat(2, 1fr); }
+    .signup-flow { grid-template-columns: repeat(2, 1fr); }
+    .flow-row { grid-template-columns: repeat(2, 1fr); }
+    .tab-options { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .page { padding: 28px 16px; }
+    h1 { font-size: 38px; }
+    .principles, .signup-flow, .flow-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ====================================================== -->
+  <!-- HEADER + KILLER INSIGHT                                  -->
+  <!-- ====================================================== -->
+  <header>
+    <div class="kicker">Mailroom v0.7 · final design · sign-off</div>
+    <h1>The signup flow<br>IS the first send.</h1>
+    <p class="lead">
+      One radical simplification reorganizes the whole product. The user
+      cannot enter Mailroom until they have mailed a card. The "form" we
+      ask them to fill out IS a postcard. Every field we need (their name,
+      their address, the recipient&apos;s details) gets collected because
+      they&apos;re literally addressing one. No skip, no preview, no browse
+      first. They open the app, they mail a memory, they&apos;re in.
+    </p>
+    <p class="lead">
+      Time to First Send goes from <b>8&ndash;12 minutes</b> (v0.6.x) to
+      <b>~3 minutes</b>. The user gets value before they get UI.
+    </p>
+  </header>
+
+  <!-- four principles -->
+  <div class="principles">
+    <div class="principle">
+      <div class="num">1</div>
+      <h4>Signup is the first send</h4>
+      <p>No skip button. No "complete profile later." The first thing the user does in Mailroom is mail a real postcard. Then they&apos;re in.</p>
+    </div>
+    <div class="principle">
+      <div class="num">2</div>
+      <h4>Two whys, one app</h4>
+      <p>Primary: <b>Mail a shared memory.</b> Secondary: <b>Send a stranger something nice.</b> The pen pal feature is the second why &mdash; equally first-class.</p>
+    </div>
+    <div class="principle">
+      <div class="num">3</div>
+      <h4>Empty isn&apos;t allowed</h4>
+      <p>The user has at least one postcard in their journal from the moment they finish onboarding. The empty-state of the app doesn&apos;t exist for new users.</p>
+    </div>
+    <div class="principle">
+      <div class="num">4</div>
+      <h4>Address gaps don&apos;t block</h4>
+      <p>If they don&apos;t know the friend&apos;s address, send-a-link. The card queues and ships the moment the friend fills in the form. From the sender&apos;s view, it&apos;s sent.</p>
+    </div>
+  </div>
+
+  <!-- ====================================================== -->
+  <!-- THE NEW CREDITS PILL                                     -->
+  <!-- ====================================================== -->
+  <hr>
+  <div class="kicker">Visual fix</div>
+  <h2>The new credits pill: envelope + count.</h2>
+  <p class="lead">
+    The 1&cent; stamp tile next to the count showed two numbers (a tiny
+    "1&cent;" and a regular count). At a glance, looked like 13, 25, etc.
+    Replaced with a clean envelope icon. One number, one meaning. Reads
+    as <i>"3 cards in your pocket"</i> instantly.
+  </p>
+
+  <div class="pill-compare">
+    <div class="pill-compare-cell">
+      <h4>Before · v0.6.x</h4>
+      <div class="demo">
+        <span class="old-pill">
+          <span class="tile">1&cent;</span>
+          <span class="num">3</span>
+        </span>
+      </div>
+      <div class="note">"1&cent;" and "3" both read as numbers. The eye does math it shouldn&apos;t.</div>
+    </div>
+    <div class="pill-compare-cell">
+      <h4>After · v0.7</h4>
+      <div class="demo">
+        <span class="creditpill">
+          <svg width="20" height="15" viewBox="0 0 24 18" fill="none">
+            <rect x="1" y="1" width="22" height="16" rx="1.5" stroke="#2D3344" stroke-width="1.6"/>
+            <path d="M2 3 L12 11 L22 3" stroke="#2D3344" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <circle cx="12" cy="10.2" r="1.8" fill="#2D3344"/>
+          </svg>
+          <span>3</span>
+        </span>
+      </div>
+      <div class="note">Envelope = "card." Number = "how many." No competing numerals.</div>
+    </div>
+  </div>
+
+  <!-- ====================================================== -->
+  <!-- THE FORCED SIGNUP → SEND FLOW                            -->
+  <!-- ====================================================== -->
+  <hr>
+  <div class="kicker">The new signup &middot; 7 screens</div>
+  <h2>From "Sign in" to "Mailed it" in under 3 minutes.</h2>
+  <p class="lead">
+    Each screen has one job. The user can&apos;t move forward without
+    completing it. They can&apos;t skip ahead, can&apos;t browse,
+    can&apos;t see the tabs until the last step. The app gates
+    discovery behind doing the thing.
+  </p>
+
+  <div class="flow-row">
+
+    <!-- SCREEN 1: Sign in — UNCHANGED FROM v0.6.x. Same Recraft hero,
+         same Apple Sign In primary, same email fallback. Only the
+         tagline copy is the proposed change. -->
+    <div class="phone-wrap">
+      <div class="step-num">1</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content" style="padding-top: 8px;">
+            <!-- Recraft hero art frame (existing hero-folk-map.png) -->
+            <div style="aspect-ratio:1; border-radius:16px; overflow:hidden; width:100%; margin-top:4px;
+                 background:
+                   radial-gradient(circle at 25% 30%, rgba(217,119,87,0.55) 0%, transparent 28%),
+                   radial-gradient(circle at 75% 35%, rgba(60,110,143,0.55) 0%, transparent 28%),
+                   radial-gradient(circle at 50% 70%, rgba(184,154,96,0.45) 0%, transparent 30%),
+                   linear-gradient(160deg, #E8D8B5 0%, #D4B886 60%, #A88B5C 100%);
+                 position:relative;">
+              <!-- folk-art map suggestion: rivers + stamp dots -->
+              <svg style="position:absolute; inset:0; width:100%; height:100%;" viewBox="0 0 200 200" preserveAspectRatio="none">
+                <path d="M10 80 Q 50 60, 90 90 T 180 70" stroke="rgba(60,110,143,0.5)" stroke-width="1.2" fill="none"/>
+                <path d="M20 130 Q 70 110, 110 140 T 195 130" stroke="rgba(60,110,143,0.4)" stroke-width="1" fill="none"/>
+                <circle cx="40" cy="60" r="3.5" fill="#C24A45"/>
+                <circle cx="120" cy="50" r="3.5" fill="#C24A45"/>
+                <circle cx="160" cy="120" r="3.5" fill="#3C6E8F"/>
+                <circle cx="70" cy="150" r="3.5" fill="#C24A45"/>
+              </svg>
+              <div style="position:absolute; bottom:8px; right:10px; font-family:var(--sans); font-size:8px; font-weight:700; color:rgba(45,51,68,0.4); letter-spacing:0.08em;">USA &middot; 2026</div>
+            </div>
+            <div style="text-align:center; margin-top:14px;">
+              <div style="font-family:var(--script); font-size:32px; line-height:1; color:var(--ink); margin-bottom:8px;">Mailroom</div>
+              <div style="font-family:var(--serif); font-size:18px; font-weight:600; line-height:1.18; padding: 0 8px;">
+                Mail a memory for<br>less than a stamp.
+              </div>
+            </div>
+            <div style="position:absolute; bottom:14px; left:14px; right:14px;">
+              <div style="background:black; color:white; border-radius:10px; padding:13px; text-align:center; font-family:var(--sans); font-size:14px; font-weight:600; margin-bottom:10px;">
+                &#63743; &nbsp; Sign in with Apple
+              </div>
+              <div style="text-align:center; font-family:var(--serif); font-size:13px; color:var(--postal-blue); text-decoration:underline;">Sign up with email &rarr;</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Sign in.</b> <i>Unchanged structure</i> &mdash; same Recraft hero, same wordmark, same Apple primary + email fallback. Only the tagline is proposed: <b>"Mail a memory for less than a stamp."</b> (sentence case, not title case.)</div>
+    </div>
+
+    <!-- SCREEN 2: Pick the photo -->
+    <div class="phone-wrap">
+      <div class="step-num">2</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content">
+            <div class="stepdots">
+              <div class="d active"></div>
+              <div class="d"></div>
+              <div class="d"></div>
+              <div class="d"></div>
+              <div class="d"></div>
+            </div>
+            <div style="font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-0.01em; line-height:1.15;">
+              Pick the photo.
+            </div>
+            <div style="font-family:var(--serif); font-style:italic; font-size:12px; color:var(--muted); margin:6px 0 12px;">
+              The moment that meant something.
+            </div>
+            <div class="photo-pick" style="height:170px;"></div>
+            <div style="display:flex; gap:6px; margin: 8px 0 12px; overflow:hidden;">
+              <div class="card photo-coast" style="height:36px;"></div>
+              <div class="card photo-mtn" style="height:36px;"></div>
+              <div class="card photo-sunset" style="height:36px;"></div>
+              <div class="card photo-desert" style="height:36px;"></div>
+              <div class="card photo-forest" style="height:36px;"></div>
+            </div>
+            <div class="ctabtn">Continue &rarr;</div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Pick the photo.</b> Photo picker, the most important commitment of the flow. Recent shots scroll below. No need to leave the app to pick.</div>
+    </div>
+
+    <!-- SCREEN 3: Write the note -->
+    <div class="phone-wrap">
+      <div class="step-num">3</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content">
+            <div class="stepdots">
+              <div class="d done"></div>
+              <div class="d active"></div>
+              <div class="d"></div>
+              <div class="d"></div>
+              <div class="d"></div>
+            </div>
+            <div style="font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-0.01em; line-height:1.15;">
+              What&apos;s the<br>memory?
+            </div>
+            <div style="font-family:var(--serif); font-style:italic; font-size:12px; color:var(--muted); margin:6px 0 12px;">
+              A line or two. It&apos;s a postcard, not an email.
+            </div>
+            <div style="background:var(--paper-soft); border:1.5px dashed var(--line); border-radius:8px; padding:14px; min-height:120px; font-family:var(--script); font-size:16px; color:var(--ink); line-height:1.3;">
+              the hike we kept saying<br>we&apos;d do &mdash;<br><br>love, S
+            </div>
+            <div style="font-family:var(--sans); font-size:10px; color:var(--muted); text-align:right; margin-top:4px;">52 / 280</div>
+            <div class="ctabtn" style="margin-top:14px;">Continue &rarr;</div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Write the note.</b> Handwriting-style font in the input itself signals what this becomes. Postcards are short. The character limit teaches the format.</div>
+    </div>
+
+    <!-- SCREEN 4: Pick recipient (with all options) -->
+    <div class="phone-wrap">
+      <div class="step-num">4</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content">
+            <div class="stepdots">
+              <div class="d done"></div>
+              <div class="d done"></div>
+              <div class="d active"></div>
+              <div class="d"></div>
+              <div class="d"></div>
+            </div>
+            <div style="font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-0.01em; line-height:1.15;">
+              Who&apos;s it for?
+            </div>
+            <div style="font-family:var(--serif); font-style:italic; font-size:12px; color:var(--muted); margin:6px 0 14px;">
+              Pick one. You can always mail another later.
+            </div>
+
+            <div class="recip-option selected">
+              <div class="dot">M</div>
+              <div class="info">
+                <div class="nm">Someone I know</div>
+                <div class="sub">Friend, family, anyone with an address</div>
+              </div>
+              <span style="color:var(--ink); font-family:var(--sans); font-size:14px;">&#10003;</span>
+            </div>
+            <div class="recip-option">
+              <div class="dot link">&#128279;</div>
+              <div class="info">
+                <div class="nm">Send them a link</div>
+                <div class="sub">Don&apos;t have their address? We&apos;ll ask them.</div>
+              </div>
+            </div>
+            <div class="recip-option">
+              <div class="dot self">&#9737;</div>
+              <div class="info">
+                <div class="nm">Send it to myself</div>
+                <div class="sub">Future you will thank past you</div>
+              </div>
+            </div>
+            <div class="recip-option">
+              <div class="dot link">?</div>
+              <div class="info">
+                <div class="nm">A pen pal</div>
+                <div class="sub">Send one, get one from a stranger</div>
+              </div>
+            </div>
+
+            <div class="ctabtn" style="margin-top:10px;">Continue &rarr;</div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Pick a recipient.</b> Four ways to send. "Send them a link" solves the no-address problem &mdash; the card queues, and ships the moment the friend fills in their address. Self-send and pen pal are both first-class.</div>
+    </div>
+
+  </div>
+
+  <div class="flow-row">
+
+    <!-- SCREEN 5: Their info — name + ONE smart address field -->
+    <div class="phone-wrap">
+      <div class="step-num">5</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content">
+            <div class="stepdots">
+              <div class="d done"></div>
+              <div class="d done"></div>
+              <div class="d done"></div>
+              <div class="d active"></div>
+              <div class="d"></div>
+            </div>
+            <div style="font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-0.01em; line-height:1.15;">
+              Where to?
+            </div>
+            <div style="font-family:var(--serif); font-style:italic; font-size:12px; color:var(--muted); margin:6px 0 16px;">
+              Just for the envelope. Never shared with anyone else.
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <div class="field-label">Their name</div>
+              <div class="field-input filled">Maya Chen</div>
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <div class="field-label">Their address</div>
+              <div class="field-input filled" style="line-height:1.4;">412 SE Belmont,<br>Portland, OR 97214</div>
+            </div>
+
+            <div class="ctabtn">Continue &rarr;</div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Recipient.</b> Two fields: their name + one smart address box. The address field uses iOS autofill (Contacts) and address autocomplete &mdash; the user types a street, the suggestions complete the city/state/ZIP. If they picked "send a link" on screen 4, this whole screen becomes one field: <i>"Their phone or email"</i>.</div>
+    </div>
+
+    <!-- SCREEN 6: Your info — same shape, your turn -->
+    <div class="phone-wrap">
+      <div class="step-num">6</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content">
+            <div class="stepdots">
+              <div class="d done"></div>
+              <div class="d done"></div>
+              <div class="d done"></div>
+              <div class="d done"></div>
+              <div class="d active"></div>
+            </div>
+            <div style="font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-0.01em; line-height:1.15;">
+              From you.
+            </div>
+            <div style="font-family:var(--serif); font-style:italic; font-size:12px; color:var(--muted); margin:6px 0 16px;">
+              We print "from your city" on the back. Your full address stays private.
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <div class="field-label">Your first name</div>
+              <div class="field-input filled">Scotty</div>
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <div class="field-label">Your address</div>
+              <div class="field-input filled" style="line-height:1.4;">5209 Dorset Ave,<br>Boise, ID 83706</div>
+            </div>
+
+            <div class="ctabtn">Mail it &rarr;</div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Sender.</b> Same shape. Your name + one smart address box. iOS autofills from your iCloud-saved address. The button flips to <i>"Mail it &rarr;"</i> &mdash; the user feels the mailbox at the end of their finger.</div>
+    </div>
+
+    <!-- SCREEN 7: Confirmation / "the fold" animation moment -->
+    <div class="phone-wrap">
+      <div class="step-num">7</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <!-- Soft postal-paper backdrop for the celebration -->
+          <div class="content" style="text-align:center; padding-top:0; background:
+                radial-gradient(ellipse at 50% 30%, rgba(217,119,87,0.10) 0%, transparent 60%),
+                radial-gradient(ellipse at 50% 80%, rgba(60,110,143,0.08) 0%, transparent 60%);">
+
+            <!-- The hero illustration: envelope mid-flight with the postcard
+                 visible behind it, MAILED stamp coming down at an angle,
+                 motion arcs sweeping across, stars/sparkles. Conveys the
+                 "fold + send" moment that paper-fold animation delivers. -->
+            <div style="margin: 30px auto 0; width: 200px; height: 168px; position:relative;">
+              <!-- back postcard, fanned -->
+              <div style="position:absolute; top:18px; left:14px; width:140px; height:96px; border-radius:4px; transform:rotate(-8deg);
+                   background:linear-gradient(150deg, #8ba978, #4f6b3e 60%, #2c3f1f);
+                   box-shadow:0 4px 10px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.2);
+                   border:1px solid rgba(0,0,0,0.15);">
+                <!-- script label suggesting the memory -->
+                <div style="position:absolute; bottom:8px; left:10px; right:10px; color:white; font-family:var(--script); font-size:13px; text-shadow:0 1px 3px rgba(0,0,0,0.5); line-height:1.1;">the hike we<br>kept saying</div>
+                <!-- mini stamp dot -->
+                <div style="position:absolute; top:6px; right:8px; width:14px; height:18px; background:var(--postal-red); border-radius:2px;
+                     box-shadow:0 1px 2px rgba(0,0,0,0.2);"></div>
+              </div>
+
+              <!-- envelope front, slightly tilted, partially overlapping the postcard -->
+              <div style="position:absolute; top:38px; left:48px; width:130px; height:88px; transform:rotate(6deg);
+                   filter: drop-shadow(0 8px 14px rgba(0,0,0,0.22));">
+                <svg width="130" height="88" viewBox="0 0 130 88" fill="none">
+                  <!-- envelope body -->
+                  <rect x="2" y="2" width="126" height="84" rx="3" fill="var(--white)" stroke="var(--ink)" stroke-width="1.6"/>
+                  <!-- flap fold lines -->
+                  <path d="M3 4 L65 50 L127 4" stroke="var(--ink)" stroke-width="1.6" fill="none"/>
+                  <!-- corner side folds -->
+                  <path d="M3 86 L48 50" stroke="rgba(45,51,68,0.4)" stroke-width="0.7" fill="none"/>
+                  <path d="M127 86 L82 50" stroke="rgba(45,51,68,0.4)" stroke-width="0.7" fill="none"/>
+                  <!-- stamp -->
+                  <rect x="86" y="9" width="26" height="20" fill="var(--postal-red)" rx="1.5"/>
+                  <text x="99" y="22" text-anchor="middle" font-family="serif" font-size="9" font-weight="700" fill="white">1¢</text>
+                  <!-- the recipient address, faintly written -->
+                  <text x="12" y="64" font-family="cursive" font-size="9" fill="rgba(45,51,68,0.7)">Maya Chen</text>
+                  <text x="12" y="76" font-family="cursive" font-size="8" fill="rgba(45,51,68,0.5)">412 SE Belmont · Portland</text>
+                </svg>
+              </div>
+
+              <!-- circular postmark, semi-transparent, top-left -->
+              <svg style="position:absolute; top:14px; left:8px;" width="58" height="58" viewBox="0 0 58 58">
+                <circle cx="29" cy="29" r="26" stroke="var(--postal-blue)" stroke-width="1.4" fill="none" opacity="0.65"/>
+                <circle cx="29" cy="29" r="20" stroke="var(--postal-blue)" stroke-width="0.8" fill="none" opacity="0.55"/>
+                <text x="29" y="22" text-anchor="middle" font-family="sans-serif" font-size="6.5" font-weight="700" fill="var(--postal-blue)" opacity="0.85" letter-spacing="0.5">MAILROOM</text>
+                <text x="29" y="34" text-anchor="middle" font-family="serif" font-size="11" font-weight="700" fill="var(--postal-blue)" opacity="0.9">★</text>
+                <text x="29" y="44" text-anchor="middle" font-family="sans-serif" font-size="6" font-weight="600" fill="var(--postal-blue)" opacity="0.75">MAY 13 2026</text>
+              </svg>
+
+              <!-- "MAILED" stamp coming down at an angle, the magic moment -->
+              <div style="position:absolute; top:6px; right:14px; transform:rotate(14deg);
+                   background:transparent; padding:0;">
+                <div style="border:2.5px solid var(--postal-red); padding:4px 10px;
+                     font-family:var(--sans); font-size:13px; font-weight:800;
+                     color:var(--postal-red); letter-spacing:0.14em;
+                     border-radius:2px;
+                     text-shadow:0 0 2px rgba(255,255,255,0.6);">
+                  MAILED
+                </div>
+              </div>
+
+              <!-- motion arcs sweeping out, suggesting flight -->
+              <svg style="position:absolute; inset:0; pointer-events:none;" width="200" height="168" viewBox="0 0 200 168">
+                <path d="M5 90 Q 25 60, 50 70" stroke="rgba(60,110,143,0.55)" stroke-width="2" fill="none" stroke-linecap="round" stroke-dasharray="2 4"/>
+                <path d="M15 110 Q 30 95, 50 95" stroke="rgba(60,110,143,0.35)" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="2 3"/>
+                <path d="M10 130 Q 30 120, 50 122" stroke="rgba(60,110,143,0.25)" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-dasharray="2 3"/>
+                <!-- sparkles -->
+                <text x="172" y="22" font-size="11" fill="var(--gold)">✦</text>
+                <text x="182" y="48" font-size="9" fill="var(--gold)" opacity="0.85">·</text>
+                <text x="190" y="80" font-size="14" fill="var(--gold)">✦</text>
+                <text x="178" y="148" font-size="9" fill="var(--gold)">✦</text>
+                <text x="20" y="160" font-size="9" fill="var(--gold)" opacity="0.7">·</text>
+              </svg>
+            </div>
+
+            <div style="font-family:var(--sans); font-size:11px; font-weight:700; letter-spacing:0.18em; color:var(--postal-red); text-transform:uppercase; margin-top:14px;">
+              Mailed
+            </div>
+            <div style="font-family:var(--serif); font-size:24px; font-weight:600; line-height:1.12; margin-top:10px; letter-spacing:-0.01em;">
+              Your card is<br>on its way.
+            </div>
+            <div style="font-family:var(--serif); font-style:italic; font-size:13px; color:var(--muted); margin-top:12px; line-height:1.45; padding:0 14px;">
+              Maya gets it in 4&ndash;7 days. We&apos;ll drop a pin on your map the moment it lands.
+            </div>
+            <div style="position:absolute; bottom:14px; left:14px; right:14px;">
+              <div class="ctabtn">Open Mailroom &rarr;</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Mailed.</b> The magical moment. In motion: the photo + note fold into a postcard, the postcard slides behind the envelope, the envelope tilts forward, "MAILED" stamps down at an angle. Soft postal-paper backdrop, sparkles, motion arcs. ~700ms total. Haptic thunk. <b>This is the dopamine.</b></div>
+    </div>
+
+    <!-- SCREEN 8: First view of the app -->
+    <div class="phone-wrap">
+      <div class="step-num">8</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content">
+            <div class="h-row">
+              <span class="wordmark">Mailroom</span>
+              <span class="creditpill small">
+                <svg width="14" height="11" viewBox="0 0 24 18" fill="none">
+                  <rect x="1" y="1" width="22" height="16" rx="1.5" stroke="#2D3344" stroke-width="1.6"/>
+                  <path d="M2 3 L12 11 L22 3" stroke="#2D3344" stroke-width="1.6" fill="none"/>
+                  <circle cx="12" cy="10.2" r="1.8" fill="#2D3344"/>
+                </svg>
+                <span>2</span>
+              </span>
+            </div>
+            <div style="font-family:var(--serif); font-size:18px; font-weight:600; margin:6px 0 8px;">
+              Welcome, Scotty.
+            </div>
+
+            <div class="week-strip">
+              <div class="week-label">This week &middot; today</div>
+              <div class="week-cards">
+                <div class="card photo-forest"><div class="stampdot"></div><div class="label">Maya</div></div>
+                <div class="empty-week-tile">+</div>
+              </div>
+            </div>
+
+            <!-- annotated callouts -->
+            <div style="margin-top:24px; padding:12px 14px; background:linear-gradient(135deg, rgba(184,154,96,0.18), rgba(60,110,143,0.10)); border:1px solid var(--gold); border-radius:10px;">
+              <div style="font-family:var(--sans); font-size:9px; font-weight:700; letter-spacing:0.1em; color:#8a722e; text-transform:uppercase; margin-bottom:4px;">
+                Your first card
+              </div>
+              <div style="font-family:var(--serif); font-style:italic; font-size:12px; line-height:1.4; color:var(--ink);">
+                Tap to track it on the map, or write another &mdash; you have 2 more on us.
+              </div>
+            </div>
+          </div>
+
+          <div class="tabbar">
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+              <div>Map</div>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5.5 7l13 10M5.5 17l13-10"/></svg>
+              <div>Constellation</div>
+            </div>
+            <div class="tab fab">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div>Friends</div>
+            </div>
+            <div class="tab active">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div>My Card</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>App, first opened.</b> They land on <b>My Card</b> with their first postcard visible in their journal &mdash; the gallery isn&apos;t empty because they just mailed something. Tabs are visible for the first time. The callout points to the new card. Onboarding done.</div>
+    </div>
+
+  </div>
+
+  <div class="signoff-box">
+    <h3>Why this is the right move</h3>
+    <p>
+      Every form field we collect is one we&apos;d collect anyway for the
+      send. Every screen the user passes through is one they&apos;d
+      eventually visit. We didn&apos;t add work, we removed the option to
+      defer it. The user gets to the value (a postcard in their journal,
+      a real card heading to a real mailbox) in the same time it takes
+      them to fill in a signup form today.
+    </p>
+    <p>
+      <b>And the address-link option is the unlock that makes this never fail.</b>
+      If the user doesn&apos;t have a friend&apos;s address &mdash; or any
+      friend at all &mdash; they can still send "send them a link," and
+      that counts as their first send. The app opens. Their journal has
+      a queued card. The recipient might fill in the address later, or
+      not. Either way, the user is in.
+    </p>
+  </div>
+
+  <!-- ====================================================== -->
+  <!-- POST-SIGNUP APP LAYOUT — single confirmed direction      -->
+  <!-- ====================================================== -->
+  <hr>
+  <div class="kicker">After the first send</div>
+  <h2>Five destinations. One button. One bar.</h2>
+  <p class="lead">
+    Tab order, left to right: <b>Map &middot; Constellation &middot;
+    [Send FAB] &middot; Friends &middot; My Card</b>. Same five icons
+    the existing app already uses (Map, Sparkles, Send, Users, User
+    from Lucide). Send sits centered, raised, never moves. The
+    Postcards journal you saw in the v0.6.x gallery is gone as its
+    own tab &mdash; it lives inside <b>My Card</b> now, which is where
+    you&apos;d expect your own postcard history to be.
+  </p>
+
+  <div class="flow-row" style="grid-template-columns: repeat(5, 1fr);">
+
+    <!-- Phone 1: MAP — tap pin → connecting line + bottom-sheet card -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status" style="color:white;"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content fullbleed">
+            <!-- map basemap: USA-ish -->
+            <div style="position:absolute; inset:0; background:
+                 linear-gradient(160deg, #1f3548 0%, #2c5267 40%, #3C6E8F 75%, #5d8aa8 100%);">
+              <!-- faint continent outline -->
+              <svg style="position:absolute; inset:0; width:100%; height:100%;" viewBox="0 0 100 200" preserveAspectRatio="none">
+                <path d="M10 60 Q 30 50, 50 65 T 90 70 L 90 130 Q 70 145, 50 135 T 10 130 Z" fill="rgba(96,122,85,0.18)" stroke="rgba(255,255,255,0.18)" stroke-width="0.3"/>
+              </svg>
+
+              <!-- the route line — the magic moment of the interaction.
+                   When a pin is tapped, a postal-red dashed line animates
+                   from the pin to its reciprocal (your home pin). -->
+              <svg style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;" viewBox="0 0 100 200" preserveAspectRatio="none">
+                <path d="M22 90 Q 48 60, 76 110" stroke="var(--postal-red)" stroke-width="0.9"
+                      stroke-dasharray="2 1.5" fill="none" stroke-linecap="round"
+                      style="filter: drop-shadow(0 0 1.4px rgba(194,74,69,0.7));"/>
+                <!-- tiny "stamp" at mid-arc -->
+                <circle cx="49" cy="74" r="1.5" fill="white"/>
+                <circle cx="49" cy="74" r="0.8" fill="var(--postal-red)"/>
+              </svg>
+
+              <!-- pins. selected pin is bigger, glowing -->
+              <div style="position:absolute; top:30%; left:18%; width:18px; height:18px; border-radius:100px; background:var(--postal-red); border:2.5px solid white; box-shadow:0 0 0 4px rgba(194,74,69,0.25), 0 2px 6px rgba(0,0,0,0.4); z-index:5;">
+                <div style="position:absolute; bottom:-3px; left:50%; transform:translateX(-50%) rotate(45deg); width:6px; height:6px; background:var(--postal-red); border-right:2.5px solid white; border-bottom:2.5px solid white;"></div>
+              </div>
+              <!-- your home pin (your city) -->
+              <div style="position:absolute; top:48%; left:72%; width:14px; height:14px; border-radius:100px; background:white; border:2px solid var(--ink); box-shadow:0 1px 3px rgba(0,0,0,0.3); z-index:5;">
+                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:5px; height:5px; border-radius:100px; background:var(--ink);"></div>
+              </div>
+              <!-- other pins, smaller -->
+              <div style="position:absolute; top:18%; left:36%; width:10px; height:10px; border-radius:100px; background:var(--postal-red); border:2px solid white; opacity:0.8;"></div>
+              <div style="position:absolute; top:62%; left:44%; width:10px; height:10px; border-radius:100px; background:var(--postal-blue); border:2px solid white;"></div>
+              <div style="position:absolute; top:32%; left:64%; width:9px; height:9px; border-radius:100px; background:var(--postal-blue); border:2px solid white; opacity:0.75;"></div>
+              <div style="position:absolute; bottom:18%; right:18%; width:9px; height:9px; border-radius:100px; background:var(--postal-red); border:2px solid white; opacity:0.75;"></div>
+
+              <!-- top overlay: wordmark + credits -->
+              <div style="position:absolute; top:14px; left:14px; right:14px; display:flex; justify-content:space-between; align-items:center;">
+                <span class="wordmark" style="color:white; text-shadow:0 1px 4px rgba(0,0,0,0.4);">Mailroom</span>
+                <span class="creditpill small" style="background:rgba(255,255,255,0.92);">
+                  <svg width="12" height="10" viewBox="0 0 24 18" fill="none">
+                    <rect x="1" y="1" width="22" height="16" rx="1.5" stroke="#2D3344" stroke-width="1.6"/>
+                    <path d="M2 3 L12 11 L22 3" stroke="#2D3344" stroke-width="1.6" fill="none"/>
+                  </svg>
+                  <span>2</span>
+                </span>
+              </div>
+
+              <!-- bottom-sheet card preview (the teteapp pattern, adapted for postcards) -->
+              <div style="position:absolute; bottom:0; left:0; right:0; background:var(--paper); border-radius:18px 18px 0 0; padding:14px 14px 18px; box-shadow:0 -8px 24px rgba(0,0,0,0.18);">
+                <!-- drag handle -->
+                <div style="width:36px; height:3px; background:var(--line); border-radius:100px; margin:0 auto 12px;"></div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                  <!-- postcard thumbnail -->
+                  <div style="width:50px; height:38px; border-radius:3px; flex-shrink:0;
+                       background:linear-gradient(150deg, #8ba978, #4f6b3e 60%, #2c3f1f); position:relative;">
+                    <div style="position:absolute; top:2px; right:2px; width:7px; height:9px; background:var(--postal-red); border-radius:1px;"></div>
+                  </div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                      <div style="font-family:var(--serif); font-size:11px; font-weight:600;">From Maya</div>
+                      <div style="font-family:var(--sans); font-size:8.5px; color:var(--muted); font-weight:600;">PORTLAND, OR</div>
+                    </div>
+                    <div style="font-family:var(--script); font-size:11px; line-height:1.25; color:var(--ink-soft); margin-top:2px;">that hike we kept saying we&apos;d do —</div>
+                    <div style="font-family:var(--sans); font-size:8px; color:var(--muted); margin-top:4px; letter-spacing:0.05em;">DELIVERED MAY 10 &middot; 2026</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- TAB BAR — new order: Map | Const | Send | Friends | My Card -->
+          <div class="tabbar">
+            <div class="tab active">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+              <div>Map</div>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5.5 7l13 10M5.5 17l13-10"/></svg>
+              <div>Constellation</div>
+            </div>
+            <div class="tab fab">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div>Friends</div>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div>My Card</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Map.</b> Full bleed. <b>Sent</b> pins are postal-red, <b>received</b> pins are postal-blue, your home is the inkstone marker. Tap a pin and a dashed line traces from that city to your home pin, and the postcard slides up from the bottom in a sheet &mdash; teteapp pattern, postcard payload.</div>
+    </div>
+
+    <!-- Phone 2: CONSTELLATION — full screen, teteapp port -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status" style="color:white;"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content fullbleed" style="background:
+               radial-gradient(ellipse at 50% 50%, #1c2438 0%, #11141f 50%, #06080f 100%);">
+            <!-- subtle starfield -->
+            <svg style="position:absolute; inset:0; width:100%; height:100%;" viewBox="0 0 200 400" preserveAspectRatio="none">
+              <circle cx="22" cy="60" r="0.4" fill="white" opacity="0.4"/>
+              <circle cx="170" cy="80" r="0.3" fill="white" opacity="0.3"/>
+              <circle cx="60" cy="160" r="0.4" fill="white" opacity="0.5"/>
+              <circle cx="180" cy="240" r="0.3" fill="white" opacity="0.4"/>
+              <circle cx="28" cy="320" r="0.4" fill="white" opacity="0.3"/>
+              <circle cx="120" cy="380" r="0.5" fill="white" opacity="0.5"/>
+              <circle cx="50" cy="280" r="0.3" fill="white" opacity="0.3"/>
+              <circle cx="170" cy="350" r="0.4" fill="white" opacity="0.4"/>
+            </svg>
+
+            <!-- top overlay -->
+            <div style="position:absolute; top:14px; left:14px; right:14px; display:flex; justify-content:space-between; align-items:center; z-index:5;">
+              <span class="wordmark" style="color:white;">Mailroom</span>
+              <span class="creditpill small" style="background:rgba(255,255,255,0.92);">
+                <svg width="12" height="10" viewBox="0 0 24 18" fill="none">
+                  <rect x="1" y="1" width="22" height="16" rx="1.5" stroke="#2D3344" stroke-width="1.6"/>
+                  <path d="M2 3 L12 11 L22 3" stroke="#2D3344" stroke-width="1.6" fill="none"/>
+                </svg>
+                <span>2</span>
+              </span>
+            </div>
+
+            <!-- force-directed graph: you in center, friends as glowing nodes -->
+            <svg style="position:absolute; inset:0; width:100%; height:100%;" viewBox="0 0 100 200" preserveAspectRatio="xMidYMid meet">
+              <!-- edges with stroke weight proportional to cards exchanged -->
+              <line x1="50" y1="100" x2="28" y2="64" stroke="rgba(217,119,87,0.45)" stroke-width="0.5"/>
+              <line x1="50" y1="100" x2="76" y2="60" stroke="rgba(184,154,96,0.45)" stroke-width="0.7"/>
+              <line x1="50" y1="100" x2="22" y2="138" stroke="rgba(60,110,143,0.45)" stroke-width="0.4"/>
+              <line x1="50" y1="100" x2="78" y2="140" stroke="rgba(96,122,85,0.45)" stroke-width="0.6"/>
+              <line x1="50" y1="100" x2="58" y2="160" stroke="rgba(184,154,96,0.30)" stroke-width="0.3"/>
+              <!-- friend-of-friend edge (faint, optional) -->
+              <line x1="28" y1="64" x2="76" y2="60" stroke="rgba(255,255,255,0.10)" stroke-width="0.25" stroke-dasharray="1 1"/>
+            </svg>
+
+            <!-- center: YOU -->
+            <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:24px; height:24px; border-radius:100px; background:linear-gradient(135deg, #d97757, #B89A60); border:2px solid white; box-shadow:0 0 24px rgba(216,150,90,0.55), 0 0 4px rgba(255,255,255,0.5);"></div>
+            <div style="position:absolute; top:54%; left:50%; transform:translateX(-50%); color:white; font-family:var(--script); font-size:11px; opacity:0.9; margin-top:14px;">you</div>
+
+            <!-- friends — gold ring on Maya = reciprocation badge -->
+            <div style="position:absolute; top:30%; left:28%; width:17px; height:17px; border-radius:100px; background:linear-gradient(135deg, #d97757, #B89A60); border:1.5px solid rgba(255,255,255,0.85); box-shadow:0 0 14px rgba(217,119,87,0.7), 0 0 0 2.5px rgba(184,154,96,0.5);"></div>
+            <div style="position:absolute; top:34%; left:30%; color:white; font-family:var(--script); font-size:9.5px; opacity:0.95; margin-top:14px;">Maya</div>
+
+            <div style="position:absolute; top:28%; right:24%; width:13px; height:13px; border-radius:100px; background:linear-gradient(135deg, #3C6E8F, #6F92AE); border:1.5px solid rgba(255,255,255,0.85); box-shadow:0 0 12px rgba(60,110,143,0.7);"></div>
+            <div style="position:absolute; top:32%; right:20%; color:white; font-family:var(--script); font-size:9px; opacity:0.85;">Dad</div>
+
+            <div style="position:absolute; bottom:32%; left:22%; width:12px; height:12px; border-radius:100px; background:linear-gradient(135deg, #3C6E8F, #6F92AE); border:1.5px solid rgba(255,255,255,0.85); box-shadow:0 0 10px rgba(60,110,143,0.6);"></div>
+            <div style="position:absolute; bottom:28%; left:20%; color:white; font-family:var(--script); font-size:9px; opacity:0.85;">Sam</div>
+
+            <div style="position:absolute; bottom:30%; right:22%; width:11px; height:11px; border-radius:100px; background:linear-gradient(135deg, #607A55, #8FAA78); border:1.5px solid rgba(255,255,255,0.85); box-shadow:0 0 10px rgba(96,122,85,0.6);"></div>
+            <div style="position:absolute; bottom:26%; right:18%; color:white; font-family:var(--script); font-size:9px; opacity:0.85;">Jules</div>
+
+            <div style="position:absolute; bottom:18%; left:54%; width:9px; height:9px; border-radius:100px; background:linear-gradient(135deg, #B89A60, #d97757); border:1.5px solid rgba(255,255,255,0.85); box-shadow:0 0 8px rgba(184,154,96,0.5); opacity:0.85;"></div>
+          </div>
+          <div class="tabbar">
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+              <div>Map</div>
+            </div>
+            <div class="tab active">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5.5 7l13 10M5.5 17l13-10"/></svg>
+              <div>Constellation</div>
+            </div>
+            <div class="tab fab">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div>Friends</div>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div>My Card</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Constellation.</b> Full bleed, dark sky. <b>Force-directed graph ported from t&ecirc;te</b>: you in the center, friends as glowing nodes, edge thickness = postcards exchanged. Maya has the gold ring &mdash; she reciprocated. Tap any edge for a bottom sheet of postcards on that line. Pan + pinch to zoom.</div>
+    </div>
+
+    <!-- Phone 3: SEND modal (FAB tapped) -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content">
+            <div class="h-row">
+              <span style="font-family:var(--serif); font-weight:600; font-size:14px;">Mail a memory</span>
+              <span style="font-family:var(--sans); font-size:11px; color:var(--muted);">&times; close</span>
+            </div>
+            <div style="font-family:var(--serif); font-style:italic; font-size:11px; color:var(--muted); margin-bottom:10px;">
+              Same 5 steps you did to sign up. Just faster now.
+            </div>
+            <div class="stepdots">
+              <div class="d active"></div>
+              <div class="d"></div>
+              <div class="d"></div>
+              <div class="d"></div>
+              <div class="d"></div>
+            </div>
+            <div style="font-family:var(--serif); font-size:18px; font-weight:600; margin-bottom:10px;">
+              Pick the photo.
+            </div>
+            <div class="photo-pick" style="height:140px;"></div>
+            <div style="display:flex; gap:6px; margin: 8px 0 12px; overflow:hidden;">
+              <div class="card photo-coast" style="height:36px;"></div>
+              <div class="card photo-mtn" style="height:36px;"></div>
+              <div class="card photo-sunset" style="height:36px;"></div>
+              <div class="card photo-desert" style="height:36px;"></div>
+            </div>
+            <div class="ctabtn">Continue &rarr;</div>
+          </div>
+          <div class="tabbar">
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+              <div>Map</div>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5.5 7l13 10M5.5 17l13-10"/></svg>
+              <div>Constellation</div>
+            </div>
+            <div class="tab fab" style="background:white; color:var(--ink); border:2px solid var(--ink);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div>Friends</div>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div>My Card</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Send (FAB tapped).</b> Same 5-step flow they did during signup. The Send icon in the FAB rotates into a close (&times;) while the modal is open. Returning users go fast because they already know the shape.</div>
+    </div>
+
+    <!-- Phone 4: FRIENDS -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content">
+            <div class="h-row">
+              <span class="wordmark">Mailroom</span>
+              <span class="creditpill small">
+                <svg width="12" height="10" viewBox="0 0 24 18" fill="none">
+                  <rect x="1" y="1" width="22" height="16" rx="1.5" stroke="#2D3344" stroke-width="1.6"/>
+                  <path d="M2 3 L12 11 L22 3" stroke="#2D3344" stroke-width="1.6" fill="none"/>
+                </svg>
+                <span>2</span>
+              </span>
+            </div>
+            <div style="font-family:var(--serif); font-size:18px; font-weight:600; margin:4px 0 14px;">
+              Friends.
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line);">
+              <div style="width:30px;height:30px;border-radius:100px;background:linear-gradient(135deg, #d97757, #B89A60);color:white;font-family:var(--serif);font-size:13px;font-weight:600;display:grid;place-items:center;">M</div>
+              <div style="flex:1;">
+                <div style="font-family:var(--serif);font-size:13px;font-weight:600;">Maya</div>
+                <div style="font-family:var(--serif);font-style:italic;font-size:10px;color:var(--muted);">Portland, OR &middot; 3 cards</div>
+              </div>
+              <div style="background:var(--ink);color:var(--paper);border-radius:100px;padding:4px 10px;font-family:var(--serif);font-size:10px;font-weight:600;">mail &rarr;</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line);">
+              <div style="width:30px;height:30px;border-radius:100px;background:linear-gradient(135deg, #3C6E8F, #6F92AE);color:white;font-family:var(--serif);font-size:13px;font-weight:600;display:grid;place-items:center;">D</div>
+              <div style="flex:1;">
+                <div style="font-family:var(--serif);font-size:13px;font-weight:600;">Dad</div>
+                <div style="font-family:var(--serif);font-style:italic;font-size:10px;color:var(--muted);">Denver, CO &middot; 2 cards</div>
+              </div>
+              <div style="background:var(--ink);color:var(--paper);border-radius:100px;padding:4px 10px;font-family:var(--serif);font-size:10px;font-weight:600;">mail &rarr;</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line);">
+              <div style="width:30px;height:30px;border-radius:100px;background:linear-gradient(135deg, #607A55, #8FAA78);color:white;font-family:var(--serif);font-size:13px;font-weight:600;display:grid;place-items:center;">S</div>
+              <div style="flex:1;">
+                <div style="font-family:var(--serif);font-size:13px;font-weight:600;">Sam</div>
+                <div style="font-family:var(--serif);font-style:italic;font-size:10px;color:var(--muted);">Brooklyn, NY &middot; 1 card</div>
+              </div>
+              <div style="background:var(--ink);color:var(--paper);border-radius:100px;padding:4px 10px;font-family:var(--serif);font-size:10px;font-weight:600;">mail &rarr;</div>
+            </div>
+
+            <div style="margin-top:14px; background:linear-gradient(135deg, rgba(60,110,143,0.10), rgba(184,154,96,0.14)); border:1.5px solid var(--postal-blue); border-radius:10px; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+              <div style="width:28px;height:28px;border-radius:100px;background:linear-gradient(135deg, var(--postal-blue), var(--sage));color:white;font-family:var(--serif);font-size:13px;font-weight:600;display:grid;place-items:center;">?</div>
+              <div style="flex:1;">
+                <div style="font-family:var(--serif);font-size:12px;font-weight:600;">A pen pal</div>
+                <div style="font-family:var(--serif);font-style:italic;font-size:10px;color:var(--postal-blue);">Send one, get one from a stranger</div>
+              </div>
+              <span style="color:var(--postal-blue);font-family:var(--sans);font-size:14px;">&rsaquo;</span>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+              <div>Map</div>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5.5 7l13 10M5.5 17l13-10"/></svg>
+              <div>Constellation</div>
+            </div>
+            <div class="tab fab">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+            <div class="tab active">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div>Friends</div>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div>My Card</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>Friends.</b> Address book. Each row is one tap from Mail. Pen pal CTA at bottom &mdash; <i>"Send one, get one from a stranger."</i></div>
+    </div>
+
+    <!-- Phone 5: MY CARD — avatar + bio + 3 stats + journal gallery -->
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span>5G</span></div>
+        <div class="screen">
+          <div class="content">
+            <div class="h-row">
+              <span class="wordmark">Mailroom</span>
+              <span class="creditpill small">
+                <svg width="12" height="10" viewBox="0 0 24 18" fill="none">
+                  <rect x="1" y="1" width="22" height="16" rx="1.5" stroke="#2D3344" stroke-width="1.6"/>
+                  <path d="M2 3 L12 11 L22 3" stroke="#2D3344" stroke-width="1.6" fill="none"/>
+                </svg>
+                <span>2</span>
+              </span>
+            </div>
+
+            <!-- hero: avatar + name + city. NO "Postcard Friends Since" line. -->
+            <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
+              <div style="width:54px; height:54px; border-radius:100px; background:linear-gradient(135deg, #d97757, #B89A60); border:2px solid var(--white); box-shadow:0 2px 6px rgba(0,0,0,0.08); color:white; font-family:var(--serif); font-size:22px; font-weight:600; display:grid; place-items:center; flex-shrink:0;">S</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-family:var(--serif); font-size:24px; font-weight:600; line-height:1.0;">Scotty</div>
+                <div style="font-family:var(--serif); font-style:italic; font-size:11px; color:var(--postal-blue); margin-top:2px;">&#10752; Boise, ID</div>
+              </div>
+            </div>
+
+            <!-- editable bio. Tappable placeholder shows the affordance. -->
+            <div style="margin-top:12px; background:var(--white); border:1px solid var(--line); border-radius:10px; padding:10px 12px; min-height:48px; position:relative;">
+              <div style="font-family:var(--serif); font-style:italic; font-size:11.5px; color:var(--ink); line-height:1.4;">
+                Trail runner, espresso evangelist. Mail me anything you took a photo of and meant to talk about.
+              </div>
+              <!-- pencil edit affordance -->
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; top:8px; right:10px; color:var(--muted);"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </div>
+
+            <!-- 3 stats: Friends, Sent, Received -->
+            <div style="display:flex; gap:6px; margin:12px 0 14px;">
+              <div style="flex:1; background:var(--white); border:1px solid var(--line); border-radius:8px; padding:8px 4px; text-align:center;">
+                <div style="font-family:var(--serif); font-size:17px; font-weight:600; line-height:1;">12</div>
+                <div style="font-family:var(--sans); font-size:7.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin-top:3px;">Friends</div>
+              </div>
+              <div style="flex:1; background:var(--white); border:1px solid var(--line); border-radius:8px; padding:8px 4px; text-align:center;">
+                <div style="font-family:var(--serif); font-size:17px; font-weight:600; line-height:1;">14</div>
+                <div style="font-family:var(--sans); font-size:7.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin-top:3px;">Sent</div>
+              </div>
+              <div style="flex:1; background:var(--white); border:1px solid var(--line); border-radius:8px; padding:8px 4px; text-align:center;">
+                <div style="font-family:var(--serif); font-size:17px; font-weight:600; line-height:1;">9</div>
+                <div style="font-family:var(--sans); font-size:7.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin-top:3px;">Received</div>
+              </div>
+            </div>
+
+            <!-- gallery fills the rest of the screen -->
+            <div class="week-strip">
+              <div class="week-label">This week</div>
+              <div class="week-cards">
+                <div class="card photo-coast"><div class="stampdot"></div><div class="label">Maya</div></div>
+                <div class="card photo-mtn in"><div class="stampdot" style="background:var(--postal-blue)"></div></div>
+                <div class="empty-week-tile">+</div>
+              </div>
+            </div>
+            <div class="week-strip">
+              <div class="week-label">May 6</div>
+              <div class="week-cards">
+                <div class="card photo-sunset"><div class="stampdot"></div></div>
+                <div class="card queued"></div>
+              </div>
+            </div>
+            <div class="week-strip">
+              <div class="week-label">Apr 29</div>
+              <div class="week-cards">
+                <div class="card photo-forest"><div class="stampdot"></div></div>
+                <div class="card photo-snow in"><div class="stampdot" style="background:var(--postal-blue)"></div></div>
+                <div class="card photo-desert"><div class="stampdot"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+              <div>Map</div>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5.5 7l13 10M5.5 17l13-10"/></svg>
+              <div>Constellation</div>
+            </div>
+            <div class="tab fab">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+            <div class="tab">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div>Friends</div>
+            </div>
+            <div class="tab active">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div>My Card</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>My Card.</b> Your home. Avatar + name + city &mdash; <b>no</b> "Postcard Friends Since" line (it&apos;s your own profile, you know when you joined). Editable bio in its place. Three stats: <b>Friends &middot; Sent &middot; Received</b>. The rest of the screen is your week-by-week postcard gallery &mdash; sent (red stamp), received (blue ring), queued (dashed border).</div>
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- MAGICAL MOMENTS — THE TO-DO                              -->
+  <!-- ====================================================== -->
+  <hr>
+  <div class="kicker">Magical moments &middot; v0.7 build list</div>
+  <h2>Five small things that make this feel alive.</h2>
+  <p class="lead">
+    Per your request, these are in the v0.7 to-do. None of them are
+    screens. They&apos;re micro-moments that pay off the brand and
+    reward the act of sending. Cheap to build, disproportionately sticky.
+  </p>
+
+  <div class="todo">
+    <div class="todo-item">
+      <div class="todo-check"></div>
+      <div class="todo-body">
+        <div class="todo-title">&#9993;&nbsp;&nbsp;The fold</div>
+        <p class="todo-desc">On tap-Mail-it: the photo + note compose into a postcard, then a paper-fold animation folds the card into an envelope. ~700ms. Replaces the current "Sent!" alert. Fires at the end of signup AND every subsequent send.</p>
+        <div class="todo-meta"><b>Lib:</b> react-native-reanimated 3 keyframes &middot; <b>Est:</b> 2-3 hrs</div>
+      </div>
+    </div>
+    <div class="todo-item">
+      <div class="todo-check"></div>
+      <div class="todo-body">
+        <div class="todo-title">&#128205;&nbsp;&nbsp;The pin drops</div>
+        <p class="todo-desc">When the mail service confirms a card is in transit, a soft animation fires on the Map tab: red dot fades in at the destination city, pulses once. Solidifies on delivery. User checks the map and sees new dots over time.</p>
+        <div class="todo-meta"><b>Lib:</b> mail-service webhook → Supabase fn → push → MapView callout &middot; <b>Est:</b> 3-4 hrs</div>
+      </div>
+    </div>
+    <div class="todo-item">
+      <div class="todo-check"></div>
+      <div class="todo-body">
+        <div class="todo-title">&#127775;&nbsp;&nbsp;The reciprocation badge</div>
+        <p class="todo-desc">When someone you mailed first mails YOU back, their card lands in your My Card journal with a soft gold ring + "Your pen pal" stamp overlay. The loop closing is the dopamine. Fires in Constellation too &mdash; their node gets the gold ring.</p>
+        <div class="todo-meta"><b>Lib:</b> CSS state on inbound cards where outbound exists to same recipient &middot; <b>Est:</b> 2 hrs</div>
+      </div>
+    </div>
+    <div class="todo-item">
+      <div class="todo-check"></div>
+      <div class="todo-body">
+        <div class="todo-title">&#128172;&nbsp;&nbsp;The empty-week whisper</div>
+        <p class="todo-desc">If you go a week without sending, the trailing tile in this week&apos;s row morphs from a quiet dashed "+" into a soft black tile that reads "Mail someone &rarr;". No push notification, no nag. Just a nudge inside the journal you&apos;ll already check.</p>
+        <div class="todo-meta"><b>Lib:</b> conditional render on last-send-timestamp &middot; <b>Est:</b> 1 hr</div>
+      </div>
+    </div>
+    <div class="todo-item">
+      <div class="todo-check"></div>
+      <div class="todo-body">
+        <div class="todo-title">&#128227;&nbsp;&nbsp;The thunk</div>
+        <p class="todo-desc">Physical postal "thunk" haptic + a soft mailbox-lid wav clip when the user taps Mail it. Tiny detail. Memorable disproportionately to build cost. Pair with the fold animation.</p>
+        <div class="todo-meta"><b>Lib:</b> expo-haptics + expo-av &middot; <b>Est:</b> 30 min</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="lead" style="margin-top:8px;">
+    <b>Total build cost for all five: ~9 hours.</b> Two focused sessions
+    with CC.
+  </p>
+
+  <!-- ====================================================== -->
+  <!-- CONSTELLATION — PORT FROM TETEAPP                        -->
+  <!-- ====================================================== -->
+  <hr>
+  <div class="kicker">Constellation &middot; not rebuilding, porting</div>
+  <h2>Reuse the t&ecirc;te constellation work.</h2>
+  <p class="lead">
+    Short answer: <b>we don&apos;t rebuild Constellation from scratch.</b>
+    Mailroom&apos;s current radial constellation is the simple version;
+    the work you already did in
+    <a href="https://github.com/scotty123868/teteapp-main/blob/main/src/screens/ConstellationScreen.tsx" target="_blank"><code>teteapp-main</code></a>
+    is the production-grade version. We port it across, swap the data
+    model from <i>moments</i> to <i>postcards</i>, and ship.
+  </p>
+
+  <div style="background:var(--white); border:1px solid var(--line); border-radius:14px; padding:24px 28px; margin:20px 0;">
+    <h4 style="margin-bottom:14px;">What teteapp&apos;s constellation already does</h4>
+    <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:14px 32px;">
+      <div>
+        <div style="font-family:var(--serif); font-size:15px; font-weight:600; margin-bottom:4px;">&#127775;&nbsp; Force-directed social graph</div>
+        <p style="font-size:13.5px; color:var(--ink-soft); margin:0; line-height:1.5;">d3-force simulation. Self fixed at center via fx/fy. Other nodes gravitate by link-distance + many-body repulsion. 120 ticks settled offline so it doesn&apos;t run during render.</p>
+      </div>
+      <div>
+        <div style="font-family:var(--serif); font-size:15px; font-weight:600; margin-bottom:4px;">&#128279;&nbsp; Friend-of-friend edges</div>
+        <p style="font-size:13.5px; color:var(--ink-soft); margin:0; line-height:1.5;">Public postcards between two of your friends surface as faint edges. The web grows with the NETWORK, not just you. Toggle on/off, default off.</p>
+      </div>
+      <div>
+        <div style="font-family:var(--serif); font-size:15px; font-weight:600; margin-bottom:4px;">&#128269;&nbsp; Pan + pinch zoom</div>
+        <p style="font-size:13.5px; color:var(--ink-soft); margin:0; line-height:1.5;">Zoom up to 3x to read dense clusters. Zoom out to 0.6x to fit 50+ friend graphs. Double-tap resets. Uses react-native-gesture-handler.</p>
+      </div>
+      <div>
+        <div style="font-family:var(--serif); font-size:15px; font-weight:600; margin-bottom:4px;">&#128203;&nbsp; Bottom-sheet drilldowns</div>
+        <p style="font-size:13.5px; color:var(--ink-soft); margin:0; line-height:1.5;">Tap an edge &rarr; list of postcards exchanged on that line. Tap a node &rarr; profile overlay with avatar, shared count, swipeable gallery of cards. Tap your own node &rarr; clears.</p>
+      </div>
+      <div>
+        <div style="font-family:var(--serif); font-size:15px; font-weight:600; margin-bottom:4px;">&#128274;&nbsp; Privacy-aware</div>
+        <p style="font-size:13.5px; color:var(--ink-soft); margin:0; line-height:1.5;">FoF only surfaces postcards visible to current user via the public-feed rule. No private mail leaks. Already vetted in t&ecirc;te.</p>
+      </div>
+      <div>
+        <div style="font-family:var(--serif); font-size:15px; font-weight:600; margin-bottom:4px;">&#10024;&nbsp; Reciprocation badge integration</div>
+        <p style="font-size:13.5px; color:var(--ink-soft); margin:0; line-height:1.5;">The "gold ring" magical moment from the to-do above hooks straight into this graph &mdash; when a node reciprocates, its star glows gold. Same architecture, postcard-flavored.</p>
+      </div>
+    </div>
+  </div>
+
+  <h4 style="margin-top:24px;">The port, concretely</h4>
+  <ol style="font-size:14.5px; color:var(--ink-soft); line-height:1.65; max-width:80ch;">
+    <li>Copy <code>src/lib/constellationGraph.ts</code> from teteapp &rarr; Mailroom <code>src/lib/constellationGraph.ts</code>.</li>
+    <li>Rename the data model: <code>LocalMoment</code> &rarr; <code>Postcard</code>, <code>participants</code> &rarr; <code>(sender_id, recipient_id)</code>, <code>shared</code> &rarr; <code>delivered</code>.</li>
+    <li>Copy <code>src/screens/ConstellationScreen.tsx</code> &rarr; Mailroom <code>app/(tabs)/constellation.tsx</code>. Swap <code>LocalMoment</code> imports for the postcards API.</li>
+    <li>Recolor: Mailroom&apos;s ink + paper palette in place of t&ecirc;te&apos;s velvet. Same dark sky for the constellation background. Keep the gold reciprocation accent.</li>
+    <li>Wire the bottom-sheet drilldown to open postcard details (the existing route the journal already uses).</li>
+    <li>Hook the reciprocation badge: any node where outbound + inbound both exist gets a gold ring. Same logic as the journal&apos;s gold-card overlay.</li>
+  </ol>
+
+  <p class="lead" style="margin-top:12px;">
+    <b>Estimated port: ~6&ndash;8 hours.</b> Half the time a from-scratch
+    build would take. The teteapp version is genuinely the better visualization
+    &mdash; force-directed beats radial-spiral every time once the graph
+    has more than ~8 people.
+  </p>
+
+  <!-- ====================================================== -->
+  <!-- CUT/KEEP                                                 -->
+  <!-- ====================================================== -->
+  <hr>
+  <div class="kicker">What changes</div>
+  <h2>What we&apos;re cutting, moving, keeping, adding.</h2>
+
+  <table class="cut-keep">
+    <tr>
+      <th>Surface</th>
+      <th>Verdict</th>
+      <th>Why</th>
+    </tr>
+    <tr>
+      <td><b>Forced signup &rarr; send flow</b></td>
+      <td><span class="verdict v-new">new (the keystone)</span></td>
+      <td>The whole v0.7 thesis. Replaces the existing multi-page signup. User cannot reach the app until they&apos;ve mailed a card (or a link-card).</td>
+    </tr>
+    <tr>
+      <td><b>"About me" grid</b> (interests, send-me, birthday, currently-into)</td>
+      <td><span class="verdict v-cut">cut</span></td>
+      <td>Four optional fields gating nothing. Replaced with one Bio textarea behind Settings.</td>
+    </tr>
+    <tr>
+      <td><b>Bio</b> &mdash; single textarea</td>
+      <td><span class="verdict v-new">new</span></td>
+      <td>One free-form sentence about you. Edit from your avatar &mdash; just one screen, one input.</td>
+    </tr>
+    <tr>
+      <td><b>Tab structure</b> (5 tabs, centered Send FAB)</td>
+      <td><span class="verdict v-move">restructure</span></td>
+      <td>New order, left to right: <b>Map &middot; Constellation &middot; [Send FAB] &middot; Friends &middot; My Card</b>. Same five Lucide icons the existing app already uses. Send becomes a centered raised FAB. Friends stays "Friends" (no rename).</td>
+    </tr>
+    <tr>
+      <td><b>Postcards tab</b></td>
+      <td><span class="verdict v-cut">absorb</span></td>
+      <td>The journal moves <i>inside</i> My Card, where your own postcard history naturally lives. Saves a tab slot and reads more like "my profile = my mail."</td>
+    </tr>
+    <tr>
+      <td><b>Map interaction</b></td>
+      <td><span class="verdict v-new">new</span></td>
+      <td>Tap a pin &rarr; a postal-red dashed line animates from that city to the reciprocal pin (your home, or the other end). Bottom sheet slides up with the postcard preview. teteapp pattern, postcard payload.</td>
+    </tr>
+    <tr>
+      <td><b>Constellation</b></td>
+      <td><span class="verdict v-move">port from teteapp</span></td>
+      <td>Own tab, full-bleed dark sky. <b>Port the teteapp force-directed graph</b> instead of rebuilding &mdash; friend-of-friend edges, pan + pinch zoom, bottom-sheet drilldowns. The gold reciprocation badge wires straight into it. ~6&ndash;8 hr port instead of a from-scratch rebuild.</td>
+    </tr>
+    <tr>
+      <td><b>My Card</b> redesign</td>
+      <td><span class="verdict v-move">restructure</span></td>
+      <td>Keeps the existing shape. Avatar + name + city stays. <b>"Postcard Friends Since 2026" line removed</b> (it&apos;s your own profile &mdash; you know when you joined). Editable bio in its place. Stats trimmed to <b>3</b>: Friends &middot; Sent &middot; Received (replaced "Replies", removed "Cities"). The week-by-week postcard gallery fills the rest of the screen.</td>
+    </tr>
+    <tr>
+      <td><b>"About me" grid</b> (interests, send-me, birthday, currently-into)</td>
+      <td><span class="verdict v-cut">cut</span></td>
+      <td>Four optional fields gating nothing. Replaced with one Bio textarea on the My Card page itself, edit-in-place.</td>
+    </tr>
+    <tr>
+      <td><b>Pen pal / send-to-stranger</b></td>
+      <td><span class="verdict v-new">new</span></td>
+      <td>First-class option in the recipient picker AND the bottom of the Friends tab. Copy: <b>"Send one, get one from a stranger."</b> Second-most-important "why" of the app.</td>
+    </tr>
+    <tr>
+      <td><b>"Send them a link"</b> (address-collection)</td>
+      <td><span class="verdict v-keep">keep (surfaced)</span></td>
+      <td>Already built in v0.5+. Now promoted to a first-class recipient option in the picker so it actually gets used.</td>
+    </tr>
+    <tr>
+      <td><b>"Send to myself"</b></td>
+      <td><span class="verdict v-new">new</span></td>
+      <td>New recipient option. Solves the no-friends-yet edge case AND gives the user a way to test the product on themselves.</td>
+    </tr>
+    <tr>
+      <td><b>Credits pill</b> (envelope + count)</td>
+      <td><span class="verdict v-new">new visual</span></td>
+      <td>Replaces the 1&cent;-stamp + number combo that read as two numerals. Now: envelope icon + single count, baseline-aligned.</td>
+    </tr>
+    <tr>
+      <td><b>Streak counter</b></td>
+      <td><span class="verdict v-new">new</span></td>
+      <td>The one metric that drives habitual sending. Shown on the My Card header above the gallery.</td>
+    </tr>
+    <tr>
+      <td><b>"First Card Ideas" / category grid</b></td>
+      <td><span class="verdict v-cut">cut (already)</span></td>
+      <td>Already removed in 0.5.0. Stays out.</td>
+    </tr>
+    <tr>
+      <td><b>"Mailroom mails real postcards" intro page</b></td>
+      <td><span class="verdict v-cut">cut (already)</span></td>
+      <td>Already removed in 0.6.1 build 8.</td>
+    </tr>
+  </table>
+
+  <!-- ====================================================== -->
+  <!-- BUILD ORDER                                              -->
+  <!-- ====================================================== -->
+  <hr>
+  <div class="kicker">Concrete v0.7 build order</div>
+  <h2>Phase by phase.</h2>
+  <p class="lead">
+    Before the redesign ships, the existing payment + mail-service wiring
+    needs to actually work. None of this is magical if "Mail it" doesn&apos;t
+    actually mail.
+  </p>
+
+  <div class="build-order">
+    <h3>Phase A &middot; foundations</h3>
+    <ol>
+      <li><b>Wire payment + mail-service test keys.</b> Real card goes from photo to USPS. No design changes yet. <span class="est">~1 day</span></li>
+      <li><b>Deploy the Phase 6.1 hardening migration + edge functions.</b> Re-test send_postcard end-to-end on the new schema. <span class="est">~2 hrs</span></li>
+    </ol>
+
+    <h3>Phase B &middot; the keystone</h3>
+    <ol>
+      <li><b>Build the forced signup &rarr; send flow.</b> Replaces WelcomeSheet entirely. 7 screens: sign in &rarr; pick photo &rarr; write note &rarr; pick recipient &rarr; their info &rarr; your info &rarr; mailed. <span class="est">~6-8 hrs</span></li>
+      <li><b>Build the recipient picker</b> with all four options (friend, send-link, self, pen pal). <span class="est">~2 hrs</span></li>
+      <li><b>Wire pen pal matching</b> backend (random within tier &mdash; city/state/anywhere). Even a placeholder service works for v0.7. <span class="est">~4-6 hrs</span></li>
+    </ol>
+
+    <h3>Phase C &middot; the app on the other side</h3>
+    <ol>
+      <li><b>Restructure the 5 tabs:</b> Map &middot; Constellation &middot; [Send FAB] &middot; Friends &middot; My Card. Send becomes a centered raised FAB. Postcards is no longer a tab. <span class="est">~2 hrs</span></li>
+      <li><b>Redesign My Card:</b> remove "Postcard Friends Since" line, swap the About-me grid for one editable bio textarea, trim stats to <b>Friends &middot; Sent &middot; Received</b>, attach the week-by-week journal beneath the stats. <span class="est">~3-4 hrs</span></li>
+      <li><b>Build the Map interaction:</b> tap pin &rarr; animate connecting line to reciprocal pin &rarr; bottom-sheet postcard preview slides up. <span class="est">~4 hrs</span></li>
+      <li><b>Port teteapp constellation</b> &mdash; copy <code>constellationGraph.ts</code> + <code>ConstellationScreen.tsx</code>, swap moments &rarr; postcards, restyle for Mailroom palette, full-bleed dark sky. <span class="est">~6&ndash;8 hrs</span></li>
+      <li><b>Clean up Friends:</b> rename copy on the pen-pal CTA to "Send one, get one from a stranger." <span class="est">~30 min</span></li>
+      <li><b>Swap credits pill</b> from 1&cent;-tile to envelope-icon + count. <span class="est">~30 min</span></li>
+    </ol>
+
+    <h3>Phase D &middot; magical moments</h3>
+    <ol>
+      <li><b>The fold</b> &mdash; postcard folds into envelope after Mail it. <span class="est">~3 hrs</span></li>
+      <li><b>The pin drops</b> &mdash; mail-service webhook &rarr; map animation. <span class="est">~3-4 hrs</span></li>
+      <li><b>The reciprocation badge</b> &mdash; gold ring on inbound cards from people you mailed first. <span class="est">~2 hrs</span></li>
+      <li><b>The empty-week whisper</b> &mdash; trailing tile morphs into "Mail someone &rarr;" after a quiet week. <span class="est">~1 hr</span></li>
+      <li><b>The thunk</b> &mdash; mailbox haptic + wav on send. <span class="est">~30 min</span></li>
+    </ol>
+  </div>
+
+  <p class="lead">
+    <b>Estimated total: ~42&ndash;54 hours with CC + you.</b> Realistically
+    5&ndash;7 working sessions. Payment + mail-service wiring comes first;
+    the keystone signup&rarr;send comes second; the constellation port and
+    magical moments come last. Everything in Phase C/D is composable and
+    can ship behind a flag if you want progressive releases.
+  </p>
+
+  <!-- ====================================================== -->
+  <!-- SIGN-OFF                                                 -->
+  <!-- ====================================================== -->
+  <div class="signoff-box">
+    <h3>What I need from you to start building.</h3>
+    <ol>
+      <li><b>Confirm forced signup-to-send is the new flow.</b> No skip button. (Y / N)</li>
+      <li><b>Confirmed:</b> 5-slot tab bar (<b>Map &middot; Constellation &middot; [Send FAB] &middot; Friends &middot; My Card</b>) with the Send icon as a centered raised FAB. Postcards journal lives inside My Card. Constellation port from teteapp planned.</li>
+      <li><b>Confirm the credits pill swap</b> (envelope + count, replacing 1&cent;-tile).</li>
+      <li><b>Confirm all 5 magical moments make the v0.7 cut.</b></li>
+      <li><b>Payment + mail-service test keys</b> &mdash; per the earlier ask. Without these, the entire forced-send flow can&apos;t actually send.</li>
+    </ol>
+    <p style="margin-top:16px;">
+      Once you sign off on these five, I can start Phase A immediately
+      and walk you through each subsequent phase as I land it.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

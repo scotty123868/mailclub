@@ -1,5 +1,6 @@
+import { Mail } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text } from "react-native";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
@@ -8,13 +9,16 @@ import { fonts } from "@/src/theme/typography";
 /**
  * Persistent stamp-balance pill for the right side of the Header.
  *
+ * v0.7: replaced the 1¢-stamp tile + count combo (which read as two
+ * numerals on a glance — "1¢ 3" looked like "13") with a clean envelope
+ * icon + the count. One icon, one number, unambiguous.
+ *
  * - Reads `credits` from MailClubContext so the count updates the moment a
- *   send completes (or a purchase lands) — no prop drilling.
- * - Owns its own CreditsSheet modal so any tab that uses <Header /> gets
- *   a one-tap path to buy stamps without each screen needing to wire up
- *   state for the sheet.
- * - Quiet visual: small cream-paper pill with a 1¢-red stamp tile + the
- *   number. Not a flashy gold badge — information, not pressure.
+ *   send completes or a purchase lands. No prop drilling.
+ * - Owns its own CreditsSheet modal so any tab using <Header /> gets a
+ *   one-tap path to buy stamps without screens wiring up state.
+ * - Quiet visual: cream-paper pill, inked envelope, single number. Same
+ *   serif-semibold treatment as the rest of the wordmark family.
  */
 export function CreditsPill() {
   const { credits } = useMailClub();
@@ -30,9 +34,7 @@ export function CreditsPill() {
         testID="header-credits-pill"
         hitSlop={8}
       >
-        <View style={styles.stampTile}>
-          <Text style={styles.stampDenom}>1¢</Text>
-        </View>
+        <Mail color={colors.ink} size={16} strokeWidth={1.8} />
         <Text style={styles.count}>{credits}</Text>
       </Pressable>
       <CreditsSheet visible={open} onClose={() => setOpen(false)} />
@@ -40,14 +42,13 @@ export function CreditsPill() {
   );
 }
 
-// Geometry note: the stamp tile and count text both want to sit centered on
-// the same horizontal line. RN text has implicit top/bottom padding ("font
-// padding" on Android, ascender/descender on iOS) so we can't just match
-// fontSize to tile height and hope. The reliable pattern: set lineHeight to
-// match the tile height, set includeFontPadding=false (Android), and use
-// textAlignVertical: center. Then drop the count's minWidth/textAlign quirks
-// that were nudging it off-center.
-const TILE_H = 22;
+// Alignment note: the envelope icon and the number must visually share a
+// baseline. Lucide icons render via SVG (no font-padding) but React Native
+// text adds top/bottom ascender padding by default. We compensate with
+// lineHeight=icon-size + includeFontPadding=false. Both end up centered
+// inside the pill with no manual nudges. If you change `iconSize`, change
+// `count.lineHeight` to match.
+const ICON_SIZE = 16;
 
 const styles = StyleSheet.create({
   pill: {
@@ -57,36 +58,19 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 7,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   pillPressed: { opacity: 0.6 },
-  stampTile: {
-    alignItems: "center",
-    backgroundColor: colors.postalRed,
-    borderRadius: 3,
-    height: TILE_H,
-    justifyContent: "center",
-    width: 18,
-  },
-  stampDenom: {
-    color: colors.white,
-    fontFamily: fonts.serifSemi,
-    fontSize: 10,
-    includeFontPadding: false,
-    letterSpacing: -0.4,
-    lineHeight: TILE_H,
-    textAlign: "center",
-    textAlignVertical: "center",
-  },
   count: {
     color: colors.ink,
     fontFamily: fonts.serifSemi,
     fontSize: 16,
     includeFontPadding: false,
-    lineHeight: TILE_H,
+    lineHeight: ICON_SIZE + 4,
     textAlign: "center",
     textAlignVertical: "center",
+    minWidth: 12,
   },
 });

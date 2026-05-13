@@ -1,8 +1,7 @@
 import { useRouter } from "expo-router";
-import { Cake, Globe2, Image as ImageIcon, LucideIcon, Mail, Pencil, Send, Star, Tag, Users } from "lucide-react-native";
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Mail, Pencil, Send, Users } from "lucide-react-native";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { EditAboutMeSheet } from "@/src/components/EditAboutMeSheet";
@@ -14,29 +13,31 @@ import { MetricStrip } from "@/src/components/MetricStrip";
 import { NotificationsSheet } from "@/src/components/NotificationsSheet";
 import { OnboardingFreeCreditsBanner } from "@/src/components/OnboardingFreeCreditsBanner";
 import { PrivacySheet } from "@/src/components/PrivacySheet";
-import { PostalCard } from "@/src/components/PostalCard";
 import { SettingsSheet } from "@/src/components/SettingsSheet";
+import { WeeklyJournal } from "@/src/components/WeeklyJournal";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
 /**
- * My Card tab — v0.6.1.
+ * My Card tab — v0.7.
  *
- * v0.6.1 cleanup: the bottom Send Mail / Add Friend buttons + the Constellation
- * / Map preview-card grid were all just navigation shortcuts to other tabs
- * (Send, Friends, Constellation, Map are all in the tab bar). User feedback
- * after build 6: "the stuff at the bottom of the profile page just redirects
- * to the other tabs. maybe redundant." Removed both. The MetricStrip at the
- * top remains — those metric tiles are status indicators that happen to be
- * tappable shortcuts, not pure navigation.
+ * Restructured per user spec:
+ *   • Hero: avatar + name + city. **No** "Postcard Friends Since 2026"
+ *     line (it&apos;s your own profile, you know when you joined).
+ *   • Bio: one editable textarea, replaces the old About-me grid
+ *     (interests / send-me / birthday / currently-into). Tap → opens
+ *     EditAboutMeSheet which now scopes down to just the bio field.
+ *   • Stats: **3** tiles — Friends · Sent · Received. Replaced "Replies"
+ *     copy with "Received"; removed "Cities" (lived on the Map tab anyway).
+ *   • Rest of the screen: the week-by-week postcard journal. This used
+ *     to be a separate "Postcards" tab in earlier v0.7 drafts; per user
+ *     spec it lives inside My Card now where your own postcard history
+ *     naturally belongs.
  *
- * Older cleanups still in effect:
- *   • "First Card Ideas" 4-circle grid removed.
- *   • Inline `CreditsBalance` row removed. The stamps pill in the Header
- *     is now the only path into the Buy Stamps sheet.
- *   • The CreditsSheet stays mounted on this screen only so that opening
- *     "Buy stamps" from the Settings sheet still works.
+ * The Settings sheet still mounts here so old paths (Buy stamps,
+ * Address book, Notifications, Privacy, About) all still reach. The
+ * AppShell + Header pattern is unchanged from v0.6.x.
  */
 export default function MyMailCardScreen() {
   const router = useRouter();
@@ -49,10 +50,21 @@ export default function MyMailCardScreen() {
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
 
-  // Real metrics derived from state — no fake inflation
-  const sentCount = postcards.filter((p) => p.status === "sent").length;
+  // Real metrics derived from state. We DON'T fake-inflate these — if you
+  // sent zero, "0" is the right number, and the empty-week whisper on the
+  // journal below will nudge accordingly.
+  const sentCount = useMemo(
+    () => postcards.filter((p) => p.status === "sent").length,
+    [postcards],
+  );
+  // v0.7 NOTE: `voidReplies` is what we have today for "received." Once
+  // the Postcard type carries `senderId` (Phase 1210 enables receiver-side
+  // SELECT but the client mapper doesn&apos;t yet expose it), this will
+  // expand to: inbound postcards + void replies. For now the count
+  // matches today&apos;s definition, just renamed.
   const receivedCount = voidReplies.length;
-  const citiesCount = new Set(friends.map((f) => f.city)).size;
+
+  const bioText = currentUser.tagline?.trim();
 
   return (
     <AppShell>
@@ -60,49 +72,92 @@ export default function MyMailCardScreen() {
 
       <OnboardingFreeCreditsBanner />
 
+      {/* Hero: avatar + name + city. No since-line. */}
       <View style={styles.hero}>
-        <IdentityAvatar user={currentUser} size={104} variant="hero" />
+        <IdentityAvatar user={currentUser} size={96} variant="hero" />
         <View style={styles.heroCopy}>
-          <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{currentUser.name}</Text>
-          <Text style={styles.city}>⌖ {currentUser.city}{currentUser.state ? `, ${currentUser.state}` : ""}</Text>
-          <Text style={styles.since}>POSTCARD FRIENDS SINCE {currentUser.since}</Text>
+          <Text
+            style={styles.name}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {currentUser.name}
+          </Text>
+          <Text style={styles.city}>
+            ⌖ {currentUser.city}
+            {currentUser.state ? `, ${currentUser.state}` : ""}
+          </Text>
         </View>
       </View>
-      {currentUser.tagline ? (
-        <Text style={styles.tagline}>{currentUser.tagline}</Text>
-      ) : null}
 
-      <MetricStrip metrics={[
-        { icon: Users, value: friends.length, label: "Friends", onPress: () => router.push("/friends"), testID: "metric-friends" },
-        { icon: Send, value: sentCount, label: "Sent", accent: "#607A55", onPress: () => setMailOpen("sent"), testID: "metric-sent" },
-        { icon: Mail, value: receivedCount, label: "Replies", accent: colors.postalBlue, onPress: () => setMailOpen("replies"), testID: "metric-replies" },
-        { icon: Globe2, value: citiesCount, label: "Cities", accent: colors.postalRed, onPress: () => router.push("/map"), testID: "metric-cities" },
-      ]} />
-
+      {/* Editable bio. Tap opens the edit sheet. Shows a placeholder
+          state when bio is empty so the affordance is visible. */}
       <Pressable
         onPress={() => setEditAboutOpen(true)}
-        testID="about-me-edit-trigger"
+        testID="bio-edit-trigger"
         accessibilityRole="button"
-        accessibilityLabel="Edit your About Me"
+        accessibilityLabel={bioText ? "Edit your bio" : "Add a bio"}
+        style={styles.bio}
       >
-        <PostalCard style={styles.about}>
-          <View style={styles.airmailEdge} />
-          <View style={styles.aboutCopy}>
-            <View style={styles.aboutTitleRow}>
-              <Text style={styles.sectionTitle}>About me</Text>
-              <Pencil color={colors.mutedInk} size={15} strokeWidth={1.5} />
-            </View>
-            <View style={styles.divider}>
-              <Svg18 />
-            </View>
-            <InfoLine icon={Star} label="Interests:" value={currentUser.interests || "Tap to add"} />
-            <InfoLine icon={ImageIcon} label="Send me:" value={currentUser.sendMe || "Tap to add"} />
-            <InfoLine icon={Cake} label="Birthday:" value={currentUser.birthday || "Tap to add"} />
-            <InfoLine icon={Tag} label="Currently into:" value={currentUser.currentlyInto || "Tap to add"} italic />
-          </View>
-        </PostalCard>
+        <Text
+          style={[styles.bioText, !bioText && styles.bioPlaceholder]}
+          numberOfLines={3}
+        >
+          {bioText || "Tap to add a bio — one line about you."}
+        </Text>
+        <Pencil color={colors.mutedInk} size={14} strokeWidth={1.6} style={styles.bioPencil} />
       </Pressable>
 
+      {/* 3 metric tiles. No more 4-tile strip; Cities is gone (lives on
+          the Map tab where it belongs). */}
+      <MetricStrip
+        metrics={[
+          {
+            icon: Users,
+            value: friends.length,
+            label: "Friends",
+            onPress: () => router.push("/friends"),
+            testID: "metric-friends",
+          },
+          {
+            icon: Send,
+            value: sentCount,
+            label: "Sent",
+            accent: "#607A55",
+            onPress: () => setMailOpen("sent"),
+            testID: "metric-sent",
+          },
+          {
+            icon: Mail,
+            value: receivedCount,
+            label: "Received",
+            accent: colors.postalBlue,
+            onPress: () => setMailOpen("replies"),
+            testID: "metric-received",
+          },
+        ]}
+      />
+
+      {/* Section heading for the journal. */}
+      <View style={styles.journalHeader}>
+        <Text style={styles.journalTitle}>Your postcard journal</Text>
+      </View>
+
+      <ScrollView
+        horizontal={false}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.journalScroll}
+      >
+        <WeeklyJournal
+          postcards={postcards}
+          voidReplies={voidReplies}
+          onPressCard={() => setMailOpen("sent")}
+          onPressEmptyTile={() => router.push("/send")}
+        />
+      </ScrollView>
+
+      {/* Mounted sheets */}
       <CreditsSheet visible={creditsOpen} onClose={() => setCreditsOpen(false)} />
       <SettingsSheet
         visible={settingsOpen}
@@ -127,40 +182,64 @@ export default function MyMailCardScreen() {
   );
 }
 
-function Svg18() {
-  return (
-    <Svg width={140} height={9} viewBox="0 0 140 9">
-      <Path d="M 0 5 Q 32 1, 64 5 L 70 2 L 76 5 Q 108 9, 140 5" stroke="#9A8D76" strokeWidth={0.9} fill="none" />
-    </Svg>
-  );
-}
-
-function InfoLine({ icon: Icon, label, value, italic = false }: { icon: LucideIcon; label: string; value: string; italic?: boolean }) {
-  return (
-    <View style={styles.infoLine}>
-      <Icon color={colors.ink} size={20} strokeWidth={1.45} />
-      <Text style={[styles.infoText, italic && styles.italic]}>
-        <Text style={styles.infoLabel}>{label} </Text>{value}
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  hero: { alignItems: "center", flexDirection: "row", gap: 18, marginTop: 8 },
+  hero: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 16,
+    marginTop: 8,
+  },
   heroCopy: { flex: 1 },
-  name: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 40, lineHeight: 44 },
-  city: { color: colors.postalBlue, fontFamily: fonts.serif, fontSize: 17, marginTop: 0 },
-  since: { color: colors.postalRed, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.9, marginTop: 8 },
-  tagline: { color: colors.ink, fontFamily: fonts.serifItalic, fontSize: 17, lineHeight: 22, marginTop: 4, paddingHorizontal: 2 },
-  about: { overflow: "hidden", padding: 20, paddingLeft: 22 },
-  airmailEdge: { backgroundColor: colors.postalBlue, bottom: 0, left: 0, position: "absolute", top: 0, width: 5 },
-  aboutCopy: { gap: 12 },
-  aboutTitleRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  sectionTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 26, letterSpacing: 0.2 },
-  divider: { marginTop: -4 },
-  infoLine: { alignItems: "flex-start", borderBottomColor: colors.line, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: "row", gap: 12, paddingBottom: 11 },
-  infoText: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 16, lineHeight: 22 },
-  infoLabel: { fontFamily: fonts.serifBold },
-  italic: { color: "#607A55", fontFamily: fonts.serifItalic },
+  name: {
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 36,
+    lineHeight: 40,
+  },
+  city: {
+    color: colors.postalBlue,
+    fontFamily: fonts.serif,
+    fontSize: 16,
+    marginTop: 2,
+  },
+
+  // Bio — single line, editable, replaces the 4-row About-me grid.
+  bio: {
+    backgroundColor: colors.white,
+    borderColor: colors.line,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    paddingRight: 32, // room for pencil
+    marginTop: 14,
+    position: "relative",
+  },
+  bioText: {
+    color: colors.ink,
+    fontFamily: fonts.serifItalic,
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  bioPlaceholder: { color: colors.mutedInk },
+  bioPencil: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+  },
+
+  journalHeader: {
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  journalTitle: {
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 20,
+    letterSpacing: -0.2,
+  },
+
+  journalScroll: {
+    paddingBottom: 24,
+  },
 });
