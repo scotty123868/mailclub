@@ -16,13 +16,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mailrooms.app",
-      "buildNumber": "15",
+      "buildNumber": "16",
       "usesAppleSignIn": true,
       "config": {
         "googleMapsApiKey": ""
       },
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Mailroom uses your photos so you can pick one for the postcard you're sending.",
+        "NSContactsUsageDescription": "Mailroom can use your contacts to help you address a postcard to a friend. Optional.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
