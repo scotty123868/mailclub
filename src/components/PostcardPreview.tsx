@@ -11,15 +11,21 @@ import { fonts } from "@/src/theme/typography";
  * postcard. Both components forward a ref so they can be captured to PNG by
  * `react-native-view-shot` and uploaded to Lob.
  *
- *   • Real postcards are 6×4 in, 1.5:1 aspect ratio
- *   • Lob renders at 300 DPI = 1875 × 1275 px per side
- *   • With 1/8 inch bleed → 1950 × 1350 px max
+ *   • Lob 4×6 postcards are actually 4.25" × 6.25" (incl. 1/8" bleed)
+ *   • Aspect ratio = 6.25 / 4.25 = ~1.4706
+ *   • Renders at 300 DPI = 1875 × 1275 px per side
+ *
+ * v0.7.0.20: ASPECT_RATIO was 1.5 (a true 4×6, no bleed). Lob rejects
+ * anything outside ~4.25:6.25 — even 0.03 off the ratio fails their
+ * validator with "Expected height:width ratio of 4.25:6.25". Bringing
+ * the on-screen + captured view to the right ratio so the captured
+ * PNG passes.
  *
  * The previews render at any width and proportionally scale internal type.
  * For Lob capture, wrap the preview in <ViewShot> at width=1875 (off-screen).
  */
 
-const ASPECT_RATIO = 1.5;
+const ASPECT_RATIO = 6.25 / 4.25; // ~1.4706 — matches Lob 4×6 with bleed
 const DEFAULT_WIDTH = 320;
 
 // =========================================================================

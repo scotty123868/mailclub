@@ -15,7 +15,15 @@ import { supabase, SUPABASE_CONFIGURED } from "./supabase";
  * Sized for Lob's 4×6 postcards: 1875 × 1275 px at 300 DPI.
  */
 
-const LOB_RENDER_WIDTH = 1875; // px — 6.25" × 300 DPI (includes 1/8" bleed)
+// v0.7.0.20: Lob's 4×6 postcard is actually 4.25" × 6.25" with bleed.
+// width × DPI = 6.25" × 300 = 1875.
+const LOB_RENDER_WIDTH = 1875;
+// Aspect ratio = width / height = 6.25 / 4.25 = ~1.4706. The PREVIOUS
+// constant used 1.5, which is what a true 4×6 postcard would be without
+// bleed. Lob explicitly rejects anything that isn't ~4.25:6.25 height:width,
+// so even being 0.03 off the ratio (1.5 vs 1.4706) trips their validator
+// after the bytes finally reach them (build 30+ pipeline).
+const LOB_ASPECT_W_OVER_H = 6.25 / 4.25;
 
 /**
  * Capture a React Native View ref to a PNG file on disk.
@@ -44,7 +52,7 @@ async function captureViewToFile(viewRef: any, _filename: string): Promise<strin
     format: "png",
     quality: 1,
     width: LOB_RENDER_WIDTH,
-    height: Math.round(LOB_RENDER_WIDTH / 1.5),
+    height: Math.round(LOB_RENDER_WIDTH / LOB_ASPECT_W_OVER_H),
     result: "base64",
   });
   return `data:image/png;base64,${base64}`;
@@ -195,5 +203,5 @@ export async function submitToLob(input: LobSubmitInput): Promise<LobSubmitResul
  * the preview components at. Exposed so tests + other callers stay in sync.
  */
 export function lobRenderDimensions() {
-  return { width: LOB_RENDER_WIDTH, height: Math.round(LOB_RENDER_WIDTH / 1.5) };
+  return { width: LOB_RENDER_WIDTH, height: Math.round(LOB_RENDER_WIDTH / LOB_ASPECT_W_OVER_H) };
 }
