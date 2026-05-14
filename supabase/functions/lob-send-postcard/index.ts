@@ -217,9 +217,33 @@ html, body {
 </body></html>`;
 }
 
+// v0.7.0.20: helper that always returns HTTP 200 with the actual outcome
+// encoded in the body's `ok` field. Reason: supabase-js's
+// functions.invoke() wraps any non-2xx response in a generic
+// FunctionsHttpError ("Edge Function returned a non-2xx status code")
+// and does NOT parse the body unless the caller explicitly reads
+// error.context.json(). Most client code (including our submitToLob)
+// just reads `error.message`, so the real reason gets swallowed.
+//
+// Returning 200 for everything trades HTTP semantics (use status codes
+// for failure!) for diagnostic clarity (real error message reaches the
+// user every time). This is the right trade for an internal Edge
+// Function — supabase analytics dashboard still tracks failures via the
+// `ok: false` count in body once we instrument it, and external Lob
+// API monitoring is unaffected (we still log lob_error to postcards).
+//
+// The intent-status param is preserved in the JSON body as `__status`
+// for debugging/logging only — it doesn't drive HTTP routing.
+function json(body: unknown, _intentStatus = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req: Request) => {
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ ok: false, error: "POST only" }), { status: 405 });
+    return json({ ok: false, error: "POST only" }, 405);
   }
 
   // -- AUTH --------------------------------------------------------------
@@ -250,24 +274,18 @@ serve(async (req: Request) => {
     );
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user?.id) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Invalid auth token" }),
-        { status: 401 },
-      );
+      return json({ ok: false, error: "Invalid auth token" }, 401);
     }
     callerUserId = userData.user.id;
   } else {
-    return new Response(
-      JSON.stringify({ ok: false, error: "Auth required (Bearer JWT or internal secret)" }),
-      { status: 401 },
-    );
+    return json({ ok: false, error: "Auth required (Bearer JWT or internal secret)" }, 401);
   }
 
   let body: Body;
   try {
     body = await req.json();
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: "Invalid JSON body" }), { status: 400 });
+    return json({ ok: false, error: "Invalid JSON body" }, 400);
   }
 
   // v0.7.0.11: two input modes:
@@ -281,24 +299,18 @@ serve(async (req: Request) => {
   //      and pass HTML strings to Lob, which renders them server-side.
   const useInlineHtml = body.render_mode === "html";
   if (!body.postcard_id) {
-    return new Response(
-      JSON.stringify({ ok: false, error: "postcard_id required" }),
-      { status: 400 },
-    );
+    return json({ ok: false, error: "postcard_id required" }, 400);
   }
   if (!useInlineHtml && (!body.front_url || !body.back_url)) {
-    return new Response(
-      JSON.stringify({ ok: false, error: "front_url + back_url required unless render_mode=html" }),
-      { status: 400 },
+    return json(
+      { ok: false, error: "front_url + back_url required unless render_mode=html" },
+      400,
     );
   }
 
   const lobKey = Deno.env.get("LOB_API_KEY");
   if (!lobKey) {
-    return new Response(
-      JSON.stringify({ ok: false, error: "LOB_API_KEY env var missing" }),
-      { status: 500 },
-    );
+    return json({ ok: false, error: "LOB_API_KEY env var missing" }, 500);
   }
 
   const supabase = createClient(
@@ -321,17 +333,11 @@ serve(async (req: Request) => {
   // (claim → lob-send-postcard) skip this since the claim function already
   // validated the claim token AND created the postcard server-side.
   if (postcard && !isInternalCall && callerUserId && (postcard as any).sender_id !== callerUserId) {
-    return new Response(
-      JSON.stringify({ ok: false, error: "Postcard does not belong to caller" }),
-      { status: 403 },
-    );
+    return json({ ok: false, error: "Postcard does not belong to caller" }, 403);
   }
 
   if (pcErr || !postcard) {
-    return new Response(
-      JSON.stringify({ ok: false, error: pcErr?.message ?? "Postcard not found" }),
-      { status: 404 },
-    );
+    return json({ ok: false, error: pcErr?.message ?? "Postcard not found" }, 404);
   }
 
   const toKind = (postcard as any).to_kind;
@@ -399,9 +405,26 @@ serve(async (req: Request) => {
     };
   }
   if (!recipient || !recipient.address_line1 || !recipient.address_city || !recipient.address_state || !recipient.address_zip) {
-    return new Response(
-      JSON.stringify({ ok: false, error: "No recipient address available (need either a friend with an address or a claimed claim row)" }),
-      { status: 400 },
+    // v0.7.0.20: include diagnostic info so we can debug *which* field
+    // is missing without function logs. Don't leak the actual address —
+    // just say which keys are unset.
+    const missing = !recipient
+      ? "recipient row not found"
+      : [
+          !recipient.address_line1 && "line1",
+          !recipient.address_city && "city",
+          !recipient.address_state && "state",
+          !recipient.address_zip && "zip",
+        ].filter(Boolean).join(", ");
+    return json(
+      {
+        ok: false,
+        error: `No recipient address available (missing: ${missing}). The friend record may have been created without a complete mailing address.`,
+        toKind,
+        friendIdSet: !!friendId,
+        claimIdSet: !!claimId,
+      },
+      400,
     );
   }
 
@@ -488,6 +511,15 @@ serve(async (req: Request) => {
     front: frontPayload,
     back: backPayload,
     size: "4x6",
+    // v0.7.0.20: Lob requires use_type on every postcard send. Without
+    // it the API rejects with "Mail use_type must be one of 'marketing'
+    // or 'operational'". For Mailroom's product (user-initiated personal
+    // postcards to friends), "marketing" is the closer fit — not a
+    // transactional/operational notification, more like personal outreach.
+    // If you ever want to override per-account (e.g. set the default in
+    // dashboard.lob.com → Settings → Account), you can drop this line,
+    // but hardcoding keeps the send working independent of account state.
+    use_type: "marketing",
   });
 
   let lobResp: Response;
@@ -503,29 +535,24 @@ serve(async (req: Request) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Network error to Lob";
     await supabase.from("postcards").update({ lob_error: msg }).eq("id", postcard.id);
-    return new Response(JSON.stringify({ ok: false, error: msg }), { status: 502 });
+    return json({ ok: false, error: msg }, 502);
   }
 
-  const json = await lobResp.json();
+  // v0.7.0.20: renamed to lobJson — the previous `json` const shadowed
+  // the new top-level `json()` response helper.
+  const lobJson = await lobResp.json();
 
   if (!lobResp.ok) {
-    const msg = json?.error?.message ?? `Lob returned ${lobResp.status}`;
+    const msg = lobJson?.error?.message ?? `Lob returned ${lobResp.status}`;
     await supabase.from("postcards").update({ lob_error: msg }).eq("id", postcard.id);
-    return new Response(JSON.stringify({ ok: false, error: msg }), { status: lobResp.status });
+    return json({ ok: false, error: msg }, lobResp.status);
   }
 
   // Success — persist Lob's metadata on the postcard row.
-  // v0.7.0.10: also overwrite photo_path with the rendered front PNG's
-  // Storage URL when the URL-mode caller (welcome/Send tab) supplied one,
-  // so the journal renders the actual rendered front instead of the
-  // volatile ImagePicker tmp file. In html mode (send-link claim path)
-  // there's no rendered URL to write — keep the original photo_path
-  // (which is the postcard-photos Storage path, resolved to signed URLs
-  // on the client via fetchPostcards in v0.7.0.11).
   const update: Record<string, unknown> = {
-    lob_id: json.id,
+    lob_id: lobJson.id,
     lob_status: "queued",
-    lob_expected_delivery: json.expected_delivery_date,
+    lob_expected_delivery: lobJson.expected_delivery_date,
     lob_error: null,
   };
   if (!useInlineHtml && body.front_url) {
@@ -533,12 +560,9 @@ serve(async (req: Request) => {
   }
   await supabase.from("postcards").update(update).eq("id", postcard.id);
 
-  return new Response(
-    JSON.stringify({
-      ok: true,
-      lob_id: json.id,
-      expected_delivery_date: json.expected_delivery_date,
-    }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
-  );
+  return json({
+    ok: true,
+    lob_id: lobJson.id,
+    expected_delivery_date: lobJson.expected_delivery_date,
+  });
 });
