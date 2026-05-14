@@ -21,6 +21,8 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
+  withSequence,
   withTiming,
 } from "react-native-reanimated";
 import { PrimaryButton } from "@/src/components/Buttons";
@@ -108,6 +110,11 @@ const EMPTY_ADDRESS: AddressDraft = { line1: "", line2: "", city: "", state: "",
 
 const HERO_FOLK_MAP = require("@/assets/onboarding/hero-folk-map.png");
 const HERO_MAILBOX = require("@/assets/onboarding/hero-mailbox.png");
+// v0.7.0.24: user picked variant B from the Recraft hand-drawn gallery.
+// Hot-air balloon shaped like an envelope, drifting over patterned green
+// fields. Used as the MailedStep celebration hero, with a gentle
+// floating animation that makes it feel like it's actually flying.
+const HERO_ENVELOPE_BALLOON = require("@/assets/onboarding/hero-envelope-balloon.jpg");
 
 // State validator: 2-char US state code. We don&apos;t validate against a
 // full state list here — Lob does USPS verification server-side at send.
@@ -1780,15 +1787,18 @@ function MailedStep({
   shareUrl?: string | null;
   onDismiss: () => void;
 }) {
-  // v0.7.0.10 dramatic rewrite: per user feedback the original "card
-  // shrinks into envelope" beat felt small + read as a generic dialog.
-  // The new beat: the folk-map hero pulses in BIG, three little
-  // envelope dots fly outward (your card joining the constellation),
-  // the MAILED stamp slams in with rotation. Bigger scales, bigger
-  // contrast, satisfying overshoot.
-  const heroScale = useSharedValue(0.6);
+  // v0.7.0.24: hero is now a hand-drawn envelope-shaped hot-air balloon
+  // (Recraft variant B, picked by user). Animation reads as a balloon
+  // actually taking flight:
+  //   - Rises up from below the stage (translateY)
+  //   - Eases into a gentle continuous bob (sin-wave loop on Y + slight rotate)
+  //   - Three small envelopes still fly out around it
+  //   - MAILED stamp slams in last
+  const heroScale = useSharedValue(0.85);
   const heroOpacity = useSharedValue(0);
-  const heroBlur = useSharedValue(8); // shadow blur for breath
+  const heroTranslateY = useSharedValue(80); // starts below the stage
+  const heroBob = useSharedValue(0); // continuous loop, ±6px sway
+  const heroSway = useSharedValue(0); // continuous loop, ±2deg rotation
   const env1X = useSharedValue(0);
   const env1Y = useSharedValue(0);
   const env1Opacity = useSharedValue(0);
@@ -1804,13 +1814,43 @@ function MailedStep({
   const captionTranslateY = useSharedValue(12);
 
   useEffect(() => {
-    // BEAT 1 (0-450ms): hero illustration springs in, big + warm
-    heroOpacity.value = withTiming(1, { duration: 350 });
-    heroScale.value = withTiming(1, {
-      duration: 450,
-      easing: Easing.bezier(0.34, 1.56, 0.64, 1), // spring overshoot
+    // BEAT 1 (0-700ms): balloon rises from below the stage, opacity in.
+    // Slow ease-out matching the "filling with hot air, lifting off" beat.
+    heroOpacity.value = withTiming(1, { duration: 500 });
+    heroTranslateY.value = withTiming(0, {
+      duration: 700,
+      easing: Easing.bezier(0.16, 1, 0.3, 1), // strong ease-out, lands smooth
     });
-    heroBlur.value = withDelay(300, withTiming(16, { duration: 600 }));
+    heroScale.value = withTiming(1, {
+      duration: 700,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+    });
+
+    // BEAT 1.5 (after entry): continuous gentle floating loop.
+    // Two oscillations running on different periods so the bob never
+    // looks mechanical. ±6px Y sway, ±2deg rotation, total period ~2.4s.
+    heroBob.value = withDelay(
+      700,
+      withRepeat(
+        withSequence(
+          withTiming(-6, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+          withTiming(6, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1, // infinite
+        false,
+      ),
+    );
+    heroSway.value = withDelay(
+      700,
+      withRepeat(
+        withSequence(
+          withTiming(2, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
+          withTiming(-2, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        false,
+      ),
+    );
 
     // BEAT 2 (300-900ms): three envelope dots fly out from the hero
     // in different directions, suggesting the card joining many others
@@ -1839,7 +1879,7 @@ function MailedStep({
     captionOpacity.value = withDelay(1100, withTiming(1, { duration: 400 }));
     captionTranslateY.value = withDelay(1100, withTiming(0, { duration: 400 }));
   }, [
-    heroOpacity, heroScale, heroBlur,
+    heroOpacity, heroScale, heroTranslateY, heroBob, heroSway,
     env1Opacity, env1X, env1Y,
     env2Opacity, env2X, env2Y,
     env3Opacity, env3X, env3Y,
@@ -1849,7 +1889,14 @@ function MailedStep({
 
   const heroStyle = useAnimatedStyle(() => ({
     opacity: heroOpacity.value,
-    transform: [{ scale: heroScale.value }],
+    transform: [
+      // Initial rise (BEAT 1) + continuous bob (loop) compose into the
+      // visible Y position. Same for sway/scale — combine all into one
+      // transform stack so Reanimated drives them together.
+      { translateY: heroTranslateY.value + heroBob.value },
+      { rotate: `${heroSway.value}deg` },
+      { scale: heroScale.value },
+    ],
   }));
   const env1Style = useAnimatedStyle(() => ({
     opacity: env1Opacity.value,
@@ -1889,10 +1936,13 @@ function MailedStep({
   return (
     <View style={[stepStyles.wrap, { alignItems: "center" }]} testID="welcome-step-mailed">
       <View style={mailedStyles.stage}>
-        {/* Hero map illustration — your card joining a wider network */}
+        {/* v0.7.0.24: hand-drawn envelope-balloon hero, with a rise-and-bob
+            animation that makes it look like the postcard is genuinely
+            taking flight. (Recraft hand_drawn style, user-picked variant B
+            from the Recraft gallery.) */}
         <Animated.View style={[mailedStyles.heroFrame, heroStyle]}>
           <Image
-            source={HERO_FOLK_MAP}
+            source={HERO_ENVELOPE_BALLOON}
             style={mailedStyles.heroImage}
             resizeMode="cover"
           />
