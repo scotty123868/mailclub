@@ -40,16 +40,12 @@ export const PostcardFrontPreview = forwardRef<View, FrontProps>(function Postca
   ref,
 ) {
   const height = width / ASPECT_RATIO;
-  // v0.7.0.12: redesigned to "Polaroid" — photo inset within a thick
-  // white frame, optional handwritten caption in the bottom margin,
-  // small Mailroom wordmark in the lower-right of the white area.
-  // Matches the buildFrontHtml template used by Lob's server-side
-  // render so the in-app preview and the printed card look identical.
-  const padTop = width * 0.045;
-  const padSide = width * 0.045;
-  const padBottom = width * 0.16;
-  const captionSize = Math.max(13, width * 0.058);
-  const markSize = Math.max(7, width * 0.028);
+  // v0.7.0.13: photo dominates. Subtle cream border matches the back's
+  // paper color so front + back read as one coherent piece when set
+  // next to each other. No caption, no wordmark — the photo is the
+  // statement. (`caption` prop kept for backward compat but ignored.)
+  const pad = Math.max(6, width * 0.024); // ~6% of width — tight but visible
+  const placeholderSize = Math.max(11, width * 0.04);
 
   return (
     <View
@@ -58,55 +54,29 @@ export const PostcardFrontPreview = forwardRef<View, FrontProps>(function Postca
       style={[styles.cardOuter, frontStyles.outer, { width, height }]}
       testID={testID ?? "postcard-front-preview"}
       accessibilityRole="image"
-      accessibilityLabel={caption ? `Postcard front, captioned "${caption}"` : "Postcard front"}
+      accessibilityLabel="Postcard front"
     >
       <View
         style={[
           styles.cardInner,
-          frontStyles.polaroidFrame,
-          {
-            paddingTop: padTop,
-            paddingLeft: padSide,
-            paddingRight: padSide,
-            paddingBottom: padBottom,
-          },
+          frontStyles.creamFrame,
+          { padding: pad },
         ]}
       >
-        {/* The photo well — inset within the white margin */}
         <View style={frontStyles.photoWell}>
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
           ) : (
             <View style={frontStyles.photoPlaceholder}>
-              <Text style={[frontStyles.placeholderText, { fontSize: captionSize * 0.85 }]}>
+              <Text style={[frontStyles.placeholderText, { fontSize: placeholderSize }]}>
                 Photo goes here
               </Text>
-              <Text style={[frontStyles.placeholderSub, { fontSize: captionSize * 0.65 }]}>
+              <Text style={[frontStyles.placeholderSub, { fontSize: placeholderSize * 0.78 }]}>
                 Tap "Add photo" on the Send screen
               </Text>
             </View>
           )}
-          {/* Hairline edge so the photo reads as a printed photograph,
-              not just a div. */}
           <View style={frontStyles.photoEdge} pointerEvents="none" />
-        </View>
-
-        {/* Caption in the bottom white margin — Caveat hand-written */}
-        {caption ? (
-          <Text
-            style={[
-              frontStyles.captionText,
-              { fontSize: captionSize, marginTop: width * 0.025 },
-            ]}
-            numberOfLines={2}
-          >
-            {caption}
-          </Text>
-        ) : null}
-
-        {/* Mailroom wordmark — quiet in the lower-right of the white frame */}
-        <View style={[frontStyles.markCorner, { right: padSide, bottom: padSide * 0.6 }]}>
-          <Text style={[frontStyles.markText, { fontSize: markSize }]}>MAILROOM</Text>
         </View>
       </View>
     </View>
@@ -402,11 +372,13 @@ const styles = StyleSheet.create({
 
 const frontStyles = StyleSheet.create({
   outer: {},
-  // v0.7.0.12: Polaroid frame — white paper, photo inset, caption + mark
-  // in the bottom margin. Old "full-bleed photo + caption banner" design
-  // moved to the printed back's vibe.
-  polaroidFrame: {
-    backgroundColor: "#FFFEFA",
+  // v0.7.0.13: cream paper frame matching the back's `#FBF4DE` so front
+  // and back read as one coherent piece when laid side by side. Thin
+  // border (~2.4% of width on all four sides) — distinct enough to
+  // separate from the photo but quiet enough that the photo dominates.
+  // No caption, no wordmark. The photo is the statement.
+  creamFrame: {
+    backgroundColor: "#FBF4DE",
     position: "relative",
   },
   photoWell: {

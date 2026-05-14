@@ -54,64 +54,40 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function buildFrontHtml(photoUrl: string, caption?: string): string {
-  // Polaroid: white paper frame with photo inset, optional handwritten
-  // caption below, tiny MAILROOM wordmark in the lower-right. Matches
-  // PostcardFrontPreview after v0.7.0.12 redesign.
+function buildFrontHtml(photoUrl: string): string {
+  // v0.7.0.13: photo-only front. Cream border matches the back's paper
+  // so front/back read as one piece. No caption, no wordmark. The photo
+  // is the statement. Lob's bleed area is automatic; we render edge-to-
+  // edge cream and let the photo sit inside a ~6% margin.
   const photoEl = photoUrl
     ? `<img class="photo" src="${escapeHtml(photoUrl)}" />`
     : `<div class="photo placeholder">Mailroom</div>`;
-  const captionEl = caption
-    ? `<div class="caption">${escapeHtml(caption)}</div>`
-    : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @page { margin: 0; size: 6.25in 4.25in; }
 html, body { margin: 0; padding: 0; }
 .card {
   width: 6.25in; height: 4.25in;
-  background: #FFFEFA;
-  padding: 0.22in 0.28in 0.65in;
+  background: #FBF4DE;
+  padding: 0.15in;
   box-sizing: border-box;
-  position: relative;
-  font-family: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
 }
 .photo {
   width: 100%; height: 100%;
   display: block;
   object-fit: cover;
   background: #1B1F2D;
-  border: 0.5pt solid rgba(0,0,0,0.12);
-  position: relative;
+  border: 0.4pt solid rgba(0,0,0,0.12);
 }
 .placeholder {
   font-family: Georgia, serif;
   font-size: 48pt;
-  color: #F2EBDA;
+  color: #E8D5A8;
   text-align: center;
   line-height: 1;
   padding-top: 1in;
 }
-.caption {
-  position: absolute;
-  left: 0; right: 0;
-  bottom: 0.22in;
-  text-align: center;
-  font-size: 20pt;
-  color: #17223B;
-  letter-spacing: 0.3pt;
-}
-.mark {
-  position: absolute;
-  bottom: 0.13in;
-  right: 0.28in;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  font-weight: 700;
-  font-size: 7.5pt;
-  letter-spacing: 2.2pt;
-  color: rgba(94, 100, 114, 0.65);
-}
 </style></head><body>
-<div class="card">${photoEl}${captionEl}<div class="mark">MAILROOM</div></div>
+<div class="card">${photoEl}</div>
 </body></html>`;
 }
 
@@ -122,23 +98,41 @@ function buildBackHtml(opts: {
   senderState?: string;
   reciprocationUrl?: string;
 }): string {
-  // Match PostcardBackPreview: cream paper backdrop, gold vertical divider,
-  // FROM line + script message on the left, USPS guide lines + postage
-  // stamp imagery + reciprocation QR on the left side (right is reserved
-  // for Lob's overprint of the recipient address + IMb).
-  const fromLine = opts.senderName
-    ? `FROM: ${escapeHtml(opts.senderName.toUpperCase())}${opts.senderCity ? `, ${escapeHtml(opts.senderCity.toUpperCase())}` : ""}${opts.senderState ? ` ${escapeHtml(opts.senderState.toUpperCase())}` : ""}`
-    : "";
-  // QR via qrserver.com — Lob's renderer fetches the image. 300px is
-  // plenty for a 0.8in print. ecc=M for moderate error correction.
+  // v0.7.0.14 — Lob-compliant back layout (FROM line dropped, QR caption
+  // neutralized).
+  //
+  // Lob's published constraints:
+  //   - Ink-free address zone: 3.2835" × 2.375", positioned 0.275" from
+  //     the right edge and 0.25" from the bottom edge. Lob overprints
+  //     recipient + return + indicia + IMb here.
+  //   - Bottom 0.625" full-width also IMb-clear.
+  //   - Designer-available space: top 1.625" (full width) + left 2.69"
+  //     down to y=3.625".
+  //
+  // Layout:
+  //   TOP-RIGHT (4.85–6.07in × 0.22–1.45in): QR + "Scan to reply"
+  //     caption — sits where a stamp would go on a paper postcard.
+  //   LEFT (0.32in onward, top to y=3.4in): handwritten message,
+  //     starts higher now that FROM line is gone, more room overall.
+  //   LEFT BOTTOM (0–2.69in × 3.4–3.625in): tiny Mailroom wordmark.
+  //   Bottom-right (2.97–5.97in × 1.625–4.0in): LOB INK-FREE — nothing.
+  //   Full-width bottom 0.625": LOB INK-FREE — nothing.
+  //
+  // Why no FROM line: for friend sends, the recipient already knows the
+  // sender (their name is on the friend record). The script message
+  // itself usually opens with the recipient's name and signs with the
+  // sender's, so it's redundant. For pen pal sends, anonymity is
+  // intentional — the QR + reply flow handles identification. Lob's
+  // auto-printed return address in the ink-free zone is the formal
+  // "from" line. Anything else is noise.
+  //
+  // (Sender args kept in the signature for future use — e.g. an
+  // optional "✦ Mailroom pen pal" line for void sends — but unused
+  // in this version.)
+  void opts.senderName; void opts.senderCity; void opts.senderState;
+
   const qrSrc = opts.reciprocationUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&margin=0&data=${encodeURIComponent(opts.reciprocationUrl)}`
-    : "";
-  const qrBlock = qrSrc
-    ? `<div class="qr-wrap">
-        <img class="qr" src="${qrSrc}" />
-        <div class="qr-caption">Scan to reply free →</div>
-      </div>`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=M&margin=0&data=${encodeURIComponent(opts.reciprocationUrl)}`
     : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @page { margin: 0; size: 6.25in 4.25in; }
@@ -149,146 +143,76 @@ html, body {
   color: #17223B;
 }
 .card { position: relative; width: 100%; height: 100%; }
-.divider {
-  position: absolute;
-  left: 49.9%;
-  top: 0.25in;
-  bottom: 0.25in;
-  width: 0.5pt;
-  background: #C2A56D;
-  opacity: 0.75;
-}
-.left {
-  position: absolute;
-  top: 0; bottom: 0; left: 0;
-  width: 50%;
-  padding: 0.32in 0.28in 0.32in 0.32in;
-  box-sizing: border-box;
-}
-.from {
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  font-weight: 700;
-  font-size: 7.5pt;
-  letter-spacing: 0.6pt;
-  text-transform: uppercase;
-  color: #5E6472;
-  margin-bottom: 0.18in;
-}
+
+/* LEFT — handwritten message. Hard-bounded so it can't spill into the
+   right-side Lob ink-free zone or the bottom IMb zone. Right edge stops
+   at 2.55in (well clear of the 2.97in start of Lob's zone). overflow-
+   wrap break-word handles long unbroken strings. */
 .message {
+  position: absolute;
+  top: 0.42in;
+  left: 0.42in;
+  width: 2.1in;
+  max-width: 2.1in;
+  height: 2.95in;
+  max-height: 2.95in;
   font-family: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
-  font-size: 21pt;
+  font-size: 18pt;
   line-height: 1.42;
-  letter-spacing: 0.3pt;
+  letter-spacing: 0.2pt;
   color: #17223B;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
   overflow: hidden;
-  height: calc(100% - 1.6in);
+  box-sizing: border-box;
+  padding-right: 0.08in;  /* extra visual breathing room from divider */
 }
+
+/* TOP-RIGHT — QR as the "stamp" position. Inside the top 1.55in free
+   zone, well clear of Lob's ink-free area below it. */
 .qr-wrap {
   position: absolute;
-  left: 0.32in;
-  bottom: 0.32in;
-  width: 1in;
+  top: 0.22in;
+  right: 0.32in;
+  width: 1.18in;
   text-align: center;
 }
 .qr {
-  width: 0.92in; height: 0.92in;
+  width: 1.1in; height: 1.1in;
   background: #FFFDF7;
-  padding: 0.05in;
-  border: 0.5pt solid #C2A56D;
+  padding: 0.04in;
+  border: 0.4pt solid #C2A56D;
+  display: block;
 }
 .qr-caption {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-style: italic;
   font-size: 7pt;
   color: #5E6472;
-  margin-top: 0.04in;
+  margin-top: 0.06in;
   white-space: nowrap;
 }
-/* Right half: deliberately empty. Lob overprints recipient + IMb here.
-   We render the postage stamp + postmark as decoration in the TOP-RIGHT
-   corner only — Lob's address zone is the middle-lower right. */
-.stamp {
+
+/* Hairline divider — visual cue that right half is the address side.
+   Stops above Lob's ink-free zone. */
+.divider {
   position: absolute;
-  top: 0.22in;
-  right: 0.32in;
-  width: 0.72in;
-  height: 0.86in;
-  transform: rotate(-4deg);
-  background: #B84A3A;
-  border: 0.8pt solid #7A2218;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.stamp-inner {
-  width: 0.62in;
-  height: 0.76in;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.05in 0;
-  color: #FFFDF7;
-}
-.stamp-top {
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  font-weight: 700;
-  font-size: 6pt;
-  letter-spacing: 0.8pt;
-}
-.stamp-dove {
-  font-family: Georgia, serif;
-  font-size: 22pt;
-  line-height: 1;
-}
-.stamp-denom {
-  background: #FFFDF7;
-  color: #B84A3A;
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-weight: 700;
-  font-size: 7pt;
-  padding: 1pt 4pt;
-}
-.postmark {
-  position: absolute;
-  top: 0.42in;
-  right: 0.92in;
-  width: 0.62in;
-  height: 0.62in;
-  border: 1.5pt solid #B84A3A;
-  border-radius: 50%;
-  opacity: 0.7;
-  transform: rotate(-8deg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #B84A3A;
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: 5.5pt;
-  letter-spacing: 0.8pt;
-  text-align: center;
-  line-height: 1.2;
+  left: 3.0in;
+  top: 0.35in;
+  bottom: 0.85in;
+  width: 0.4pt;
+  background: rgba(194, 165, 109, 0.5);
 }
 </style></head><body>
 <div class="card">
   <div class="divider"></div>
-  <div class="left">
-    ${fromLine ? `<div class="from">${fromLine}</div>` : ""}
-    <div class="message">${escapeHtml(opts.message)}</div>
-    ${qrBlock}
-  </div>
-  <div class="stamp">
-    <div class="stamp-inner">
-      <div class="stamp-top">MAILROOM</div>
-      <div class="stamp-dove">✶</div>
-      <div class="stamp-denom">FOREVER</div>
-    </div>
-  </div>
-  <div class="postmark">
-    MAILROOM<br>WITH CARE<br>2026
-  </div>
+  <div class="message">${escapeHtml(opts.message)}</div>
+  ${qrSrc ? `<div class="qr-wrap">
+    <img class="qr" src="${qrSrc}" />
+    <div class="qr-caption">Scan to reply</div>
+  </div>` : ""}
 </div>
 </body></html>`;
 }
@@ -542,11 +466,24 @@ serve(async (req: Request) => {
     "to[address_state]": recipient.address_state,
     "to[address_zip]": recipient.address_zip,
     "to[address_country]": recipient.address_country,
-    "from[name]": sender?.name ?? "Mailroom Member",
-    "from[address_line1]": sender?.address_line1 ?? "1 Mailroom Way",
-    "from[address_city]": sender?.city ?? "Denver",
-    "from[address_state]": sender?.state ?? "CO",
-    "from[address_zip]": sender?.address_zip ?? "80202",
+    // v0.7.0.13: prefer the Mailroom-owned return address (env vars) over
+    // the sender's personal home address. Senders' privacy matters — we
+    // don't want everyone's home address printed on every postcard's
+    // return line. When the env vars aren't set we fall back to a clearly
+    // labeled placeholder so test-mode prints still validate; live mode
+    // will be gated on real values being present.
+    //
+    // Set these once via:
+    //   supabase secrets set MAILROOM_RETURN_NAME="Mailroom"
+    //   supabase secrets set MAILROOM_RETURN_LINE1="123 Some Real St"
+    //   supabase secrets set MAILROOM_RETURN_CITY="Denver"
+    //   supabase secrets set MAILROOM_RETURN_STATE="CO"
+    //   supabase secrets set MAILROOM_RETURN_ZIP="80202"
+    "from[name]": Deno.env.get("MAILROOM_RETURN_NAME") ?? "Mailroom",
+    "from[address_line1]": Deno.env.get("MAILROOM_RETURN_LINE1") ?? "1 Mailroom Way",
+    "from[address_city]": Deno.env.get("MAILROOM_RETURN_CITY") ?? "Denver",
+    "from[address_state]": Deno.env.get("MAILROOM_RETURN_STATE") ?? "CO",
+    "from[address_zip]": Deno.env.get("MAILROOM_RETURN_ZIP") ?? "80202",
     "from[address_country]": "US",
     front: frontPayload,
     back: backPayload,

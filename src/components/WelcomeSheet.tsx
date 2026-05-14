@@ -2167,8 +2167,16 @@ function stripCountry(input: string): string {
 }
 
 /** Find a "City State ZIP" pattern anywhere at the END of `s`. Returns
- *  the city, 2-letter state code, and zip if matched; null otherwise.
- *  Handles state as either a 2-letter code OR a full state name. */
+ *  the city, 2-letter state code, zip, and `rest` (everything before
+ *  the city). Handles state as either a 2-letter code OR a full state name.
+ *
+ *  v0.7.0.14 fix: city is now the LAST comma-separated chunk before the
+ *  state, not everything before the state. Previously "5209 Dorset Ave,
+ *  Chevy Chase Maryland 20815" would set city="5209 Dorset Ave, Chevy
+ *  Chase" and leave line1 empty — blocking the user from sending. Now
+ *  we walk back through commas to isolate just "Chevy Chase" as the city
+ *  and return "5209 Dorset Ave" as `rest` for the caller to use as line1.
+ */
 function extractCityStateZip(
   s: string,
 ): { city: string; state: string; zip: string; rest: string } | null {
@@ -2179,16 +2187,24 @@ function extractCityStateZip(
   const beforeZip = s.slice(0, zipMatch.index).trim().replace(/,$/, "").trim();
   if (!beforeZip) return null;
 
-  // Walk the state patterns (longest-first) trying to find one at the END of
-  // beforeZip. The remainder before the state is the city.
   for (const { pattern, code } of ALL_STATE_PATTERNS) {
-    // Need pattern at the end of the string.
     const endPattern = new RegExp(pattern.source + "\\s*$", "i");
     const m = beforeZip.match(endPattern);
     if (m && m.index !== undefined) {
-      const cityPart = beforeZip.slice(0, m.index).trim().replace(/,$/, "").trim();
-      if (!cityPart) continue;
-      return { city: cityPart, state: code, zip, rest: "" };
+      // Text before the state. Could be "line1, city" OR
+      // "line1, line2, city" OR just "city".
+      const beforeState = beforeZip.slice(0, m.index).trim().replace(/,$/, "").trim();
+      if (!beforeState) continue;
+      // Last comma boundary separates the rest (line1 + maybe line2)
+      // from the city. No comma → the whole thing is the city.
+      const lastComma = beforeState.lastIndexOf(",");
+      const city =
+        lastComma >= 0
+          ? beforeState.slice(lastComma + 1).trim()
+          : beforeState;
+      if (!city) continue;
+      const rest = lastComma >= 0 ? beforeState.slice(0, lastComma).trim() : "";
+      return { city, state: code, zip, rest };
     }
   }
   return null;
@@ -2261,24 +2277,20 @@ function parseFreeFormAddress(input: string): AddressDraft | null {
   }
 
   // Strategy A: scan from the END of the joined string for "City State ZIP".
-  // Handles 2-chunk Maryland-style input: "Chevy Chase Maryland 20815".
+  // Handles "5209 Dorset Avenue, Chevy Chase Maryland 20815" (2-chunk
+  // Maryland-style with full state name) AND "412 SE Belmont, Portland,
+  // OR 97214" (3-chunk canonical). extractCityStateZip walks back through
+  // commas to isolate the city, returning `rest` which is line1 (+ optional
+  // line2) ready to use.
   const joined = parts.join(", ");
   const extracted = extractCityStateZip(joined);
   if (extracted) {
-    // What's left in `joined` BEFORE city is line1 + optional line2.
-    const beforeCityIdx = joined.toLowerCase().lastIndexOf(extracted.city.toLowerCase());
-    const beforeCity =
-      beforeCityIdx > 0
-        ? joined.slice(0, beforeCityIdx).trim().replace(/,$/, "").trim()
-        : "";
-    // beforeCity may itself contain commas (line1, line2). Split it.
-    const beforeParts = beforeCity.split(",").map((s) => s.trim()).filter(Boolean);
-    const line1 = beforeParts[0] ?? "";
-    const line2 = beforeParts.length > 1 ? beforeParts.slice(1).join(", ") : "";
-    // Only commit Strategy A's result if line1 is non-empty. The joined
-    // approach can swallow line1 into the city blob when commas are
-    // present in the city's neighbors — fall through to Strategy B
-    // instead of returning an unusable parse.
+    const restParts = extracted.rest
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const line1 = restParts[0] ?? "";
+    const line2 = restParts.length > 1 ? restParts.slice(1).join(", ") : "";
     if (line1) {
       return {
         line1,
