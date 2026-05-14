@@ -119,15 +119,18 @@ export default function ConstellationScreen() {
   // voidReplies are anonymous-sender — they can&apos;t be graphed since
   // we don&apos;t know the other endpoint&apos;s userId.
   const graphPostcards = useMemo<PostcardForGraph[]>(() => {
+    // v0.7.0.24: build a Set of *visible* friend IDs so we can detect
+    // postcards that point to a hidden friend (e.g. the "(me)" self
+    // friend created by welcome-flow self-sends). Those shouldn't
+    // appear as a separate node — they collapse into the self node.
+    // Without this, the constellation showed a "Someone" stranger
+    // node for every self-send that couldn't be tapped into.
+    const visibleFriendIds = new Set(friends.map((f) => f.id));
     const rows: PostcardForGraph[] = [];
     for (const p of postcards) {
-      // Pen-pal cards (void) stay out of the graph — they have no real
-      // recipient to graph against.
+      // Pen-pal cards (void) stay out of the graph.
       if (p.toFriendId === "void") continue;
-      // v0.7.0.7: pending send-link cards have toFriendId === "". Pass
-      // them through with recipientId: null — buildSocialGraph
-      // synthesizes a placeholder node so the constellation shows the
-      // outbound card immediately after the first send.
+      // Pending send-link cards: recipientId: null synthesizes a placeholder.
       if (p.toFriendId === "") {
         rows.push({
           id: p.id,
@@ -138,7 +141,11 @@ export default function ConstellationScreen() {
         continue;
       }
       if (!p.toFriendId) continue;
-      // If senderId is missing (legacy), default to self → outbound.
+      // Self-send detection: the recipient friend was filtered out of
+      // the visible friends list (build 34's "(me)" filter). Skip the
+      // postcard entirely — the user is the self node, sending to
+      // themselves doesn't add a constellation node.
+      if (!visibleFriendIds.has(p.toFriendId)) continue;
       rows.push({
         id: p.id,
         senderId: p.senderId ?? selfId,
@@ -147,7 +154,7 @@ export default function ConstellationScreen() {
       });
     }
     return rows;
-  }, [postcards, selfId]);
+  }, [postcards, selfId, friends]);
 
   const { nodes, edges } = useMemo(
     () =>

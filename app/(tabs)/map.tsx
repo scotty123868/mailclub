@@ -68,16 +68,22 @@ export default function MapScreen() {
   // immediately after the first send — empty map ≠ first impression.
   const pins: MapCity[] = useMemo(() => {
     const seen = new Map<string, MapCity>();
-    // v0.7.0.19: ALWAYS show a home pin if we have the user's city or
-    // state. Previously the map could be totally blank for users whose
-    // city isn't in CITY_COORDS — they read it as "the map is broken."
-    // Using resolveCoord with state fallback means any US user gets
-    // *some* pin in roughly the right region from day one.
+    // v0.7.0.24: keyed pins by coord-string (lat+lng), not arbitrary
+    // ids, so home + sent-to + from at the same city dedupe into one
+    // visual pin. Previously "home" (id="home") and "city-chevy-chase"
+    // (id="city-...") would both render at the same coords with the
+    // same label, causing the "Chevy Chase" double-overlay the user
+    // flagged. Using coord-key as the dedupe key means any subsequent
+    // pin at that exact lat/lng folds into the first one.
+    const coordKey = (c: { latitude: number; longitude: number }) =>
+      `${c.latitude.toFixed(4)}_${c.longitude.toFixed(4)}`;
+
+    // v0.7.0.19: always seed a home pin if profile has city/state.
     if (currentUser.city || currentUser.state) {
       const homeCoord = resolveCoord(currentUser.city, currentUser.state);
       if (homeCoord) {
         const homeName = currentUser.city || currentUser.state || "home";
-        seen.set("home", {
+        seen.set(coordKey(homeCoord), {
           id: "home",
           name: homeName,
           coord: homeCoord,
@@ -86,27 +92,34 @@ export default function MapScreen() {
     }
 
     for (const p of postcards) {
-      // Skip pending — handled separately below.
       if (p.toFriendId === "") continue;
       const friend = friends.find((f) => f.id === p.toFriendId);
       const cityName = p.toCity || friend?.city || "";
       if (!cityName) continue;
       const coord = resolveCoord(cityName, friend?.addressState || friend?.state);
       if (!coord) continue;
-      const id = `city-${normalizeCityKey(cityName)}`;
-      if (!seen.has(id)) {
-        seen.set(id, { id, name: cityName, coord, accent: true });
+      const key = coordKey(coord);
+      if (!seen.has(key)) {
+        seen.set(key, {
+          id: `city-${normalizeCityKey(cityName)}`,
+          name: cityName,
+          coord,
+          accent: true,
+        });
       }
     }
-    // From-cities so home shows up too. Resolve via state fallback in
-    // case the user's city isn't in the static table.
+
     for (const p of postcards) {
       if (!p.fromCity) continue;
       const coord = resolveCoord(p.fromCity, currentUser.state);
       if (!coord) continue;
-      const id = `city-${normalizeCityKey(p.fromCity)}`;
-      if (!seen.has(id)) {
-        seen.set(id, { id, name: p.fromCity, coord });
+      const key = coordKey(coord);
+      if (!seen.has(key)) {
+        seen.set(key, {
+          id: `city-${normalizeCityKey(p.fromCity)}`,
+          name: p.fromCity,
+          coord,
+        });
       }
     }
     // Pending send-link cards: one pin per unclaimed card, offset

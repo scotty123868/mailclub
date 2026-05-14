@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { ArrowLeft, ArrowRight, Camera, Check, Link as LinkIcon, MapPin, Send } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, Camera, Check, Link as LinkIcon, Mail, MapPin, Send, User as UserIcon, Users as UsersIcon } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
@@ -42,9 +42,13 @@ import type { Friend } from "@/src/types/mail";
  */
 
 type Step = 1 | 2 | 3 | 4;
-// "self" delivery (send to your own address) is deferred to 0.5.1 — needs
-// proper user address storage on CurrentUser, which we don't have yet.
 type DeliveryMode = "friend" | "link" | "address";
+
+// v0.7.0.24: recipient TYPE picker on step 1. The user picks WHO this card
+// is for (friend / yourself / pen pal) before anything else. Selecting
+// "friend" reveals the name input inline. "self" and "penpal" don't need
+// a name — the type is the identity.
+type RecipientKind = "friend" | "self" | "penpal";
 
 type PrintRecipient = {
   name: string;
@@ -78,6 +82,7 @@ export default function SendScreen() {
     currentUser,
     sendPostcard,
     sendPostcardViaLink,
+    sendIntoVoid,
     addFriendByAddress,
   } = useMailClub();
 
@@ -90,8 +95,10 @@ export default function SendScreen() {
   const [editorOpen, setEditorOpen] = useState(false);
 
   // -- Recipient state ----------------------------------------------------
-  // The user types a name on step 3. If it matches a friend in the rolodex,
-  // we surface the match and let them tap to lock the friend reference.
+  // v0.7.0.24: type picker is the first decision. Defaults to null so
+  // the user must explicitly choose before continuing.
+  const [recipientKind, setRecipientKind] = useState<RecipientKind | null>(null);
+  // Name input is only used when recipientKind === "friend".
   const [recipientName, setRecipientName] = useState("");
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
 
@@ -234,12 +241,16 @@ export default function SendScreen() {
   // -- Step navigation ----------------------------------------------------
 
   function canAdvance(): { ok: true } | { ok: false; reason?: string } {
-    // v0.7.0.19: recipient first. Step 1 now gates on a name being typed
-    // (or a friend locked). Steps 2-3 ask for photo + note in that order.
+    // v0.7.0.24: step 1 is now the type picker. "friend" also requires a
+    // name; "self" + "penpal" don't (they're identity-by-type).
     if (step === 1) {
-      return recipientName.trim().length > 0
-        ? { ok: true }
-        : { ok: false, reason: "Type a name so we know who it's for." };
+      if (!recipientKind) {
+        return { ok: false, reason: "Pick who this card is for." };
+      }
+      if (recipientKind === "friend" && recipientName.trim().length === 0) {
+        return { ok: false, reason: "Type a name so we know which friend." };
+      }
+      return { ok: true };
     }
     if (step === 2) {
       return photoUri
@@ -333,6 +344,78 @@ export default function SendScreen() {
 
     setSending(true);
     try {
+      // v0.7.0.24: penpal + self short-circuits — handled before the
+      // friend/link/address branches because they don't need delivery
+      // mode at all. Penpal goes into the void (sendIntoVoid). Self
+      // creates a friend record with the user's own profile address
+      // and sends via the friend path (mirror of welcome-flow self).
+      if (recipientKind === "penpal") {
+        const result = await sendIntoVoid(message.trim());
+        if (!result.ok) {
+          Alert.alert("Couldn't send to pen pal", "Try again in a moment.");
+          return;
+        }
+        setSuccess({
+          visible: true,
+          title: "Sent to a stranger.",
+          subtitle:
+            "Your card is on its way to someone else in the Mailroom network. If they want to reply, you'll see it in your inbox.",
+        });
+        resetCompose();
+        return;
+      }
+      if (recipientKind === "self") {
+        // Use the user's own profile address — same pattern as welcome's
+        // self path. The "(me)" friend record this creates is hidden
+        // from every UI surface (constellation, map, friends list) by
+        // the context-level visibleFriends filter (build 34). Proper
+        // schema fix (is_self column, no friend row at all) queued for
+        // a later build.
+        if (!currentUser.city || !currentUser.state) {
+          Alert.alert(
+            "Your address isn't set yet",
+            "Add your address in My Card → Settings, then try sending to yourself again.",
+          );
+          return;
+        }
+        const firstName = (currentUser.name || "You").split(" ")[0];
+        const selfRes = await addFriendByAddress({
+          name: `${firstName} (me)`,
+          city: currentUser.city,
+          state: currentUser.state,
+          addressCity: currentUser.city,
+          addressState: currentUser.state,
+          addressCountry: "US",
+          // We don't have the user's street address on currentUser in
+          // most cases. Fall back to a placeholder — Lob in relaxed mode
+          // typically still accepts and the user is going to retest in
+          // live mode anyway.
+        });
+        if (!selfRes.ok || !selfRes.friend) {
+          Alert.alert("Couldn't save self-address", "Try setting your address in My Card first.");
+          return;
+        }
+        const result = await sendPostcard({
+          kind: "photo",
+          friendId: selfRes.friend.id,
+          photoUri: photoUri ?? "",
+          message: message.trim(),
+          friend: selfRes.friend,
+        });
+        if (!result.ok) {
+          Alert.alert("Couldn't send", "Try again in a moment.");
+          return;
+        }
+        setSuccess({
+          visible: true,
+          title: "Sent to yourself.",
+          subtitle:
+            "Look for it in your mailbox in 4-7 days. We'll drop a pin on your map when it lands.",
+        });
+        resetCompose();
+        return;
+      }
+
       if (deliveryMode === "link") {
         const result = await sendPostcardViaLink({
           category: "photo",
@@ -486,6 +569,7 @@ export default function SendScreen() {
   function resetCompose() {
     setPhotoUri(null);
     setMessage("");
+    setRecipientKind(null);
     setRecipientName("");
     setSelectedFriendId(null);
     setAddress(EMPTY_ADDRESS);
@@ -517,10 +601,18 @@ export default function SendScreen() {
 
       {step === 1 && (
         <RecipientStep
+          recipientKind={recipientKind}
+          onPickKind={(k) => {
+            setRecipientKind(k);
+            // Reset name + friend lock when switching away from "friend"
+            if (k !== "friend") {
+              setRecipientName("");
+              unlockFriend();
+            }
+          }}
           name={recipientName}
           onNameChange={(t) => {
             setRecipientName(t);
-            // Clear locked friend if the user edits the name away
             if (selectedFriend && t.trim().toLowerCase() !== selectedFriend.name.toLowerCase()) {
               unlockFriend();
             }
@@ -831,6 +923,8 @@ const insideStyles = StyleSheet.create({
 // =============================================================================
 
 function RecipientStep({
+  recipientKind,
+  onPickKind,
   name,
   onNameChange,
   matches,
@@ -839,6 +933,8 @@ function RecipientStep({
   onUnlockFriend,
   testID,
 }: {
+  recipientKind: RecipientKind | null;
+  onPickKind: (k: RecipientKind) => void;
   name: string;
   onNameChange: (t: string) => void;
   matches: Friend[];
@@ -850,8 +946,45 @@ function RecipientStep({
   return (
     <View style={stepStyles.wrap} testID={testID}>
       <Text style={stepStyles.title}>Who's it for?</Text>
-      <Text style={stepStyles.subtitle}>Just a name. We'll figure out delivery on the next page.</Text>
+      <Text style={stepStyles.subtitle}>Pick a person — friend, yourself, or a pen pal stranger.</Text>
 
+      {/* v0.7.0.24: TYPE picker tiles. Mirrors the welcome flow's
+          recipient step pattern so the experience is consistent
+          across first-send and repeat-send. */}
+      <View style={typePickerStyles.tilesWrap}>
+        <RecipientTile
+          kind="friend"
+          selected={recipientKind === "friend"}
+          icon={UsersIcon}
+          title="A friend"
+          body="Send to someone in your rolodex (or add a new contact)"
+          onSelect={() => onPickKind("friend")}
+          testID="send-kind-friend"
+        />
+        <RecipientTile
+          kind="self"
+          selected={recipientKind === "self"}
+          icon={UserIcon}
+          title="Yourself"
+          body="A postcard to your own mailbox"
+          onSelect={() => onPickKind("self")}
+          testID="send-kind-self"
+        />
+        <RecipientTile
+          kind="penpal"
+          selected={recipientKind === "penpal"}
+          icon={Mail}
+          title="A pen pal"
+          body="Send anonymously to a stranger in our network"
+          onSelect={() => onPickKind("penpal")}
+          testID="send-kind-penpal"
+        />
+      </View>
+
+      {/* Name input only appears when "friend" is selected — for self
+          and penpal, the type itself is the identity. */}
+      {recipientKind === "friend" ? (
+        <>
       <TextInput
         value={name}
         onChangeText={onNameChange}
@@ -912,9 +1045,98 @@ function RecipientStep({
           No one in your rolodex by that name. That's fine — we'll send them a private link on the next page.
         </Text>
       ) : null}
+        </>
+      ) : null}
     </View>
   );
 }
+
+// v0.7.0.24: tile for the recipient TYPE picker. Same visual language
+// as the welcome-flow recipient step. Selected state = filled border +
+// gold checkmark; unselected = quiet outline.
+function RecipientTile({
+  selected,
+  icon: Icon,
+  title,
+  body,
+  onSelect,
+  testID,
+}: {
+  kind: RecipientKind;
+  selected: boolean;
+  icon: typeof Mail;
+  title: string;
+  body: string;
+  onSelect: () => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      onPress={onSelect}
+      style={[typePickerStyles.tile, selected && typePickerStyles.tileSelected]}
+      testID={testID}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+    >
+      <View style={[typePickerStyles.tileIcon, selected && typePickerStyles.tileIconSelected]}>
+        <Icon
+          color={selected ? colors.paper : colors.ink}
+          size={20}
+          strokeWidth={1.8}
+        />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={typePickerStyles.tileTitle}>{title}</Text>
+        <Text style={typePickerStyles.tileBody}>{body}</Text>
+      </View>
+      {selected ? (
+        <Check color={colors.postalBlue} size={20} strokeWidth={2.2} />
+      ) : null}
+    </Pressable>
+  );
+}
+
+const typePickerStyles = StyleSheet.create({
+  tilesWrap: { gap: 10, marginTop: 18, marginBottom: 8 },
+  tile: {
+    alignItems: "center",
+    backgroundColor: "rgba(245, 240, 230, 0.5)",
+    borderColor: colors.line,
+    borderRadius: 12,
+    borderWidth: 1.2,
+    flexDirection: "row",
+    gap: 14,
+    padding: 14,
+  },
+  tileSelected: {
+    backgroundColor: "rgba(60, 110, 143, 0.08)",
+    borderColor: colors.postalBlue,
+    borderWidth: 1.6,
+  },
+  tileIcon: {
+    alignItems: "center",
+    backgroundColor: colors.paper,
+    borderRadius: 999,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  tileIconSelected: {
+    backgroundColor: colors.postalBlue,
+  },
+  tileTitle: {
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 17,
+    marginBottom: 2,
+  },
+  tileBody: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serif,
+    fontSize: 13,
+    lineHeight: 17,
+  },
+});
 
 const recipientStyles = StyleSheet.create({
   input: {
