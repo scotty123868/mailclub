@@ -9,6 +9,7 @@ import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { Header } from "@/src/components/Header";
 import { MessageEditorSheet } from "@/src/components/MessageEditorSheet";
 import { PostcardBackPreview, PostcardFrontPreview } from "@/src/components/PostcardPreview";
+import { AddressFields } from "@/src/components/AddressFields";
 import {
   AddressDraft,
   EMPTY_ADDRESS,
@@ -994,6 +995,8 @@ function DeliveryStep({
 
       {deliveryMode === "address" && (
         <View style={deliveryStyles.addressForm} testID="send-address-form">
+          {/* Recipient name stays separate — AddressFields covers the
+              mailable address only (line1, line2, city, state, zip). */}
           <AddressField
             label="Recipient name"
             value={address.name || recipientName}
@@ -1001,57 +1004,15 @@ function DeliveryStep({
             placeholder="Full name"
             autoCapitalize="words"
           />
-          <AddressField
-            label="Street address"
-            value={address.line1}
-            onChange={(v) => onAddressChange({ ...address, line1: v })}
-            placeholder="123 Bedford Ave"
-            autoComplete="address-line1"
-            textContentType="streetAddressLine1"
+          {/* v0.7.0.18: single Places-autocomplete textbox + apt below,
+              replacing the previous 4-field form. Same UX as the welcome
+              flow — addresses get validated by Google as the user types. */}
+          <AddressFields
+            address={address}
+            onChange={onAddressChange}
+            testIDPrefix="send"
+            label="Their address"
           />
-          <AddressField
-            label="Apt / Unit"
-            value={address.line2 || ""}
-            onChange={(v) => onAddressChange({ ...address, line2: v })}
-            placeholder="Apt 4B (optional)"
-            autoComplete="address-line2"
-            textContentType="streetAddressLine2"
-            required={false}
-          />
-          <View style={deliveryStyles.row}>
-            <View style={{ flex: 2 }}>
-              <AddressField
-                label="City"
-                value={address.city}
-                onChange={(v) => onAddressChange({ ...address, city: v })}
-                placeholder="Brooklyn"
-                autoCapitalize="words"
-                textContentType="addressCity"
-              />
-            </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <AddressField
-                label="State"
-                value={address.state}
-                onChange={(v) => onAddressChange({ ...address, state: v.toUpperCase().slice(0, 2) })}
-                placeholder="NY"
-                autoCapitalize="characters"
-                maxLength={2}
-                textContentType="addressState"
-              />
-            </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <AddressField
-                label="ZIP"
-                value={address.zip}
-                onChange={(v) => onAddressChange({ ...address, zip: v })}
-                placeholder="11211"
-                keyboardType="number-pad"
-                maxLength={10}
-                textContentType="postalCode"
-              />
-            </View>
-          </View>
         </View>
       )}
     </View>

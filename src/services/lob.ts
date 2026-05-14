@@ -65,8 +65,18 @@ export async function capturePostcardForPrint(
  * its public URL.
  */
 async function uploadSide(localUri: string, path: string): Promise<string> {
-  const fetched = await fetch(localUri);
-  if (!fetched.ok) throw new Error(`Could not read local file ${localUri}`);
+  // v0.7.0.18: iOS view-shot's tmpfile mode sometimes returns a bare
+  // /private/var/... path with no file:// scheme. RN's fetch() throws
+  // "Invalid URL: /private/var/..." in that case, which surfaced as the
+  // raw error on the welcome flow's "Mail it" step. Normalize the URI
+  // here so the rest of the upload pipeline can stay scheme-agnostic.
+  const safeUri = localUri.startsWith("file://")
+    ? localUri
+    : localUri.startsWith("/")
+      ? `file://${localUri}`
+      : localUri;
+  const fetched = await fetch(safeUri);
+  if (!fetched.ok) throw new Error(`Could not read local file ${safeUri}`);
   const blob = await fetched.blob();
 
   const { error } = await supabase.storage

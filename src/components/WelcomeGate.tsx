@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { WelcomeSheet } from "@/src/components/WelcomeSheet";
 import { useMailClub } from "@/src/state/MailClubContext";
 
@@ -31,6 +31,19 @@ export function WelcomeGate() {
     hydrated,
   } = useMailClub();
   const [dismissedLocal, setDismissedLocal] = useState(false);
+
+  // v0.7.0.18: when the user signs out, MailClubContext clears
+  // hasCompletedSignup back to false. dismissedLocal used to stay `true`
+  // from the previous session — which kept the gate closed even though
+  // the user was now unauthenticated, leaving them stranded on whatever
+  // tab they were on (e.g. My Card) with no path back into onboarding.
+  // Reset the local dismissal whenever any of the three onboarding flags
+  // flips false. Re-entry into the welcome flow is the correct UX.
+  useEffect(() => {
+    if (!hasCompletedSignup || !hasSentFirstCard || !hasSeenFreeCreditsIntro) {
+      setDismissedLocal(false);
+    }
+  }, [hasCompletedSignup, hasSentFirstCard, hasSeenFreeCreditsIntro]);
 
   if (!hydrated) return null;
   // v0.7: three-flag gate. All must be true to enter the app.

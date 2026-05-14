@@ -2,9 +2,11 @@ import { Cake, ChevronDown, ChevronUp, MapPin, UserPlus, X } from "lucide-react-
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
+import { AddressFields } from "@/src/components/AddressFields";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
+import type { AddressDraft } from "@/src/types/address";
 
 /**
  * Add a friend. Two layers:
@@ -28,11 +30,22 @@ export function AddFriendSheet({
   const [state, setState] = useState("");
   const [birthday, setBirthday] = useState("");
   const [showMailingAddress, setShowMailingAddress] = useState(false);
-  const [addressLine1, setAddressLine1] = useState("");
-  const [addressLine2, setAddressLine2] = useState("");
-  const [addressCity, setAddressCity] = useState("");
-  const [addressState, setAddressState] = useState("");
-  const [addressZip, setAddressZip] = useState("");
+  // v0.7.0.18: single AddressDraft replacing 5 separate state vars. Lets
+  // the AddressFields component (with Google Places autocomplete) drop in
+  // unchanged. Destructured back into the 5 server fields at submit time.
+  const [mailingAddress, setMailingAddress] = useState<AddressDraft>({
+    name: "",
+    line1: "",
+    line2: "",
+    city: "",
+    state: "",
+    zip: "",
+  });
+  const addressLine1 = mailingAddress.line1;
+  const addressLine2 = mailingAddress.line2 ?? "";
+  const addressCity = mailingAddress.city;
+  const addressState = mailingAddress.state;
+  const addressZip = mailingAddress.zip;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,11 +55,7 @@ export function AddFriendSheet({
     setState("");
     setBirthday("");
     setShowMailingAddress(false);
-    setAddressLine1("");
-    setAddressLine2("");
-    setAddressCity("");
-    setAddressState("");
-    setAddressZip("");
+    setMailingAddress({ name: "", line1: "", line2: "", city: "", state: "", zip: "" });
     setError(null);
     setSubmitting(false);
   }
@@ -58,8 +67,13 @@ export function AddFriendSheet({
   // Auto-populate the address city/state from the basic city/state so the
   // user doesn't re-type if they're the same.
   function syncAddressFromBasic() {
-    if (city && !addressCity) setAddressCity(city);
-    if (state && !addressState) setAddressState(state);
+    if ((city && !addressCity) || (state && !addressState)) {
+      setMailingAddress((prev) => ({
+        ...prev,
+        city: prev.city || city,
+        state: prev.state || state,
+      }));
+    }
   }
 
   async function submit() {
@@ -229,77 +243,17 @@ export function AddFriendSheet({
 
             {showMailingAddress ? (
               <View style={styles.addressBlock} testID="add-friend-address-block">
-                <View style={styles.field}>
-                  <Text style={styles.label}>Street address</Text>
-                  <TextInput
-                    value={addressLine1}
-                    onChangeText={setAddressLine1}
-                    placeholder="123 Main Street"
-                    placeholderTextColor="#9A8D76"
-                    style={styles.input}
-                    testID="add-friend-line1"
-                    autoCapitalize="words"
-                    textContentType="streetAddressLine1"
-                  />
-                </View>
+                {/* v0.7.0.18: single GPlaces autocomplete textbox + apt
+                    below, replacing the prior 5-field stack. Consistent
+                    UX with welcome flow + Send tab. */}
+                <AddressFields
+                  address={mailingAddress}
+                  onChange={setMailingAddress}
+                  testIDPrefix="add-friend"
+                  label="Mailing address"
+                  placeholder="123 Main St, Boise, ID 83702"
+                />
 
-                <View style={styles.field}>
-                  <Text style={styles.label}>Apt / suite (optional)</Text>
-                  <TextInput
-                    value={addressLine2}
-                    onChangeText={setAddressLine2}
-                    placeholder="Apt 4B"
-                    placeholderTextColor="#9A8D76"
-                    style={styles.input}
-                    testID="add-friend-line2"
-                    autoCapitalize="words"
-                    textContentType="streetAddressLine2"
-                  />
-                </View>
-
-                <View style={styles.row}>
-                  <View style={[styles.field, { flex: 2 }]}>
-                    <Text style={styles.label}>City</Text>
-                    <TextInput
-                      value={addressCity}
-                      onChangeText={setAddressCity}
-                      placeholder={city || "Boise"}
-                      placeholderTextColor="#9A8D76"
-                      style={styles.input}
-                      testID="add-friend-address-city"
-                      autoCapitalize="words"
-                      textContentType="addressCity"
-                    />
-                  </View>
-                  <View style={[styles.field, { flex: 1 }]}>
-                    <Text style={styles.label}>State</Text>
-                    <TextInput
-                      value={addressState}
-                      onChangeText={setAddressState}
-                      placeholder={state || "ID"}
-                      placeholderTextColor="#9A8D76"
-                      style={styles.input}
-                      testID="add-friend-address-state"
-                      autoCapitalize="characters"
-                      maxLength={3}
-                      textContentType="addressState"
-                    />
-                  </View>
-                  <View style={[styles.field, { flex: 1.2 }]}>
-                    <Text style={styles.label}>ZIP</Text>
-                    <TextInput
-                      value={addressZip}
-                      onChangeText={setAddressZip}
-                      placeholder="83702"
-                      placeholderTextColor="#9A8D76"
-                      style={styles.input}
-                      testID="add-friend-zip"
-                      keyboardType="number-pad"
-                      maxLength={10}
-                      textContentType="postalCode"
-                    />
-                  </View>
-                </View>
 
                 {hasFullMailingAddress ? (
                   <View style={[styles.notice, styles.noticeOk]}>

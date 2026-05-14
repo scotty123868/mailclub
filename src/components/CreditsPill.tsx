@@ -1,6 +1,6 @@
 import { Mail } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
@@ -34,8 +34,17 @@ export function CreditsPill() {
         testID="header-credits-pill"
         hitSlop={8}
       >
-        <Mail color={colors.ink} size={16} strokeWidth={1.8} />
-        <Text style={styles.count}>{credits}</Text>
+        {/* v0.7.0.18: wrap both glyphs in explicit ICON_SIZE-tall boxes so
+            they share an identical bounding height. iOS Text adds ascender
+            padding that flex-center can't strip, so lineHeight alone wasn't
+            enough — the "3" sat a hair below the envelope. Forcing equal
+            height + justifyContent: center pins the optical centers. */}
+        <View style={styles.glyphBox}>
+          <Mail color={colors.ink} size={ICON_SIZE} strokeWidth={1.8} />
+        </View>
+        <View style={styles.glyphBox}>
+          <Text style={styles.count}>{credits}</Text>
+        </View>
       </Pressable>
       <CreditsSheet visible={open} onClose={() => setOpen(false)} />
     </>
@@ -63,18 +72,23 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   pillPressed: { opacity: 0.6 },
+  // v0.7.0.18: shared bounding box. Both the envelope SVG and the number
+  // Text live in identical ICON_SIZE-tall boxes that center their content.
+  // This is the only way to get pixel-level visual alignment between an
+  // SVG glyph and a Text glyph on iOS — flex alignItems on the parent
+  // alone uses different baselines for each child type.
+  glyphBox: {
+    alignItems: "center",
+    height: ICON_SIZE,
+    justifyContent: "center",
+    minWidth: 12,
+  },
   count: {
     color: colors.ink,
     fontFamily: fonts.serifSemi,
-    fontSize: 16,
-    // v0.7.0.17: tightened lineHeight to match the icon glyph height so
-    // the number's baseline lines up with the envelope. Previously
-    // `ICON_SIZE + 4` gave the text 4px of extra leading that pushed the
-    // numeral visually below center.
+    fontSize: 15,
     includeFontPadding: false,
     lineHeight: ICON_SIZE,
     textAlign: "center",
-    textAlignVertical: "center",
-    minWidth: 12,
   },
 });
