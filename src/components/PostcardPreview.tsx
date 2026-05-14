@@ -40,8 +40,16 @@ export const PostcardFrontPreview = forwardRef<View, FrontProps>(function Postca
   ref,
 ) {
   const height = width / ASPECT_RATIO;
-  const captionSize = Math.max(11, width * 0.04);
-  const markSize = Math.max(8, width * 0.028);
+  // v0.7.0.12: redesigned to "Polaroid" — photo inset within a thick
+  // white frame, optional handwritten caption in the bottom margin,
+  // small Mailroom wordmark in the lower-right of the white area.
+  // Matches the buildFrontHtml template used by Lob's server-side
+  // render so the in-app preview and the printed card look identical.
+  const padTop = width * 0.045;
+  const padSide = width * 0.045;
+  const padBottom = width * 0.16;
+  const captionSize = Math.max(13, width * 0.058);
+  const markSize = Math.max(7, width * 0.028);
 
   return (
     <View
@@ -52,53 +60,54 @@ export const PostcardFrontPreview = forwardRef<View, FrontProps>(function Postca
       accessibilityRole="image"
       accessibilityLabel={caption ? `Postcard front, captioned "${caption}"` : "Postcard front"}
     >
-      {/* Slight inner border to suggest the printed bleed area */}
-      <View style={[styles.cardInner, frontStyles.inner]}>
-        {photoUri ? (
-          <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
-        ) : (
-          <PaperBackdrop />
-        )}
-
-        {/* Subtle vignette darkens edges so caption stays legible on any photo */}
-        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-          <Defs>
-            <Pattern id="grain" patternUnits="userSpaceOnUse" width="2" height="2">
-              <Rect width="2" height="2" fill="rgba(0,0,0,0)" />
-              <Circle cx="0.5" cy="0.5" r="0.15" fill="#000" opacity={0.12} />
-            </Pattern>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#grain)" />
-          <Rect width="100%" height="100%" fill="rgba(0,0,0,0)" stroke="rgba(0,0,0,0.18)" strokeWidth={1.5} />
-        </Svg>
-
-        {/* Caption banner — cream paper strip at the bottom, like 1970s photo print labels */}
-        {caption ? (
-          <View style={[frontStyles.captionBanner, { paddingVertical: Math.max(6, width * 0.022) }]}>
-            <Text
-              style={[frontStyles.captionText, { fontSize: captionSize }]}
-              numberOfLines={2}
-            >
-              {caption}
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Mark — bottom-right corner */}
-        <View style={frontStyles.markCorner}>
-          <Text style={[frontStyles.markText, { fontSize: markSize }]}>MAILROOM</Text>
+      <View
+        style={[
+          styles.cardInner,
+          frontStyles.polaroidFrame,
+          {
+            paddingTop: padTop,
+            paddingLeft: padSide,
+            paddingRight: padSide,
+            paddingBottom: padBottom,
+          },
+        ]}
+      >
+        {/* The photo well — inset within the white margin */}
+        <View style={frontStyles.photoWell}>
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
+          ) : (
+            <View style={frontStyles.photoPlaceholder}>
+              <Text style={[frontStyles.placeholderText, { fontSize: captionSize * 0.85 }]}>
+                Photo goes here
+              </Text>
+              <Text style={[frontStyles.placeholderSub, { fontSize: captionSize * 0.65 }]}>
+                Tap "Add photo" on the Send screen
+              </Text>
+            </View>
+          )}
+          {/* Hairline edge so the photo reads as a printed photograph,
+              not just a div. */}
+          <View style={frontStyles.photoEdge} pointerEvents="none" />
         </View>
 
-        {!photoUri ? (
-          <View style={frontStyles.placeholderHint}>
-            <Text style={[frontStyles.placeholderText, { fontSize: captionSize }]}>
-              Photo goes here
-            </Text>
-            <Text style={[frontStyles.placeholderSub, { fontSize: captionSize * 0.78 }]}>
-              Tap "Add photo" on the Send screen
-            </Text>
-          </View>
+        {/* Caption in the bottom white margin — Caveat hand-written */}
+        {caption ? (
+          <Text
+            style={[
+              frontStyles.captionText,
+              { fontSize: captionSize, marginTop: width * 0.025 },
+            ]}
+            numberOfLines={2}
+          >
+            {caption}
+          </Text>
         ) : null}
+
+        {/* Mailroom wordmark — quiet in the lower-right of the white frame */}
+        <View style={[frontStyles.markCorner, { right: padSide, bottom: padSide * 0.6 }]}>
+          <Text style={[frontStyles.markText, { fontSize: markSize }]}>MAILROOM</Text>
+        </View>
       </View>
     </View>
   );
@@ -393,30 +402,46 @@ const styles = StyleSheet.create({
 
 const frontStyles = StyleSheet.create({
   outer: {},
-  inner: { backgroundColor: "#2B1A08" },
-  captionBanner: {
-    backgroundColor: "rgba(255, 253, 247, 0.94)",
-    borderTopColor: "rgba(60,110,143,0.4)",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    bottom: 0,
-    left: 0,
-    paddingHorizontal: 14,
-    position: "absolute",
-    right: 0,
+  // v0.7.0.12: Polaroid frame — white paper, photo inset, caption + mark
+  // in the bottom margin. Old "full-bleed photo + caption banner" design
+  // moved to the printed back's vibe.
+  polaroidFrame: {
+    backgroundColor: "#FFFEFA",
+    position: "relative",
+  },
+  photoWell: {
+    flex: 1,
+    overflow: "hidden",
+    backgroundColor: "#1B1F2D",
+    position: "relative",
+  },
+  photoEdge: {
+    ...StyleSheet.absoluteFillObject,
+    borderColor: "rgba(0,0,0,0.12)",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  photoPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#F2EBDA",
   },
   captionText: {
     color: colors.ink,
-    fontFamily: fonts.serifSemi,
-    letterSpacing: 0.2,
+    fontFamily: fonts.script,
+    letterSpacing: 0.3,
     textAlign: "center",
   },
-  markCorner: { bottom: 6, position: "absolute", right: 10 },
+  markCorner: {
+    position: "absolute",
+  },
   markText: {
-    color: "rgba(255, 253, 247, 0.85)",
+    color: colors.mutedInk,
     fontFamily: fonts.sansBold,
     letterSpacing: 2.2,
+    opacity: 0.7,
   },
-  placeholderHint: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 4 },
   placeholderText: { color: colors.mutedInk, fontFamily: fonts.serifItalic },
   placeholderSub: { color: colors.mutedInk, fontFamily: fonts.serif, opacity: 0.65 },
 });

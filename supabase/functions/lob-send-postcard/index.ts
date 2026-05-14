@@ -34,12 +34,17 @@ type Body = {
   render_mode?: "html"; // v0.7.0.11: server-side render path for claim flow
 };
 
-// v0.7.0.11: HTML templates for server-side render (send-link claim flow).
-// Sized for 4x6 USPS postcards: 6.25" × 4.25" with 1/8" bleed. Lob's render
-// pipeline accepts inline HTML in the `front`/`back` API fields. The recipient
-// address is rendered automatically by Lob in the right half of the back —
-// we leave it blank intentionally so their address barcode + IMb don't collide
-// with our text.
+// v0.7.0.12: HTML templates for server-side render (send-link claim flow
+// AND retry-orphan path). Designed to MATCH the in-app PostcardPreview
+// components 1:1 — same Polaroid front, same paper-grain back with FROM
+// line, script message, postage stamp, postmark, USPS guide lines, and
+// reciprocation QR. The card mailed to your friend is the same card you
+// saw on your phone.
+//
+// 4x6 USPS postcard: 6.25" × 4.25" with 1/8" bleed. Lob overprints the
+// recipient address + IMb barcode on the right half of the back (the
+// USPS-compliant zone), so our back design only puts decorative elements
+// in that area — no text or graphics that would conflict.
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -49,49 +54,242 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function buildFrontHtml(photoUrl: string): string {
-  // Full-bleed photo. If no photo, fall back to a warm parchment background
-  // so the card still ships without a black void on the front.
-  const bg = photoUrl
-    ? `<img src="${escapeHtml(photoUrl)}" />`
-    : `<div class="placeholder">Mailroom</div>`;
+function buildFrontHtml(photoUrl: string, caption?: string): string {
+  // Polaroid: white paper frame with photo inset, optional handwritten
+  // caption below, tiny MAILROOM wordmark in the lower-right. Matches
+  // PostcardFrontPreview after v0.7.0.12 redesign.
+  const photoEl = photoUrl
+    ? `<img class="photo" src="${escapeHtml(photoUrl)}" />`
+    : `<div class="photo placeholder">Mailroom</div>`;
+  const captionEl = caption
+    ? `<div class="caption">${escapeHtml(caption)}</div>`
+    : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @page { margin: 0; size: 6.25in 4.25in; }
-html, body { margin: 0; padding: 0; width: 6.25in; height: 4.25in; }
-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.placeholder {
-  width: 100%; height: 100%;
-  background: #F8F1E3;
-  display: flex; align-items: center; justify-content: center;
-  font-family: Georgia, serif; font-size: 48pt; color: #17223B;
+html, body { margin: 0; padding: 0; }
+.card {
+  width: 6.25in; height: 4.25in;
+  background: #FFFEFA;
+  padding: 0.22in 0.28in 0.65in;
+  box-sizing: border-box;
+  position: relative;
+  font-family: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
 }
-</style></head><body>${bg}</body></html>`;
+.photo {
+  width: 100%; height: 100%;
+  display: block;
+  object-fit: cover;
+  background: #1B1F2D;
+  border: 0.5pt solid rgba(0,0,0,0.12);
+  position: relative;
+}
+.placeholder {
+  font-family: Georgia, serif;
+  font-size: 48pt;
+  color: #F2EBDA;
+  text-align: center;
+  line-height: 1;
+  padding-top: 1in;
+}
+.caption {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 0.22in;
+  text-align: center;
+  font-size: 20pt;
+  color: #17223B;
+  letter-spacing: 0.3pt;
+}
+.mark {
+  position: absolute;
+  bottom: 0.13in;
+  right: 0.28in;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 7.5pt;
+  letter-spacing: 2.2pt;
+  color: rgba(94, 100, 114, 0.65);
+}
+</style></head><body>
+<div class="card">${photoEl}${captionEl}<div class="mark">MAILROOM</div></div>
+</body></html>`;
 }
 
-function buildBackHtml(message: string): string {
-  // Message on the LEFT half (~3in wide). Lob renders the recipient address
-  // + IMb barcode on the right half automatically when we pass `to[...]`
-  // form fields. Keeping the right half blank avoids the IMb collision.
+function buildBackHtml(opts: {
+  message: string;
+  senderName?: string;
+  senderCity?: string;
+  senderState?: string;
+  reciprocationUrl?: string;
+}): string {
+  // Match PostcardBackPreview: cream paper backdrop, gold vertical divider,
+  // FROM line + script message on the left, USPS guide lines + postage
+  // stamp imagery + reciprocation QR on the left side (right is reserved
+  // for Lob's overprint of the recipient address + IMb).
+  const fromLine = opts.senderName
+    ? `FROM: ${escapeHtml(opts.senderName.toUpperCase())}${opts.senderCity ? `, ${escapeHtml(opts.senderCity.toUpperCase())}` : ""}${opts.senderState ? ` ${escapeHtml(opts.senderState.toUpperCase())}` : ""}`
+    : "";
+  // QR via qrserver.com — Lob's renderer fetches the image. 300px is
+  // plenty for a 0.8in print. ecc=M for moderate error correction.
+  const qrSrc = opts.reciprocationUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&margin=0&data=${encodeURIComponent(opts.reciprocationUrl)}`
+    : "";
+  const qrBlock = qrSrc
+    ? `<div class="qr-wrap">
+        <img class="qr" src="${qrSrc}" />
+        <div class="qr-caption">Scan to reply free →</div>
+      </div>`
+    : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @page { margin: 0; size: 6.25in 4.25in; }
 html, body {
-  margin: 0; padding: 0; width: 6.25in; height: 4.25in;
-  background: #FFFEF9; color: #17223B;
-  font-family: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
+  margin: 0; padding: 0;
+  width: 6.25in; height: 4.25in;
+  background: #FBF4DE;
+  color: #17223B;
+}
+.card { position: relative; width: 100%; height: 100%; }
+.divider {
+  position: absolute;
+  left: 49.9%;
+  top: 0.25in;
+  bottom: 0.25in;
+  width: 0.5pt;
+  background: #C2A56D;
+  opacity: 0.75;
+}
+.left {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 50%;
+  padding: 0.32in 0.28in 0.32in 0.32in;
+  box-sizing: border-box;
+}
+.from {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 7.5pt;
+  letter-spacing: 0.6pt;
+  text-transform: uppercase;
+  color: #5E6472;
+  margin-bottom: 0.18in;
 }
 .message {
-  position: absolute;
-  top: 0.4in;
-  left: 0.4in;
-  width: 2.9in;
-  height: 3.45in;
-  font-size: 17pt;
-  line-height: 1.5;
+  font-family: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
+  font-size: 21pt;
+  line-height: 1.42;
+  letter-spacing: 0.3pt;
+  color: #17223B;
   white-space: pre-wrap;
   overflow: hidden;
+  height: calc(100% - 1.6in);
+}
+.qr-wrap {
+  position: absolute;
+  left: 0.32in;
+  bottom: 0.32in;
+  width: 1in;
+  text-align: center;
+}
+.qr {
+  width: 0.92in; height: 0.92in;
+  background: #FFFDF7;
+  padding: 0.05in;
+  border: 0.5pt solid #C2A56D;
+}
+.qr-caption {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 7pt;
+  color: #5E6472;
+  margin-top: 0.04in;
+  white-space: nowrap;
+}
+/* Right half: deliberately empty. Lob overprints recipient + IMb here.
+   We render the postage stamp + postmark as decoration in the TOP-RIGHT
+   corner only — Lob's address zone is the middle-lower right. */
+.stamp {
+  position: absolute;
+  top: 0.22in;
+  right: 0.32in;
+  width: 0.72in;
+  height: 0.86in;
+  transform: rotate(-4deg);
+  background: #B84A3A;
+  border: 0.8pt solid #7A2218;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stamp-inner {
+  width: 0.62in;
+  height: 0.76in;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.05in 0;
+  color: #FFFDF7;
+}
+.stamp-top {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 6pt;
+  letter-spacing: 0.8pt;
+}
+.stamp-dove {
+  font-family: Georgia, serif;
+  font-size: 22pt;
+  line-height: 1;
+}
+.stamp-denom {
+  background: #FFFDF7;
+  color: #B84A3A;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 700;
+  font-size: 7pt;
+  padding: 1pt 4pt;
+}
+.postmark {
+  position: absolute;
+  top: 0.42in;
+  right: 0.92in;
+  width: 0.62in;
+  height: 0.62in;
+  border: 1.5pt solid #B84A3A;
+  border-radius: 50%;
+  opacity: 0.7;
+  transform: rotate(-8deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #B84A3A;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 5.5pt;
+  letter-spacing: 0.8pt;
+  text-align: center;
+  line-height: 1.2;
 }
 </style></head><body>
-<div class="message">${escapeHtml(message)}</div>
+<div class="card">
+  <div class="divider"></div>
+  <div class="left">
+    ${fromLine ? `<div class="from">${fromLine}</div>` : ""}
+    <div class="message">${escapeHtml(opts.message)}</div>
+    ${qrBlock}
+  </div>
+  <div class="stamp">
+    <div class="stamp-inner">
+      <div class="stamp-top">MAILROOM</div>
+      <div class="stamp-dove">✶</div>
+      <div class="stamp-denom">FOREVER</div>
+    </div>
+  </div>
+  <div class="postmark">
+    MAILROOM<br>WITH CARE<br>2026
+  </div>
+</div>
 </body></html>`;
 }
 
@@ -184,15 +382,13 @@ serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  // Load the postcard + recipient address + sender info.
-  // v0.7.0.11: also embed postcard_claims for send-link cards. The
-  // recipient address lives on the claim row (claimed_*), not on a
-  // friend record, because send-link cards never create a friend.
+  // Load the postcard. v0.7.0.11: switched off PostgREST embedded
+  // selects after the cache stopped resolving postcards→profiles for
+  // sender_id and postcards→postcard_claims for claim_id. Three
+  // explicit queries instead — slower but cache-invariant.
   const { data: postcard, error: pcErr } = await supabase
     .from("postcards")
-    .select(
-      "*, friend:to_friend_id(*), sender:sender_id(*), claim:claim_id(*)",
-    )
+    .select("*")
     .eq("id", body.postcard_id)
     .single();
 
@@ -214,10 +410,36 @@ serve(async (req: Request) => {
     );
   }
 
-  const friend = (postcard as any).friend;
-  const sender = (postcard as any).sender;
-  const claim = (postcard as any).claim;
   const toKind = (postcard as any).to_kind;
+  const senderId = (postcard as any).sender_id;
+  const friendId = (postcard as any).to_friend_id;
+  const claimId = (postcard as any).claim_id;
+
+  // Sender profile — always need this for the from-address.
+  const { data: sender } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", senderId)
+    .maybeSingle();
+
+  // Recipient — either via friend or claim depending on to_kind.
+  let friend: any = null;
+  let claim: any = null;
+  if (toKind === "claim" && claimId) {
+    const { data } = await supabase
+      .from("postcard_claims")
+      .select("*")
+      .eq("id", claimId)
+      .maybeSingle();
+    claim = data;
+  } else if (friendId) {
+    const { data } = await supabase
+      .from("friends")
+      .select("*")
+      .eq("id", friendId)
+      .maybeSingle();
+    friend = data;
+  }
 
   // Resolve the recipient address. Two source paths:
   //   - to_kind="friend"|"void"|"self": from the friend record
@@ -282,8 +504,33 @@ serve(async (req: Request) => {
         if (signed?.signedUrl) photoUrl = signed.signedUrl;
       }
     }
+    // v0.7.0.12: mint a reciprocation token for the back QR so the
+    // recipient can scan + reply free. If one already exists for this
+    // postcard, the RPC returns the existing token (idempotent).
+    let reciprocationUrl = "";
+    try {
+      const { data: tokenData } = await supabase.rpc("create_reciprocation_token", {
+        p_postcard_id: postcard.id,
+      });
+      if (tokenData && typeof tokenData === "object" && (tokenData as any).url) {
+        reciprocationUrl = (tokenData as any).url as string;
+      } else if (tokenData && typeof tokenData === "object" && (tokenData as any).token) {
+        // Some versions of the RPC return just the token; build the URL.
+        reciprocationUrl = `https://app.mailrooms.app/welcome-mail/${(tokenData as any).token}`;
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[lob-send-postcard] reciprocation token mint failed:", err);
+      // Continue without QR — postcard still ships, just no reply hook.
+    }
     frontPayload = buildFrontHtml(photoUrl);
-    backPayload = buildBackHtml((postcard as any).message ?? "");
+    backPayload = buildBackHtml({
+      message: (postcard as any).message ?? "",
+      senderName: sender?.name ?? undefined,
+      senderCity: sender?.city ?? undefined,
+      senderState: sender?.state ?? undefined,
+      reciprocationUrl: reciprocationUrl || undefined,
+    });
   }
 
   const params = new URLSearchParams({
