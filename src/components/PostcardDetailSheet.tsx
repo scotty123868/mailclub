@@ -292,6 +292,8 @@ function statusKicker(status: Postcard["status"]): string {
       return "IN TRANSIT";
     case "draft":
       return "DRAFT";
+    case "awaiting_address":
+      return "WAITING ON ADDRESS";
   }
 }
 

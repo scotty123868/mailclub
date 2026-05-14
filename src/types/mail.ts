@@ -64,7 +64,12 @@ export type Postcard = {
   toCity: string;
   category: CardCategory;
   creditCost: number;
-  status: "draft" | "sent" | "delivered";
+  // v0.7.0.19: added "awaiting_address" — the status assigned by
+  // send_postcard_via_claim when the sender creates a shareable link but
+  // the recipient hasn't filled in their address yet. The client treats
+  // this as "queued" / "outbound but pending claim" for journal and
+  // Sent-count purposes.
+  status: "draft" | "sent" | "delivered" | "awaiting_address";
   message: string;
   sentAt: string;
   placeName?: string;

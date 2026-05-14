@@ -71,7 +71,13 @@ export default function MyMailCardScreen() {
       const isOutbound = p.senderId
         ? p.senderId === authedUserId
         : true; // legacy: cards without senderId are outbound by default
-      return isOutbound && p.status === "sent";
+      // v0.7.0.19: include "awaiting_address" (the send-link path before
+      // the recipient claims). From the user's POV they took the action;
+      // the card counts as sent even if it's pending a claim. Previously
+      // only `status === "sent"` was counted, so welcome-flow Share-a-link
+      // cards never landed in the user's Sent metric — which read as
+      // "my postcard didn't save."
+      return isOutbound && (p.status === "sent" || p.status === "awaiting_address");
     }).length;
   }, [postcards, authedUserId]);
 

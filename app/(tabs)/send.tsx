@@ -234,20 +234,22 @@ export default function SendScreen() {
   // -- Step navigation ----------------------------------------------------
 
   function canAdvance(): { ok: true } | { ok: false; reason?: string } {
+    // v0.7.0.19: recipient first. Step 1 now gates on a name being typed
+    // (or a friend locked). Steps 2-3 ask for photo + note in that order.
     if (step === 1) {
+      return recipientName.trim().length > 0
+        ? { ok: true }
+        : { ok: false, reason: "Type a name so we know who it's for." };
+    }
+    if (step === 2) {
       return photoUri
         ? { ok: true }
         : { ok: false, reason: "Pick a photo first to keep moving." };
     }
-    if (step === 2) {
+    if (step === 3) {
       return message.trim().length > 0
         ? { ok: true }
         : { ok: false, reason: "Write a quick note for the back." };
-    }
-    if (step === 3) {
-      return recipientName.trim().length > 0
-        ? { ok: true }
-        : { ok: false, reason: "Type a name so we know who it's for." };
     }
     return { ok: true };
   }
@@ -514,28 +516,6 @@ export default function SendScreen() {
       <StepHeader step={step} onBack={goBack} />
 
       {step === 1 && (
-        <CoverStep
-          photoUri={photoUri}
-          onPickPhoto={openPhotoPicker}
-          testID="send-step-1"
-        />
-      )}
-
-      {step === 2 && (
-        <InsideStep
-          message={message}
-          recipientForPreview={recipientForPreview}
-          sender={{
-            name: currentUser.name || "You",
-            city: currentUser.city || "",
-            state: currentUser.state || "",
-          }}
-          onOpenEditor={() => setEditorOpen(true)}
-          testID="send-step-2"
-        />
-      )}
-
-      {step === 3 && (
         <RecipientStep
           name={recipientName}
           onNameChange={(t) => {
@@ -549,6 +529,28 @@ export default function SendScreen() {
           locked={selectedFriend}
           onLockFriend={lockFriend}
           onUnlockFriend={unlockFriend}
+          testID="send-step-1"
+        />
+      )}
+
+      {step === 2 && (
+        <CoverStep
+          photoUri={photoUri}
+          onPickPhoto={openPhotoPicker}
+          testID="send-step-2"
+        />
+      )}
+
+      {step === 3 && (
+        <InsideStep
+          message={message}
+          recipientForPreview={recipientForPreview}
+          sender={{
+            name: currentUser.name || "You",
+            city: currentUser.city || "",
+            state: currentUser.state || "",
+          }}
+          onOpenEditor={() => setEditorOpen(true)}
           testID="send-step-3"
         />
       )}
@@ -671,7 +673,12 @@ export default function SendScreen() {
 // =============================================================================
 
 function StepHeader({ step, onBack: _onBack }: { step: Step; onBack: () => void }) {
-  const labels = ["Cover", "Inside", "Recipient", "Delivery"];
+  // v0.7.0.19: recipient first per user feedback. The flow now starts
+  // with "who is this for?" before the photo/note steps, which mirrors
+  // the welcome flow's order and how senders actually think about
+  // composing a card ("I want to send Lori a postcard" → pick Lori,
+  // *then* pick the photo).
+  const labels = ["Recipient", "Cover", "Inside", "Delivery"];
   return (
     <View style={stepHeaderStyles.row} testID={`send-step-header-${step}`}>
       <Text style={stepHeaderStyles.crumb}>
