@@ -24,17 +24,30 @@ const LOB_RENDER_WIDTH = 1875; // px — 6.25" × 300 DPI (includes 1/8" bleed)
  * not the on-screen preview at ~300px wide. Use the off-screen 1875×1250
  * <ViewShot> wrapper for that. See `captureForPrint` for the orchestration.
  */
-async function captureViewToFile(viewRef: any, filename: string): Promise<string> {
-  const localUri = await captureRef(viewRef, {
+async function captureViewToFile(viewRef: any, _filename: string): Promise<string> {
+  // v0.7.0.20: changed result from "tmpfile" to "base64".
+  //
+  // Why: react-native-view-shot's tmpfile mode writes a real PNG to
+  // /private/var/.../tmp/ReactNative/xxx.png. But on iOS, RN's
+  // fetch(file://...).blob() returns a *zero-byte* blob silently — the
+  // upload succeeds, the bucket row appears with size_bytes=0, and Lob
+  // rejects with "front file must be a valid PDF, JPEG, PNG, or HTML file"
+  // because it fetches the public URL and gets an empty body. We
+  // confirmed this by querying storage.objects: every recent upload
+  // had size_bytes=0.
+  //
+  // base64 mode returns the actual PNG bytes as a base64 string. We
+  // prefix with the data: scheme so fetch() handles it as a data-URI
+  // (which works correctly in RN, unlike file://). The downstream
+  // uploadSide code path is otherwise unchanged.
+  const base64 = await captureRef(viewRef, {
     format: "png",
     quality: 1,
     width: LOB_RENDER_WIDTH,
-    // Aspect-ratio: 1.5:1 landscape → height proportionally
     height: Math.round(LOB_RENDER_WIDTH / 1.5),
-    result: "tmpfile",
-    fileName: filename,
+    result: "base64",
   });
-  return localUri;
+  return `data:image/png;base64,${base64}`;
 }
 
 export type CapturedPostcard = {
@@ -64,24 +77,37 @@ export async function capturePostcardForPrint(
  * Upload a single side to the `postcard-renders` Storage bucket and return
  * its public URL.
  */
-async function uploadSide(localUri: string, path: string): Promise<string> {
-  // v0.7.0.18: iOS view-shot's tmpfile mode sometimes returns a bare
-  // /private/var/... path with no file:// scheme. RN's fetch() throws
-  // "Invalid URL: /private/var/..." in that case, which surfaced as the
-  // raw error on the welcome flow's "Mail it" step. Normalize the URI
-  // here so the rest of the upload pipeline can stay scheme-agnostic.
-  const safeUri = localUri.startsWith("file://")
-    ? localUri
-    : localUri.startsWith("/")
-      ? `file://${localUri}`
-      : localUri;
-  const fetched = await fetch(safeUri);
-  if (!fetched.ok) throw new Error(`Could not read local file ${safeUri}`);
-  const blob = await fetched.blob();
+async function uploadSide(uri: string, path: string): Promise<string> {
+  // v0.7.0.20: uri is now a data: URI from captureViewToFile (base64-encoded
+  // PNG). Decode it directly to a Uint8Array instead of going through
+  // fetch().blob() — that path returns zero bytes on iOS for file:// URIs
+  // (see captureViewToFile for the full story) and probably has issues for
+  // data: URIs too in some RN versions.
+  //
+  // Fall back to fetch() for backward-compat in case any caller still
+  // passes a file:// URI (e.g. tests, send.tsx hasn't been updated yet).
+  let bytes: Uint8Array | Blob;
+  if (uri.startsWith("data:")) {
+    const commaIdx = uri.indexOf(",");
+    const b64 = commaIdx >= 0 ? uri.slice(commaIdx + 1) : uri;
+    bytes = base64ToBytes(b64);
+    if (bytes.length === 0) {
+      throw new Error("Decoded PNG is empty — view-shot returned no data.");
+    }
+  } else {
+    const safeUri = uri.startsWith("file://")
+      ? uri
+      : uri.startsWith("/")
+        ? `file://${uri}`
+        : uri;
+    const fetched = await fetch(safeUri);
+    if (!fetched.ok) throw new Error(`Could not read local file ${safeUri}`);
+    bytes = await fetched.blob();
+  }
 
   const { error } = await supabase.storage
     .from("postcard-renders")
-    .upload(path, blob, {
+    .upload(path, bytes, {
       upsert: true,
       contentType: "image/png",
     });
@@ -89,6 +115,16 @@ async function uploadSide(localUri: string, path: string): Promise<string> {
 
   const { data } = supabase.storage.from("postcard-renders").getPublicUrl(path);
   return data.publicUrl;
+}
+
+/** Pure-JS base64 → Uint8Array. Uses atob (available in RN via Hermes
+ *  and JavaScriptCore). No new dependencies needed. */
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
 export type LobSubmitInput = {
