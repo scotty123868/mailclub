@@ -67,8 +67,12 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontFamily: fonts.serifSemi,
     fontSize: 16,
+    // v0.7.0.17: tightened lineHeight to match the icon glyph height so
+    // the number's baseline lines up with the envelope. Previously
+    // `ICON_SIZE + 4` gave the text 4px of extra leading that pushed the
+    // numeral visually below center.
     includeFontPadding: false,
-    lineHeight: ICON_SIZE + 4,
+    lineHeight: ICON_SIZE,
     textAlign: "center",
     textAlignVertical: "center",
     minWidth: 12,

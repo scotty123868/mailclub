@@ -101,6 +101,14 @@ export async function fetchAddressSuggestions(
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
+        // v0.7.0.17: Google API key is restricted to iOS bundle
+        // com.mailrooms.app. When you call from JS fetch (not the native
+        // SDK), Google checks this header against the key's allowlist.
+        // Without it the request is REQUEST_DENIED and no suggestions
+        // surface — which is exactly the "autocomplete isn't working"
+        // bug a user reported. Hardcoded to match the actual bundle ID
+        // so a stale Constants.expoConfig doesn't break the request.
+        "X-Ios-Bundle-Identifier": "com.mailrooms.app",
         "X-Goog-FieldMask":
           "suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat",
       },
@@ -179,6 +187,9 @@ export async function fetchPlaceDetails(
       signal: opts.signal,
       headers: {
         "X-Goog-Api-Key": apiKey,
+        // Match the iOS bundle restriction on the API key — see
+        // fetchAddressSuggestions for the full rationale.
+        "X-Ios-Bundle-Identifier": "com.mailrooms.app",
         "X-Goog-FieldMask":
           "id,formattedAddress,addressComponents,displayName",
       },

@@ -302,8 +302,17 @@ export function WelcomeSheet({
       ? theirName.trim().length > 0 && isAddressComplete(theirAddress)
       : true;
 
-  const canAdvanceYourInfo =
-    yourFirstName.trim().length > 0 && isAddressComplete(yourAddress);
+  // v0.7.0.17: only "self" sends need the user's full street address —
+  // they ARE the recipient, so we need the full mailable address. For
+  // friend / link / penpal, we just need a first name + city for the
+  // "from your city" caption on the postcard back. Less typing for the
+  // user; less data collected. Privacy by default.
+  const needsFullYourAddress = recipientKind === "self";
+  const canAdvanceYourInfo = needsFullYourAddress
+    ? yourFirstName.trim().length > 0 && isAddressComplete(yourAddress)
+    : yourFirstName.trim().length > 0 &&
+      yourAddress.city.trim().length > 0 &&
+      yourAddress.state.trim().length === 2;
 
   // ----- Hero actions -------------------------------------------------------
 
@@ -828,6 +837,7 @@ export function WelcomeSheet({
               onContinue={commitSignupAndSend}
               saving={saving}
               error={error}
+              needsFullAddress={needsFullYourAddress}
             />
           ) : null}
 
@@ -1612,6 +1622,7 @@ function YourInfoStep({
   onContinue,
   saving,
   error,
+  needsFullAddress,
 }: {
   firstName: string;
   onFirstNameChange: (v: string) => void;
@@ -1622,13 +1633,19 @@ function YourInfoStep({
   onContinue: () => void;
   saving: boolean;
   error: string | null;
+  /** True only for "self" sends — we need the full mailable address since
+   * the user IS the recipient. For friend/link/penpal, we only collect
+   * name + city + state for the postcard back caption. */
+  needsFullAddress: boolean;
 }) {
   return (
     <View style={stepStyles.wrap} testID="welcome-step-your-info">
       <StepDots count={5} active={4} />
       <Text style={stepStyles.title}>From you.</Text>
       <Text style={stepStyles.subtitle}>
-        We print "from your city" on the back. Your full address stays private.
+        {needsFullAddress
+          ? "We need your address so we can mail the card to you. Stays private."
+          : "We print \"from your city\" on the back. Your full address stays private."}
       </Text>
 
       <FieldLabel>Your first name</FieldLabel>
@@ -1644,12 +1661,48 @@ function YourInfoStep({
         testID="welcome-your-firstname"
       />
 
-      <AddressFields
-        address={address}
-        onChange={onAddressChange}
-        testIDPrefix="welcome-your"
-        label="Your address"
-      />
+      {needsFullAddress ? (
+        <AddressFields
+          address={address}
+          onChange={onAddressChange}
+          testIDPrefix="welcome-your"
+          label="Your address"
+        />
+      ) : (
+        // v0.7.0.17: minimal city/state pair for non-self sends. The full
+        // street address isn't used downstream (link/penpal sends use the
+        // Mailroom return address, the postcard back only shows the city).
+        // Keeping the same AddressDraft shape so commitSignupAndSend's
+        // existing read paths work without branching.
+        <View testID="welcome-your-citystate">
+          <FieldLabel>Your city &amp; state</FieldLabel>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TextInput
+              value={address.city}
+              onChangeText={(v) => onAddressChange({ ...address, city: v })}
+              placeholder="Brooklyn"
+              placeholderTextColor={colors.mutedInk}
+              autoCapitalize="words"
+              autoCorrect={false}
+              textContentType="addressCity"
+              style={[fieldStyles.input, { flex: 2 }]}
+              testID="welcome-your-city"
+            />
+            <TextInput
+              value={address.state}
+              onChangeText={(v) => onAddressChange({ ...address, state: v.toUpperCase().slice(0, 2) })}
+              placeholder="NY"
+              placeholderTextColor={colors.mutedInk}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={2}
+              textContentType="addressState"
+              style={[fieldStyles.input, { flex: 1 }]}
+              testID="welcome-your-state"
+            />
+          </View>
+        </View>
+      )}
 
       {error ? <Text style={fieldStyles.error}>{error}</Text> : null}
 

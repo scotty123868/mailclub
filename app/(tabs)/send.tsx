@@ -1186,7 +1186,11 @@ const stepStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  actionRow: { alignItems: "center", flexDirection: "row", gap: 14, marginTop: 24 },
+  // v0.7.0.17: align to flex-end so the "Back" link sits next to the actual
+  // Send button (which lives at the bottom of the right column on step 4
+  // because of priceMain + priceMeta stacked above it). Previously this
+  // was "center", so Back floated halfway up the column and looked off.
+  actionRow: { alignItems: "flex-end", flexDirection: "row", gap: 14, marginTop: 24 },
   backBtn: { alignItems: "center", flexDirection: "row", gap: 4, paddingHorizontal: 4, paddingVertical: 10 },
   backBtnText: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 15 },
   continueBtn: { flex: 1 },
