@@ -167,6 +167,11 @@ export function WelcomeSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // v0.7.0.18: for the "Send a link" path, stash the claim URL here so
+  // MailedStep can display + share it. iOS won't present a share sheet
+  // over a fullScreen Modal, so we defer Share.share until the modal
+  // dismisses (handled in MailedStep's onDismiss below).
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   // ----- v0.7.0.8 Lob handoff: off-screen print-scale views -----------------
   // Mirrors the pattern from app/(tabs)/send.tsx. After the RPC creates a
@@ -586,10 +591,7 @@ export function WelcomeSheet({
         }
       } else if (recipientKind === "link") {
         // Send-link flow: card queues immediately + the user gets a
-        // shareable claim URL. v0.7.0.1: instead of asking for the
-        // recipient&apos;s name + contact, we open the iOS Share sheet
-        // with the claim URL and let the user pick how to deliver it
-        // (iMessage, Mail, AirDrop, whatever). Escargot pattern.
+        // shareable claim URL.
         const sendRes = await sendPostcardViaLink({
           category: "photo",
           message: message.trim(),
@@ -598,16 +600,14 @@ export function WelcomeSheet({
         if (!sendRes.ok || !sendRes.claimUrl) {
           throw new Error("Couldn't create the link.");
         }
-        try {
-          await Share.share({
-            message: `I sent you a postcard on Mailroom. Tap to claim it — ${sendRes.claimUrl}`,
-            url: sendRes.claimUrl,
-          });
-        } catch {
-          // Share sheet dismissed or unavailable — the card is queued
-          // either way. User can find the claim URL in their journal
-          // later if they want to share again.
-        }
+        // v0.7.0.18: don't call Share.share inline. iOS blocks
+        // UIActivityViewController from presenting over a fullScreen
+        // modal — the share sheet either never appears or appears
+        // *behind* the welcome modal. Stash the URL; MailedStep shows
+        // it visibly + the onDismiss handler fires Share.share AFTER
+        // the modal closes (with a 300ms delay so iOS has time to
+        // tear down the modal's view controller).
+        setShareUrl(sendRes.claimUrl);
       } else if (recipientKind === "self") {
         // Send to yourself: create a friend row with your own address
         // (so future repeat-sends to self work) and send.
@@ -844,7 +844,28 @@ export function WelcomeSheet({
           {step === "mailed" ? (
             <MailedStep
               recipientName={theirName.trim() || (recipientKind === "self" ? yourFirstName.trim() : "your friend")}
-              onDismiss={() => onComplete()}
+              shareUrl={shareUrl}
+              onDismiss={() => {
+                // v0.7.0.18: for the link path, fire Share.share AFTER the
+                // modal dismisses. iOS blocks UIActivityViewController
+                // from presenting over a fullScreen Modal — the share
+                // sheet either never appears or sits behind the modal.
+                // 300ms is enough for iOS to tear down the modal's view
+                // controller before we ask for a new presentation.
+                const pendingUrl = shareUrl;
+                onComplete();
+                if (pendingUrl) {
+                  setTimeout(() => {
+                    Share.share({
+                      message: `I sent you a postcard on Mailroom. Tap to claim it — ${pendingUrl}`,
+                      url: pendingUrl,
+                    }).catch(() => {
+                      // share dismissed — URL is still visible on the
+                      // MailedStep so the user can long-press to copy.
+                    });
+                  }, 300);
+                }
+              }}
             />
           ) : null}
         </ScrollView>
@@ -1747,9 +1768,16 @@ function YourInfoStep({
  */
 function MailedStep({
   recipientName,
+  shareUrl,
   onDismiss,
 }: {
   recipientName: string;
+  /** Send-link path: the claim URL the user should share with the
+   *  recipient. When present, MailedStep replaces the "Open Mailroom"
+   *  copy with "Share the link" and surfaces the URL as selectable text
+   *  underneath so the user can long-press to copy if iOS blocks the
+   *  share sheet for any reason. */
+  shareUrl?: string | null;
   onDismiss: () => void;
 }) {
   // v0.7.0.10 dramatic rewrite: per user feedback the original "card
@@ -1894,17 +1922,39 @@ function MailedStep({
       </View>
 
       <Animated.View style={captionStyle}>
-        <Text style={mailedStyles.kicker}>YOUR CARD IS ON ITS WAY</Text>
+        <Text style={mailedStyles.kicker}>
+          {shareUrl ? "YOUR CARD IS READY TO SHARE" : "YOUR CARD IS ON ITS WAY"}
+        </Text>
         <Text style={[stepStyles.title, { textAlign: "center", marginTop: 6 }]}>
-          See you{"\n"}in the mailbox.
+          {shareUrl ? (
+            <>Send them{"\n"}the link.</>
+          ) : (
+            <>See you{"\n"}in the mailbox.</>
+          )}
         </Text>
         <Text style={[stepStyles.subtitle, { textAlign: "center", maxWidth: 320, marginTop: 12 }]}>
-          {recipientName} gets it in 4–7 days, USPS time. We&apos;ll drop a pin on your map when it lands.
+          {shareUrl
+            ? "Tap below and pick how to send it — iMessage, Mail, AirDrop. The recipient fills in their address and we mail your card from our printer."
+            : `${recipientName} gets it in 4–7 days, USPS time. We'll drop a pin on your map when it lands.`}
         </Text>
+        {/* v0.7.0.18: show the URL as selectable text so the user can
+            long-press → Copy if for any reason the share sheet doesn't
+            appear (extremely defensive — iOS share-sheet-over-modal
+            interactions have many flavors of broken). */}
+        {shareUrl ? (
+          <Text
+            selectable
+            style={mailedStyles.shareUrl}
+            testID="welcome-mailed-share-url"
+            numberOfLines={2}
+          >
+            {shareUrl}
+          </Text>
+        ) : null}
       </Animated.View>
 
       <PrimaryButton
-        title="Open Mailroom →"
+        title={shareUrl ? "Share the link →" : "Open Mailroom →"}
         onPress={onDismiss}
         style={mailedStyles.doneBtn}
         testID="welcome-mailed-continue"
@@ -2002,6 +2052,16 @@ const mailedStyles = StyleSheet.create({
     textAlign: "center",
   },
   doneBtn: { marginTop: 28, width: "100%" },
+  // v0.7.0.18: selectable URL surfaced under the caption on link-path
+  // sends. Mutedink so it's clearly secondary to the headline; selectable
+  // so the user can long-press → Copy on iOS.
+  shareUrl: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 13,
+    marginTop: 14,
+    textAlign: "center",
+  },
 });
 
 // ============================================================================

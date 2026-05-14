@@ -566,16 +566,23 @@ export default function SendScreen() {
       )}
 
       <View style={styles.actionRow}>
-        <Pressable
-          onPress={goBack}
-          style={styles.backBtn}
-          testID="send-back-btn"
-          accessibilityRole="button"
-          accessibilityLabel={step === 1 ? "Cancel" : "Go back"}
-        >
-          <ArrowLeft color={colors.ink} size={18} strokeWidth={1.8} />
-          <Text style={styles.backBtnText}>{step === 1 ? "Cancel" : "Back"}</Text>
-        </Pressable>
+        {/* v0.7.0.18: hide the back button on step 1. "Cancel" was the
+            previous label, but there's no useful destination — the user
+            is already on the first step. If they want out, the bottom
+            tab bar is right there. Back buttons on steps 2-4 still make
+            sense (they walk back through the send flow). */}
+        {step > 1 ? (
+          <Pressable
+            onPress={goBack}
+            style={styles.backBtn}
+            testID="send-back-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft color={colors.ink} size={18} strokeWidth={1.8} />
+            <Text style={styles.backBtnText}>Back</Text>
+          </Pressable>
+        ) : null}
 
         {step === 4 ? (
           <View style={styles.sendCol}>

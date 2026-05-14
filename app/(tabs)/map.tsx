@@ -1,8 +1,10 @@
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useMemo, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { Header } from "@/src/components/Header";
+import { colors } from "@/src/theme/colors";
+import { fonts } from "@/src/theme/typography";
 import {
   CITY_COORDS,
   type MapCity,
@@ -171,6 +173,21 @@ export default function MapScreen() {
               sheetRef.current?.open({ kind: "city", cityName: city.name });
             }}
           />
+          {/* v0.7.0.18: explicit empty state. Previously the user saw a
+              blank US map with zero pins and no explanation — they read
+              that as "the map is broken." This overlay only appears when
+              there are NO pins (no sent cards, no received cards, no
+              pending claims). The instant a postcard is created the
+              overlay disappears. */}
+          {pins.length === 0 ? (
+            <View pointerEvents="none" style={styles.emptyOverlay}>
+              <Text style={styles.emptyTitle}>Your map fills as you send.</Text>
+              <Text style={styles.emptySubtitle}>
+                Send your first card from the Send tab. Every city you mail
+                to or receive from drops a pin here.
+              </Text>
+            </View>
+          ) : null}
         </View>
       </AppShell>
 
@@ -191,5 +208,43 @@ const styles = StyleSheet.create({
     marginTop: 8,
     overflow: "hidden",
     borderRadius: 12,
+    position: "relative",
+  },
+  // v0.7.0.18: centered overlay shown only when pins.length === 0. The
+  // overlay's pointerEvents="none" wrapper lets pinch/pan/zoom on the
+  // underlying MapView still work — the user can move the map around
+  // even while the empty-state copy is visible.
+  emptyOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 22,
+    textAlign: "center",
+    backgroundColor: "rgba(248, 241, 227, 0.92)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  emptySubtitle: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
+    maxWidth: 320,
+    textAlign: "center",
+    backgroundColor: "rgba(248, 241, 227, 0.92)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
 });
