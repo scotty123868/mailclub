@@ -555,7 +555,17 @@ serve(async (req: Request) => {
     lob_expected_delivery: lobJson.expected_delivery_date,
     lob_error: null,
   };
-  if (!useInlineHtml && body.front_url) {
+  // v0.7.0.23: REMOVED — don't overwrite photo_path with the rendered
+  // front URL. The user wants the journal tile to show their actual
+  // camera-roll photo, not the rendered postcard composition (which
+  // is just the photo + cream frame + tiny text — visually it's a
+  // less personal preview than the original snapshot).
+  //
+  // photo_path stays as whatever was set when the postcard row was
+  // first created (a postcard-photos bucket path, signed-URL resolved
+  // client-side). Renders live in postcard-renders/{id}/front.jpg if
+  // anyone needs them later for debugging or detail-sheet previews.
+  if (false && !useInlineHtml && body.front_url) {
     update.photo_path = body.front_url;
   }
   await supabase.from("postcards").update(update).eq("id", postcard.id);

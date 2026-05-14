@@ -1,6 +1,6 @@
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useMemo, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Dimensions, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { Header } from "@/src/components/Header";
 import { colors } from "@/src/theme/colors";
@@ -220,8 +220,19 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
+  // v0.7.0.23 BUGFIX: explicit height instead of flex:1.
+  //
+  // The Map screen sits inside AppShell, which uses a ScrollView as its
+  // root container. flex:1 inside a ScrollView's contentContainer
+  // collapses to height 0 — the entire MapPanel was rendering at zero
+  // height, which is why the map screen showed nothing but cream paper.
+  //
+  // window-height-minus-chrome gives a proper fullscreen-ish map area
+  // (Header is ~64, tab bar ~96, plus a little breathing room). When
+  // the map screen eventually moves out of AppShell into its own
+  // root-level layout (build 36+), this hack goes away.
   mapFrame: {
-    flex: 1,
+    height: Dimensions.get("window").height - 220,
     marginTop: 8,
     overflow: "hidden",
     borderRadius: 12,
