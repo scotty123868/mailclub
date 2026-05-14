@@ -88,7 +88,7 @@ export type LobSubmitInput = {
 };
 
 export type LobSubmitResult =
-  | { ok: true; lobId: string; expectedDelivery?: string }
+  | { ok: true; lobId: string; expectedDelivery?: string; frontUrl: string; backUrl: string }
   | { ok: false; error: string };
 
 /**
@@ -131,6 +131,13 @@ export async function submitToLob(input: LobSubmitInput): Promise<LobSubmitResul
       ok: true,
       lobId: data.lob_id,
       expectedDelivery: data.expected_delivery_date,
+      // v0.7.0.10: expose the Storage URLs so callers can persist the
+      // FRONT png URL onto postcards.photo_path. The local file:// URI
+      // from ImagePicker is volatile (iOS tmp cleanup), so the journal
+      // tile was rendering blank. Using the rendered front gives us a
+      // persistent thumbnail that survives app restarts + device sync.
+      frontUrl,
+      backUrl,
     };
   } catch (err: any) {
     return { ok: false, error: err?.message ?? "Unknown error" };

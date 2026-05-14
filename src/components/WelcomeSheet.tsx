@@ -451,6 +451,11 @@ export function WelcomeSheet({
         console.warn("[WelcomeSheet] Lob submit failed:", result.error);
         return false;
       }
+      // v0.7.0.10: the lob-send-postcard Edge Function persists the
+      // rendered front PNG URL into postcards.photo_path on success,
+      // so the journal + map tiles get a stable thumbnail. (RLS blocks
+      // the client from updating that column directly, but the Edge
+      // Function runs with service-role.)
       // eslint-disable-next-line no-console
       console.log("[WelcomeSheet] Lob submit ok", result.lobId);
       return true;
@@ -1640,45 +1645,100 @@ function MailedStep({
   recipientName: string;
   onDismiss: () => void;
 }) {
-  // Shared values for the fold animation. All start at "card visible,
-  // envelope hidden" and run to "envelope sealed, MAILED stamped" on
-  // mount. useEffect drives the sequence.
-  const cardScale = useSharedValue(1);
-  const cardTranslateY = useSharedValue(0);
-  const envOpacity = useSharedValue(0);
-  const envScale = useSharedValue(0.9);
-  const flapRotate = useSharedValue(0); // 0 → 180deg
+  // v0.7.0.10 dramatic rewrite: per user feedback the original "card
+  // shrinks into envelope" beat felt small + read as a generic dialog.
+  // The new beat: the folk-map hero pulses in BIG, three little
+  // envelope dots fly outward (your card joining the constellation),
+  // the MAILED stamp slams in with rotation. Bigger scales, bigger
+  // contrast, satisfying overshoot.
+  const heroScale = useSharedValue(0.6);
+  const heroOpacity = useSharedValue(0);
+  const heroBlur = useSharedValue(8); // shadow blur for breath
+  const env1X = useSharedValue(0);
+  const env1Y = useSharedValue(0);
+  const env1Opacity = useSharedValue(0);
+  const env2X = useSharedValue(0);
+  const env2Y = useSharedValue(0);
+  const env2Opacity = useSharedValue(0);
+  const env3X = useSharedValue(0);
+  const env3Y = useSharedValue(0);
+  const env3Opacity = useSharedValue(0);
   const stampScale = useSharedValue(0);
-  const stampRotate = useSharedValue(-12);
+  const stampRotate = useSharedValue(-18);
   const captionOpacity = useSharedValue(0);
+  const captionTranslateY = useSharedValue(12);
 
   useEffect(() => {
-    // The sequence.
-    cardScale.value = withDelay(150, withTiming(0.65, { duration: 350, easing: Easing.bezier(0.4, 0, 0.2, 1) }));
-    cardTranslateY.value = withDelay(150, withTiming(-8, { duration: 350 }));
-    envOpacity.value = withDelay(300, withTiming(1, { duration: 250 }));
-    envScale.value = withDelay(300, withTiming(0.95, { duration: 250 }));
-    flapRotate.value = withDelay(500, withTiming(180, { duration: 350, easing: Easing.bezier(0.4, 0, 0.2, 1) }));
-    stampScale.value = withDelay(800, withTiming(1, {
-      duration: 220,
-      easing: Easing.bezier(0.34, 1.56, 0.64, 1), // spring-y overshoot
-    }));
-    stampRotate.value = withDelay(800, withTiming(8, { duration: 220 }));
-    captionOpacity.value = withDelay(1050, withTiming(1, { duration: 400 }));
-  }, [cardScale, cardTranslateY, envOpacity, envScale, flapRotate, stampScale, stampRotate, captionOpacity]);
+    // BEAT 1 (0-450ms): hero illustration springs in, big + warm
+    heroOpacity.value = withTiming(1, { duration: 350 });
+    heroScale.value = withTiming(1, {
+      duration: 450,
+      easing: Easing.bezier(0.34, 1.56, 0.64, 1), // spring overshoot
+    });
+    heroBlur.value = withDelay(300, withTiming(16, { duration: 600 }));
 
-  const cardStyle = useAnimatedStyle(() => ({
+    // BEAT 2 (300-900ms): three envelope dots fly out from the hero
+    // in different directions, suggesting the card joining many others
+    // in transit. Staggered launches make it feel alive.
+    env1Opacity.value = withDelay(300, withTiming(1, { duration: 120 }));
+    env1X.value = withDelay(300, withTiming(-120, { duration: 600, easing: Easing.bezier(0.2, 0.7, 0.3, 1) }));
+    env1Y.value = withDelay(300, withTiming(-90, { duration: 600, easing: Easing.bezier(0.2, 0.7, 0.3, 1) }));
+
+    env2Opacity.value = withDelay(420, withTiming(1, { duration: 120 }));
+    env2X.value = withDelay(420, withTiming(110, { duration: 600, easing: Easing.bezier(0.2, 0.7, 0.3, 1) }));
+    env2Y.value = withDelay(420, withTiming(-70, { duration: 600, easing: Easing.bezier(0.2, 0.7, 0.3, 1) }));
+
+    env3Opacity.value = withDelay(540, withTiming(1, { duration: 120 }));
+    env3X.value = withDelay(540, withTiming(80, { duration: 600, easing: Easing.bezier(0.2, 0.7, 0.3, 1) }));
+    env3Y.value = withDelay(540, withTiming(95, { duration: 600, easing: Easing.bezier(0.2, 0.7, 0.3, 1) }));
+
+    // BEAT 3 (800-1100ms): MAILED rubber-stamp slams in, big bouncy
+    // overshoot. The haptic thunk fires elsewhere on send-success.
+    stampScale.value = withDelay(800, withTiming(1, {
+      duration: 320,
+      easing: Easing.bezier(0.34, 1.7, 0.5, 1), // springier
+    }));
+    stampRotate.value = withDelay(800, withTiming(-6, { duration: 320 }));
+
+    // BEAT 4 (1100ms+): caption fades in and rises slightly
+    captionOpacity.value = withDelay(1100, withTiming(1, { duration: 400 }));
+    captionTranslateY.value = withDelay(1100, withTiming(0, { duration: 400 }));
+  }, [
+    heroOpacity, heroScale, heroBlur,
+    env1Opacity, env1X, env1Y,
+    env2Opacity, env2X, env2Y,
+    env3Opacity, env3X, env3Y,
+    stampScale, stampRotate,
+    captionOpacity, captionTranslateY,
+  ]);
+
+  const heroStyle = useAnimatedStyle(() => ({
+    opacity: heroOpacity.value,
+    transform: [{ scale: heroScale.value }],
+  }));
+  const env1Style = useAnimatedStyle(() => ({
+    opacity: env1Opacity.value,
     transform: [
-      { scale: cardScale.value },
-      { translateY: cardTranslateY.value },
+      { translateX: env1X.value },
+      { translateY: env1Y.value },
+      { rotate: "-12deg" },
     ],
   }));
-  const envStyle = useAnimatedStyle(() => ({
-    opacity: envOpacity.value,
-    transform: [{ scale: envScale.value }],
+  const env2Style = useAnimatedStyle(() => ({
+    opacity: env2Opacity.value,
+    transform: [
+      { translateX: env2X.value },
+      { translateY: env2Y.value },
+      { rotate: "8deg" },
+    ],
   }));
-  const flapStyle = useAnimatedStyle(() => ({
-    transform: [{ rotateX: `${flapRotate.value}deg` }],
+  const env3Style = useAnimatedStyle(() => ({
+    opacity: env3Opacity.value,
+    transform: [
+      { translateX: env3X.value },
+      { translateY: env3Y.value },
+      { rotate: "16deg" },
+    ],
   }));
   const stampStyle = useAnimatedStyle(() => ({
     transform: [
@@ -1688,39 +1748,39 @@ function MailedStep({
   }));
   const captionStyle = useAnimatedStyle(() => ({
     opacity: captionOpacity.value,
+    transform: [{ translateY: captionTranslateY.value }],
   }));
 
   return (
     <View style={[stepStyles.wrap, { alignItems: "center" }]} testID="welcome-step-mailed">
       <View style={mailedStyles.stage}>
-        {/* The envelope back (visible after the fold starts) */}
-        <Animated.View style={[mailedStyles.envelope, envStyle]}>
-          <View style={mailedStyles.envelopeBody} />
-          {/* Side fold lines suggest the 3D-ness of the envelope */}
-          <View style={mailedStyles.foldLeft} />
-          <View style={mailedStyles.foldRight} />
-          {/* The flap — rotates around top edge to "close" the envelope */}
-          <Animated.View
-            style={[mailedStyles.flap, flapStyle]}
-            pointerEvents="none"
-          >
-            <View style={mailedStyles.flapInner} />
-          </Animated.View>
+        {/* Hero map illustration — your card joining a wider network */}
+        <Animated.View style={[mailedStyles.heroFrame, heroStyle]}>
+          <Image
+            source={HERO_FOLK_MAP}
+            style={mailedStyles.heroImage}
+            resizeMode="cover"
+          />
         </Animated.View>
 
-        {/* The postcard — starts at full size, shrinks into the envelope */}
-        <Animated.View style={[mailedStyles.card, cardStyle]}>
-          <View style={mailedStyles.cardPhoto}>
-            <Image
-              source={HERO_MAILBOX}
-              style={{ width: "100%", height: "100%" }}
-              resizeMode="cover"
-            />
+        {/* Three envelopes flying outward — the constellation forming */}
+        <Animated.View style={[mailedStyles.flyingEnvelope, env1Style]} pointerEvents="none">
+          <View style={mailedStyles.envelopeShape}>
+            <View style={mailedStyles.envelopeFlap} />
           </View>
-          <View style={mailedStyles.cardStamp} />
+        </Animated.View>
+        <Animated.View style={[mailedStyles.flyingEnvelope, env2Style]} pointerEvents="none">
+          <View style={mailedStyles.envelopeShape}>
+            <View style={mailedStyles.envelopeFlap} />
+          </View>
+        </Animated.View>
+        <Animated.View style={[mailedStyles.flyingEnvelope, env3Style]} pointerEvents="none">
+          <View style={mailedStyles.envelopeShape}>
+            <View style={mailedStyles.envelopeFlap} />
+          </View>
         </Animated.View>
 
-        {/* MAILED rubber stamp — comes down at the end */}
+        {/* MAILED rubber stamp — slams in last with a big overshoot */}
         <Animated.View style={[mailedStyles.stamp, stampStyle]} pointerEvents="none">
           <Text style={mailedStyles.stampText}>MAILED</Text>
         </Animated.View>
@@ -1746,7 +1806,7 @@ function MailedStep({
   );
 }
 
-const MAILED_STAGE = 260;
+const MAILED_STAGE = 300;
 
 const mailedStyles = StyleSheet.create({
   stage: {
@@ -1757,92 +1817,74 @@ const mailedStyles = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
   },
-  // ENVELOPE — back panel
-  envelope: {
+  // v0.7.0.10 hero illustration — the folk map fills the stage and
+  // pulses in with a big spring. Communicates "your card is going
+  // out into the world" much better than the old envelope-fold beat.
+  heroFrame: {
+    width: MAILED_STAGE,
+    height: MAILED_STAGE,
+    borderRadius: 18,
+    overflow: "hidden",
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 22,
+  },
+  heroImage: { width: "100%", height: "100%" },
+  // Flying envelope dots — three small letters that shoot outward from
+  // the center of the hero, staggered, suggesting many cards in flight.
+  flyingEnvelope: {
     position: "absolute",
-    inset: 20,
+    width: 28,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  envelopeShape: {
+    width: 28,
+    height: 20,
     backgroundColor: colors.white,
     borderColor: colors.ink,
-    borderWidth: 2,
-    borderRadius: 6,
-    overflow: "hidden",
-  },
-  envelopeBody: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.paper },
-  foldLeft: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 1,
-    backgroundColor: "rgba(0,0,0,0.08)",
-  },
-  foldRight: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    right: 0,
-    width: 1,
-    backgroundColor: "rgba(0,0,0,0.08)",
-  },
-  // FLAP — top half of envelope that folds down. Rotates around X axis
-  // about its top edge. backfaceVisibility hidden so the back doesn&apos;t
-  // bleed through when flipped past 90deg.
-  flap: {
-    position: "absolute",
-    top: -2,
-    left: -2,
-    right: -2,
-    height: "55%",
-    backgroundColor: colors.paperDark,
-    borderColor: colors.ink,
-    borderWidth: 2,
-    borderRadius: 6,
-    transformOrigin: "top",
-    backfaceVisibility: "hidden",
-  },
-  flapInner: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.paperDark },
-  // CARD — the postcard that shrinks into the envelope
-  card: {
-    width: MAILED_STAGE - 70,
-    height: (MAILED_STAGE - 70) * 0.62,
-    backgroundColor: colors.white,
-    borderColor: colors.ink,
-    borderWidth: 1.5,
-    borderRadius: 4,
-    overflow: "hidden",
-    position: "relative",
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-  },
-  cardPhoto: { width: "100%", height: "100%" },
-  cardStamp: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 18,
-    height: 22,
-    backgroundColor: colors.postalRed,
+    borderWidth: 1.4,
     borderRadius: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 3,
   },
-  // MAILED rubber stamp overlay
+  envelopeFlap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 0,
+    borderTopWidth: 10,
+    borderLeftWidth: 14,
+    borderRightWidth: 14,
+    borderTopColor: colors.postalRed,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+  },
+  // MAILED rubber stamp — bigger, more dramatic. Sits dead-center over
+  // the hero and slams down at the end of the sequence.
   stamp: {
     position: "absolute",
-    top: 30,
-    right: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 3,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderWidth: 4,
     borderColor: colors.postalRed,
-    borderRadius: 4,
-    backgroundColor: "rgba(255,253,247,0.6)",
+    borderRadius: 6,
+    backgroundColor: "rgba(255,253,247,0.85)",
+    shadowColor: colors.postalRed,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
   },
   stampText: {
     color: colors.postalRed,
     fontFamily: fonts.sansBold,
-    fontSize: 16,
-    letterSpacing: 2,
+    fontSize: 28,
+    letterSpacing: 4,
   },
   kicker: {
     color: colors.postalRed,

@@ -184,7 +184,11 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ ok: false, error: msg }), { status: lobResp.status });
   }
 
-  // Success — persist Lob's metadata on the postcard row
+  // Success — persist Lob's metadata on the postcard row.
+  // v0.7.0.10: also overwrite photo_path with the rendered front PNG's
+  // Storage URL. The client originally wrote the local ImagePicker file://
+  // URI here, but iOS cleans that up so the journal showed a blank tile.
+  // front_url is in Supabase Storage and has a stable public URL.
   await supabase
     .from("postcards")
     .update({
@@ -192,6 +196,7 @@ serve(async (req: Request) => {
       lob_status: "queued",
       lob_expected_delivery: json.expected_delivery_date,
       lob_error: null,
+      photo_path: body.front_url,
     })
     .eq("id", postcard.id);
 

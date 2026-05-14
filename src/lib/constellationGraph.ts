@@ -227,22 +227,36 @@ export function buildSocialGraph(
     pending: e.pending,
   }));
 
-  // Force simulation, parameters lifted from teteapp.
+  // Force simulation, parameters lifted from teteapp and re-tuned for
+  // the v0.7 use-case where most new users have 1–5 nodes for weeks.
+  // The old params (link distance 60, charge -80) made 2-node graphs
+  // render with both nodes piled on top of each other in the center
+  // because self has fx/fy = (cx, cy) and the friend's repulsion wasn't
+  // strong enough to push past the center-pull forces.
   const dense = nodeList.length > 20;
+  const sparse = nodeList.length <= 4;
+  // For sparse graphs, push everyone way out so the user sees the
+  // shape of "you + a friend" at a satisfying scale.
+  const baseDistance = dense ? 80 : sparse ? 140 : 90;
+  const chargeStrength = dense ? -150 : sparse ? -260 : -120;
+  // Weaken the center-pull on sparse graphs so the charge can spread
+  // them out properly without being yanked back to the middle.
+  const centerStrength = sparse ? 0.02 : 0.08;
+  const axisStrength = sparse ? 0.01 : 0.04;
   const sim = forceSimulation<GraphNode>(nodeList)
     .force(
       "link",
       forceLink<GraphNode, GraphEdge>(edgeList)
         .id((n) => n.id)
-        .distance((edge) => (dense ? 80 : 60) + Math.max(0, 30 - edge.momentCount * 4))
-        .strength(0.4),
+        .distance((edge) => baseDistance + Math.max(0, 30 - edge.momentCount * 4))
+        .strength(0.5),
     )
-    .force("charge", forceManyBody<GraphNode>().strength(dense ? -150 : -80))
-    .force("center", forceCenter(cx, cy).strength(0.08))
-    .force("x", forceX<GraphNode>(cx).strength(0.04))
-    .force("y", forceY<GraphNode>(cy).strength(0.04))
+    .force("charge", forceManyBody<GraphNode>().strength(chargeStrength))
+    .force("center", forceCenter(cx, cy).strength(centerStrength))
+    .force("x", forceX<GraphNode>(cx).strength(axisStrength))
+    .force("y", forceY<GraphNode>(cy).strength(axisStrength))
     .stop();
-  const ticks = dense ? 240 : 180;
+  const ticks = dense ? 240 : 200;
   for (let i = 0; i < ticks; i++) sim.tick();
 
   // Clamp non-self nodes inside the stage with a 16px margin.

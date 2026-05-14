@@ -107,17 +107,127 @@ export function normalizeCityKey(input: string): string {
 }
 
 /**
- * Lookup table for the Map tab: normalized city name → Geo. Cities outside
- * this list silently drop from the polyline render until we ship real
- * geocoding in 0.5.1.
+ * Lookup table for the Map tab: normalized city name → Geo. Expanded in
+ * v0.7.0.10 to cover all 50 state capitals + ~30 of the largest US metros
+ * + common DC-metro suburbs (Bethesda, Silver Spring, Arlington, etc.)
+ * so most users' home + destination cities resolve to a pin without
+ * needing a live geocoding round-trip. When a city isn't here, we fall
+ * back to Nominatim-based on-the-fly geocoding (see GEOCODE_CACHE in
+ * map.tsx) which caches results to AsyncStorage.
  */
-export const CITY_COORDS: Record<string, Geo> = Object.fromEntries(
-  DEMO_CITIES.flatMap((c) => [
-    [c.id, c.coord],
-    [normalizeCityKey(c.name), c.coord],
-    [normalizeCityKey(c.name.replace(/_/g, " ")), c.coord],
-  ]),
-);
+const EXTRA_CITIES: Array<[string, Geo]> = [
+  // DC metro (user's own city: Bethesda, MD)
+  ["bethesda", { latitude: 38.9847, longitude: -77.0947 }],
+  ["silver spring", { latitude: 38.9907, longitude: -77.0261 }],
+  ["arlington", { latitude: 38.8816, longitude: -77.0910 }],
+  ["alexandria", { latitude: 38.8048, longitude: -77.0469 }],
+  ["washington", { latitude: 38.9072, longitude: -77.0369 }],
+  ["chevy chase", { latitude: 38.9686, longitude: -77.0872 }],
+  // 50 state capitals
+  ["montgomery", { latitude: 32.3792, longitude: -86.3077 }],
+  ["juneau", { latitude: 58.3019, longitude: -134.4197 }],
+  ["phoenix", { latitude: 33.4484, longitude: -112.0740 }],
+  ["little rock", { latitude: 34.7465, longitude: -92.2896 }],
+  ["sacramento", { latitude: 38.5816, longitude: -121.4944 }],
+  ["hartford", { latitude: 41.7637, longitude: -72.6851 }],
+  ["dover", { latitude: 39.1582, longitude: -75.5244 }],
+  ["tallahassee", { latitude: 30.4383, longitude: -84.2807 }],
+  ["atlanta", { latitude: 33.7490, longitude: -84.3880 }],
+  ["honolulu", { latitude: 21.3069, longitude: -157.8583 }],
+  ["boise", { latitude: 43.6150, longitude: -116.2023 }],
+  ["springfield", { latitude: 39.7817, longitude: -89.6501 }],
+  ["indianapolis", { latitude: 39.7684, longitude: -86.1581 }],
+  ["des moines", { latitude: 41.5868, longitude: -93.6250 }],
+  ["topeka", { latitude: 39.0473, longitude: -95.6752 }],
+  ["frankfort", { latitude: 38.2009, longitude: -84.8733 }],
+  ["baton rouge", { latitude: 30.4515, longitude: -91.1871 }],
+  ["augusta", { latitude: 44.3106, longitude: -69.7795 }],
+  ["annapolis", { latitude: 38.9784, longitude: -76.4922 }],
+  ["boston", { latitude: 42.3601, longitude: -71.0589 }],
+  ["lansing", { latitude: 42.7325, longitude: -84.5555 }],
+  ["saint paul", { latitude: 44.9537, longitude: -93.0900 }],
+  ["jackson", { latitude: 32.2988, longitude: -90.1848 }],
+  ["jefferson city", { latitude: 38.5767, longitude: -92.1735 }],
+  ["helena", { latitude: 46.5891, longitude: -112.0391 }],
+  ["lincoln", { latitude: 40.8136, longitude: -96.7026 }],
+  ["carson city", { latitude: 39.1638, longitude: -119.7674 }],
+  ["concord", { latitude: 43.2081, longitude: -71.5376 }],
+  ["trenton", { latitude: 40.2206, longitude: -74.7597 }],
+  ["santa fe", { latitude: 35.6870, longitude: -105.9378 }],
+  ["albany", { latitude: 42.6526, longitude: -73.7562 }],
+  ["raleigh", { latitude: 35.7796, longitude: -78.6382 }],
+  ["bismarck", { latitude: 46.8083, longitude: -100.7837 }],
+  ["columbus", { latitude: 39.9612, longitude: -82.9988 }],
+  ["oklahoma city", { latitude: 35.4676, longitude: -97.5164 }],
+  ["salem", { latitude: 44.9429, longitude: -123.0351 }],
+  ["harrisburg", { latitude: 40.2732, longitude: -76.8867 }],
+  ["providence", { latitude: 41.8240, longitude: -71.4128 }],
+  ["columbia", { latitude: 34.0007, longitude: -81.0348 }],
+  ["pierre", { latitude: 44.3683, longitude: -100.3510 }],
+  ["nashville", { latitude: 36.1627, longitude: -86.7816 }],
+  ["austin", { latitude: 30.2672, longitude: -97.7431 }],
+  ["salt lake city", { latitude: 40.7608, longitude: -111.8910 }],
+  ["montpelier", { latitude: 44.2601, longitude: -72.5754 }],
+  ["richmond", { latitude: 37.5407, longitude: -77.4360 }],
+  ["olympia", { latitude: 47.0379, longitude: -122.9007 }],
+  ["charleston", { latitude: 38.3498, longitude: -81.6326 }],
+  ["madison", { latitude: 43.0731, longitude: -89.4012 }],
+  ["cheyenne", { latitude: 41.1399, longitude: -104.8202 }],
+  // Major US metros not already covered
+  ["new york", { latitude: 40.7128, longitude: -74.0060 }],
+  ["los angeles", { latitude: 34.0522, longitude: -118.2437 }],
+  ["chicago", { latitude: 41.8781, longitude: -87.6298 }],
+  ["houston", { latitude: 29.7604, longitude: -95.3698 }],
+  ["philadelphia", { latitude: 39.9526, longitude: -75.1652 }],
+  ["san antonio", { latitude: 29.4241, longitude: -98.4936 }],
+  ["san diego", { latitude: 32.7157, longitude: -117.1611 }],
+  ["dallas", { latitude: 32.7767, longitude: -96.7970 }],
+  ["san jose", { latitude: 37.3382, longitude: -121.8863 }],
+  ["jacksonville", { latitude: 30.3322, longitude: -81.6557 }],
+  ["fort worth", { latitude: 32.7555, longitude: -97.3308 }],
+  ["el paso", { latitude: 31.7619, longitude: -106.4850 }],
+  ["detroit", { latitude: 42.3314, longitude: -83.0458 }],
+  ["seattle", { latitude: 47.6062, longitude: -122.3321 }],
+  ["denver", { latitude: 39.7392, longitude: -104.9903 }],
+  ["portland", { latitude: 45.5152, longitude: -122.6784 }],
+  ["las vegas", { latitude: 36.1699, longitude: -115.1398 }],
+  ["memphis", { latitude: 35.1495, longitude: -90.0490 }],
+  ["louisville", { latitude: 38.2527, longitude: -85.7585 }],
+  ["milwaukee", { latitude: 43.0389, longitude: -87.9065 }],
+  ["albuquerque", { latitude: 35.0844, longitude: -106.6504 }],
+  ["tucson", { latitude: 32.2226, longitude: -110.9747 }],
+  ["fresno", { latitude: 36.7378, longitude: -119.7871 }],
+  ["miami", { latitude: 25.7617, longitude: -80.1918 }],
+  ["minneapolis", { latitude: 44.9778, longitude: -93.2650 }],
+  ["cleveland", { latitude: 41.4993, longitude: -81.6944 }],
+  ["pittsburgh", { latitude: 40.4406, longitude: -79.9959 }],
+  ["cincinnati", { latitude: 39.1031, longitude: -84.5120 }],
+  ["new orleans", { latitude: 29.9511, longitude: -90.0715 }],
+  ["orlando", { latitude: 28.5384, longitude: -81.3789 }],
+  ["tampa", { latitude: 27.9506, longitude: -82.4572 }],
+  ["san francisco", { latitude: 37.7749, longitude: -122.4194 }],
+  ["oakland", { latitude: 37.8044, longitude: -122.2712 }],
+  ["berkeley", { latitude: 37.8716, longitude: -122.2727 }],
+  ["palo alto", { latitude: 37.4419, longitude: -122.1430 }],
+  ["mountain view", { latitude: 37.3861, longitude: -122.0839 }],
+  ["brooklyn", { latitude: 40.6782, longitude: -73.9442 }],
+  ["queens", { latitude: 40.7282, longitude: -73.7949 }],
+  ["bronx", { latitude: 40.8448, longitude: -73.8648 }],
+  ["manhattan", { latitude: 40.7831, longitude: -73.9712 }],
+];
+
+export const CITY_COORDS: Record<string, Geo> = (() => {
+  const map: Record<string, Geo> = {};
+  for (const c of DEMO_CITIES) {
+    map[c.id] = c.coord;
+    map[normalizeCityKey(c.name)] = c.coord;
+    map[normalizeCityKey(c.name.replace(/_/g, " "))] = c.coord;
+  }
+  for (const [key, coord] of EXTRA_CITIES) {
+    map[normalizeCityKey(key)] = coord;
+  }
+  return map;
+})();
 
 // Continental US framing — centered roughly on Kansas, framed to include
 // Vancouver in the NW and Miami in the SE.
@@ -178,16 +288,26 @@ export function MapPanel({
   const height = compact ? 168 : 260;
   const liveInteractive = interactive ?? !compact;
   const renderRoutes = routes ?? (compact ? DEMO_ROUTES : []);
-  const renderCities = cities ?? DEMO_CITIES;
+  // v0.7.0.10: stop falling back to DEMO_CITIES in full Map view. If the
+  // user has no postcards (cities undefined) we render an empty map so
+  // the geography reads as "your map, currently quiet" rather than
+  // pre-populated with cities the user has never sent a card to.
+  const renderCities = cities ?? (compact ? DEMO_CITIES : []);
+
+  // Full Map view (non-compact): render the map full-bleed without the
+  // PostalCard's parchment border, since the screen frames it for us.
+  // Compact preview keeps the card chrome so the My Card tile reads as
+  // a finished surface.
+  const Wrapper = compact ? PostalCard : View;
 
   return (
-    <PostalCard style={[styles.card, compact && styles.compactCard]}>
+    <Wrapper style={compact ? [styles.card, styles.compactCard] : styles.fullBleedWrap}>
       {/* When compact (My Card preview), `pointerEvents="none"` lets touches
           pass through to the outer Pressable so tapping the preview navigates
           to /map. Without this, MapView swallows the tap even with
           scroll/zoom disabled. (codex P1, Phase 1 review.) */}
       <View
-        style={[styles.mapWrap, { height }]}
+        style={compact ? [styles.mapWrap, { height }] : styles.mapWrapFull}
         pointerEvents={compact ? "none" : "auto"}
       >
         <MapView
@@ -273,32 +393,19 @@ export function MapPanel({
             ))}
         </MapView>
 
-        {/* Sepia tint overlay — only applies on the Apple Maps fallback path,
-            where the live map keeps its standard colors. With Google + custom
-            style, the style JSON already paints the map sepia. */}
-        {!HAS_GOOGLE && <View style={styles.sepiaTint} pointerEvents="none" />}
-
-        {/* Parchment border + vignette — drawn over the map for "framed
-            postcard" feel. pointerEvents=none lets the map stay interactive. */}
-        <View style={styles.borderOverlay} pointerEvents="none">
-          <ParchmentFrame compact={compact} />
-        </View>
+        {/* v0.7.0.10: stripped the vintage decorations (sepia tint,
+            parchment frame, cartouche badge, compass rose, postmark
+            overlay) per user feedback — wanted Apple Maps full-bleed,
+            not a "framed postcard" treatment. Compact preview still
+            uses ParchmentFrame because the My Card preview tile reads
+            better with a border. */}
+        {compact ? (
+          <View style={styles.borderOverlay} pointerEvents="none">
+            <ParchmentFrame compact={compact} />
+          </View>
+        ) : null}
       </View>
-
-      {/* Decorations row beneath the map */}
-      {!compact && (
-        <View style={styles.decorationsRow} pointerEvents="none">
-          <CartoucheBadge />
-          <CompassRose />
-        </View>
-      )}
-
-      {!compact && (
-        <View style={styles.postmarkOverlay} pointerEvents="none">
-          <CircularPostmark size={64} opacity={0.4} />
-        </View>
-      )}
-    </PostalCard>
+    </Wrapper>
   );
 }
 
@@ -627,8 +734,16 @@ function CartoucheBadge() {
 const styles = StyleSheet.create({
   card: { overflow: "hidden", padding: 0 },
   compactCard: { minHeight: 168 },
+  fullBleedWrap: { flex: 1, backgroundColor: "transparent" },
   mapWrap: {
     position: "relative",
+    width: "100%",
+    overflow: "hidden",
+    backgroundColor: "#E8D5A8",
+  },
+  mapWrapFull: {
+    position: "relative",
+    flex: 1,
     width: "100%",
     overflow: "hidden",
     backgroundColor: "#E8D5A8",
