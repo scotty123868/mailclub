@@ -95,21 +95,43 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
   if (error) return jsonResponse({ ok: false, error: error.message }, 500);
   if (!data?.ok) return jsonResponse({ ok: false, error: data?.reason ?? "Unknown error" }, 400);
 
-  // KNOWN GAP (codex Phase 6 audit, P1 deferred):
-  // After redemption we have the recipient's address on the claim row and
-  // the postcard's status = 'queued', but no actual Lob print job is
-  // submitted. Why: magic-link sends never captured the front/back
-  // rendered PNGs (view-shot only runs for direct sends today). To close
-  // this we need server-side postcard rendering (Lob HTML templates with
-  // merge variables) OR a notify-sender-to-capture flow.
+  // v0.7.0.11: send the postcard to Lob now that we have the recipient's
+  // address. Calls lob-send-postcard with render_mode="html", which
+  // server-side renders the front (photo) + back (message) templates
+  // using the data already in the DB. Lob auto-renders the recipient
+  // address on the right half of the back from the to[*] form fields.
   //
-  // For 0.6.x: a daily reconcile job on the server side picks up
-  // status='queued' rows with a claim_id, renders them via Lob's HTML
-  // template API, and submits them. That code is queued for Phase 7.
+  // This closes the Phase 6/7 KNOWN GAP: previously the postcard row
+  // sat in status='queued' forever with no Lob handoff. The recipient
+  // would tell the sender "I claimed your card!" and then nothing
+  // would ever arrive in the mail.
   //
-  // What we DO record here: the address is saved, the postcard row is in
-  // 'queued' status, and the sender's app shows the flip from
-  // 'awaiting_address' so they know the recipient claimed.
+  // We fire-and-forget the Lob call so the recipient's claim page
+  // doesn't have to wait for Lob's render. The claim function returns
+  // success immediately. If Lob fails, the lob-send-postcard function
+  // writes the error to postcards.lob_error and we surface it elsewhere
+  // (the sender can retry from the Journal via the orphan retry UI).
+  const internalSecret = Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "";
+  if (internalSecret) {
+    const lobFnUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/lob-send-postcard`;
+    fetch(lobFnUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-mailroom-internal": internalSecret,
+      },
+      body: JSON.stringify({
+        postcard_id: data.postcard_id,
+        render_mode: "html",
+      }),
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn("[claim] lob-send-postcard call failed:", err?.message ?? err);
+    });
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn("[claim] MAILROOM_INTERNAL_SECRET not set — skipping Lob handoff");
+  }
 
   return jsonResponse({
     ok: true,

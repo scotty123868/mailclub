@@ -1,6 +1,6 @@
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Haptics from "expo-haptics";
-import { Share2, X } from "lucide-react-native";
+import { RotateCcw, Share2, X } from "lucide-react-native";
 import {
   forwardRef,
   useCallback,
@@ -9,7 +9,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { Image, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { retryOrphanShipping } from "@/src/services/api";
 import { useMailClub } from "@/src/state/MailClubContext";
 import type { Postcard } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
@@ -87,6 +88,15 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
       [],
     );
 
+    // v0.7.0.11: retry-orphan state. A postcard is an "orphan" when it
+    // exists in the DB but `lob_id` is null — Lob never accepted it.
+    // The user can tap "Retry shipping" to push it through again. The
+    // server-side retry function generates HTML for the front + back
+    // and submits to Lob, so it works for both friend-mode and
+    // claim-mode orphans.
+    const [retrying, setRetrying] = useState(false);
+    const isOrphan = !!postcard && !postcard.lobId && postcard.toFriendId !== "" && postcard.toFriendId !== "void" && postcard.status === "sent";
+
     async function onShareAgain() {
       if (!postcard?.claimUrl) return;
       const senderFirst = currentUser?.name?.split(" ")[0] || "I";
@@ -102,6 +112,32 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
         });
       } catch {
         /* user dismissed share sheet — no-op */
+      }
+    }
+
+    async function onRetryShipping() {
+      if (!postcard?.id || retrying) return;
+      setRetrying(true);
+      try {
+        Haptics.selectionAsync().catch(() => {});
+      } catch {
+        /* no-op */
+      }
+      const result = await retryOrphanShipping(postcard.id);
+      setRetrying(false);
+      if (result.ok) {
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        } catch {
+          /* no-op */
+        }
+        Alert.alert(
+          "Sent to print",
+          "Your card is on its way to the press. We'll update the status when it ships.",
+        );
+        sheetRef.current?.close();
+      } else {
+        Alert.alert("Couldn't retry", result.error ?? "Try again in a minute.");
       }
     }
 
@@ -203,6 +239,40 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
               >
                 <Share2 color={colors.paper} size={16} strokeWidth={1.8} />
                 <Text style={styles.primaryBtnText}>Share link</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* v0.7.0.11: orphan retry. A card with no lob_id has never
+              reached Lob — usually because of the build 15-18
+              capture-inside-Modal bug. Surface a retry button so the
+              user can push it through without losing the row. */}
+          {isOrphan ? (
+            <View style={styles.orphanBlock}>
+              <Text style={styles.orphanKicker}>NOT SHIPPED YET</Text>
+              <Text style={styles.orphanBlurb}>
+                Looks like this card didn&apos;t reach the printer. Tap below to send it again.
+              </Text>
+              <Pressable
+                onPress={onRetryShipping}
+                disabled={retrying}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  retrying && { opacity: 0.7 },
+                  pressed && { opacity: 0.85 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Retry shipping"
+                testID="postcard-detail-retry"
+              >
+                {retrying ? (
+                  <ActivityIndicator color={colors.paper} size="small" />
+                ) : (
+                  <RotateCcw color={colors.paper} size={16} strokeWidth={1.8} />
+                )}
+                <Text style={styles.primaryBtnText}>
+                  {retrying ? "Sending..." : "Retry shipping"}
+                </Text>
               </Pressable>
             </View>
           ) : null}
@@ -326,6 +396,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderColor: colors.line,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  orphanBlock: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: colors.paperDark,
+    borderRadius: 12,
+    borderColor: colors.postalRed,
+    borderWidth: 1,
+  },
+  orphanKicker: {
+    color: colors.postalRed,
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    marginBottom: 4,
+  },
+  orphanBlurb: {
+    color: colors.ink,
+    fontFamily: fonts.serif,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
   },
   shareKicker: {
     color: colors.postalBlue,

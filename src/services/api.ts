@@ -353,6 +353,7 @@ function postcardFromRow(row: PostcardRow): Postcard {
     customTone: row.custom_tone ?? undefined,
     referencePhotoUris: row.reference_photo_uris,
     claimUrl,
+    lobId: (row as any).lob_id ?? null,
   };
 }
 
@@ -724,6 +725,29 @@ export async function getSignedPhotoUrl(path: string, expiresIn = 60 * 60): Prom
   const { data, error } = await supabase.storage.from("postcard-photos").createSignedUrl(path, expiresIn);
   if (error || !data) return null;
   return data.signedUrl;
+}
+
+/**
+ * v0.7.0.11: retry the Lob handoff for an "orphan" postcard — one where
+ * the DB row exists with status='sent' but lob_id is null because the
+ * original view-shot capture failed (the build 15-18 Modal-hosted bug).
+ * Server validates ownership, then forwards to lob-send-postcard with
+ * server-side HTML render mode. Works for both friend-mode and
+ * claim-mode orphans.
+ */
+export async function retryOrphanShipping(postcardId: string): Promise<{ ok: boolean; error?: string; lobId?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("retry-orphan", {
+      body: { postcard_id: postcardId },
+    });
+    if (error) return { ok: false, error: error.message };
+    if (!data || data.ok !== true) {
+      return { ok: false, error: data?.error ?? "Retry failed" };
+    }
+    return { ok: true, lobId: data.lob_id };
+  } catch (err: any) {
+    return { ok: false, error: err?.message ?? "Retry threw" };
+  }
 }
 
 // -----------------------------------------------------------------------------

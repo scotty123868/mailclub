@@ -80,6 +80,13 @@ export type Postcard = {
    * surface the URL so the sender can re-share it forever.
    */
   claimUrl?: string;
+  /**
+   * Lob postcard id, populated only after the Lob handoff succeeds.
+   * Null/undefined while the card is in flight to Lob OR if the handoff
+   * failed silently (the orphan state we built `retry-orphan` to fix).
+   * UI uses this to show the "Retry shipping" affordance.
+   */
+  lobId?: string | null;
 };
 
 export type MailRoute = {
