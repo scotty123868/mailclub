@@ -518,8 +518,10 @@ export function WelcomeSheet({
         // v0.7.0.8: hand the postcard off to Lob. Captures off-screen
         // print views → uploads → invokes lob-send-postcard Edge Function.
         // Without this, the RPC's postcards row exists but nothing ships.
+        // v0.7.0.11: throw if it fails so the user sees a real error
+        // instead of the silent "MAILED" lie the audit caught.
         if (sendRes.postcardId) {
-          await submitWelcomePostcardToLob(sendRes.postcardId, {
+          const lobOk = await submitWelcomePostcardToLob(sendRes.postcardId, {
             photoUri: photoUri ?? "",
             message: message.trim(),
             recipient: {
@@ -536,6 +538,9 @@ export function WelcomeSheet({
               state: yourAddress.state.trim().toUpperCase(),
             },
           });
+          if (!lobOk) {
+            throw new Error("Couldn't print your card. Tap Mail it again — we'll retry.");
+          }
         }
       } else if (recipientKind === "link") {
         // Send-link flow: card queues immediately + the user gets a
@@ -590,7 +595,7 @@ export function WelcomeSheet({
         }
         // v0.7.0.8: hand off to Lob — same path as friend, recipient = self.
         if (sendRes.postcardId) {
-          await submitWelcomePostcardToLob(sendRes.postcardId, {
+          const lobOk = await submitWelcomePostcardToLob(sendRes.postcardId, {
             photoUri: photoUri ?? "",
             message: message.trim(),
             recipient: {
@@ -607,6 +612,9 @@ export function WelcomeSheet({
               state: yourAddress.state.trim().toUpperCase(),
             },
           });
+          if (!lobOk) {
+            throw new Error("Couldn't print your card. Tap Mail it again — we'll retry.");
+          }
         }
       } else if (recipientKind === "penpal") {
         // v0.7.0.1: pen pal is wired through sendIntoVoid — the existing
@@ -673,6 +681,7 @@ export function WelcomeSheet({
   // ----- Render ------------------------------------------------------------
 
   return (
+    <>
     <Modal
       visible={visible}
       animationType="slide"
@@ -793,12 +802,19 @@ export function WelcomeSheet({
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
+    </Modal>
 
-      {/* v0.7.0.8: off-screen 1875×1250 print views for Lob capture.
-          Positioned way off-screen (-10000,-10000) but laid out + painted
-          so react-native-view-shot can capture them to PNG. Renders from
-          `printSnapshot` when set (frozen at send time). Without these,
-          the welcome flow creates a DB row but never actually mails. */}
+    {/* v0.7.0.11 CRITICAL FIX: off-screen print views moved OUTSIDE the
+        Modal. iOS Modal presents inside a separate UIViewController, and
+        react-native-view-shot can't reliably capture views inside that
+        modal hierarchy — capture either returns an empty PNG or errors
+        silently. The audit on build 17 found `lob_id` was always null
+        for welcome-flow sends because the capture step never produced
+        valid PNGs. Mounting these as a sibling to the Modal puts them
+        in the regular RN view tree where view-shot works (same pattern
+        as `app/(tabs)/send.tsx`). Only rendered while `visible` is true
+        so we're not wasting paint cycles when WelcomeSheet is dormant. */}
+    {visible ? (
       <View
         style={welcomeOffscreenStyle.offscreen}
         pointerEvents="none"
@@ -833,7 +849,8 @@ export function WelcomeSheet({
           width={PRINT_W}
         />
       </View>
-    </Modal>
+    ) : null}
+    </>
   );
 }
 

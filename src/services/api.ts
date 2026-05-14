@@ -365,7 +365,41 @@ export async function fetchPostcards(): Promise<Postcard[]> {
     .select("*, postcard_claims(claim_token)")
     .order("sent_at", { ascending: false });
   if (error) throw error;
-  return (data as PostcardRow[]).map(postcardFromRow);
+  const cards = (data as PostcardRow[]).map(postcardFromRow);
+
+  // v0.7.0.11 CRITICAL FIX: photoUri at this point is whatever was stored
+  // in photo_path. That can be:
+  //   1. null — no photo on the card
+  //   2. full https:// URL — already renderable (e.g. lob-send-postcard
+  //      writes the public postcard-renders URL after successful Lob
+  //      submission)
+  //   3. legacy file:// URI — leftover from a pre-v0.6.x code path
+  //   4. Storage object path "<user>/<ts>-<name>.jpg" — uploaded to the
+  //      PRIVATE postcard-photos bucket. NEEDS a signed URL to render.
+  //
+  // The journal tile renders blank for case (4) because `<Image source={{
+  // uri: "<user>/<ts>-photo.jpg" }}>` can't load a relative path. The
+  // audit on build 17 showed every welcome-flow send is hitting (4).
+  // Resolve in parallel here so the gallery has working URLs.
+  const SIGNED_URL_EXPIRY = 60 * 60 * 24; // 24h
+  const needsSigning = (uri?: string) =>
+    !!uri && !uri.startsWith("http") && !uri.startsWith("file://");
+  await Promise.all(
+    cards.map(async (card) => {
+      if (!needsSigning(card.photoUri)) return;
+      try {
+        const { data: signed } = await supabase.storage
+          .from("postcard-photos")
+          .createSignedUrl(card.photoUri!, SIGNED_URL_EXPIRY);
+        if (signed?.signedUrl) card.photoUri = signed.signedUrl;
+      } catch {
+        // Couldn't sign — leave the raw path so the Image at least
+        // tries (will silently fail, but not crash).
+      }
+    }),
+  );
+
+  return cards;
 }
 
 export type SendPostcardInput =
