@@ -29,16 +29,16 @@ export function WelcomeGate() {
     hasCompletedSignup,
     hasSentFirstCard,
     hydrated,
+    authedUserId,
+    postcards,
   } = useMailClub();
   const [dismissedLocal, setDismissedLocal] = useState(false);
 
-  // v0.7.0.18: when the user signs out, MailClubContext clears
-  // hasCompletedSignup back to false. dismissedLocal used to stay `true`
-  // from the previous session — which kept the gate closed even though
-  // the user was now unauthenticated, leaving them stranded on whatever
-  // tab they were on (e.g. My Card) with no path back into onboarding.
-  // Reset the local dismissal whenever any of the three onboarding flags
-  // flips false. Re-entry into the welcome flow is the correct UX.
+  // v0.7.0.18: when the user signs out, MailClubContext clears flags back
+  // to false. dismissedLocal used to stay `true` from the previous
+  // session — kept the gate closed even though the user was now
+  // unauthenticated, stranding them on My Card. Reset the local
+  // dismissal whenever any onboarding flag flips false.
   useEffect(() => {
     if (!hasCompletedSignup || !hasSentFirstCard || !hasSeenFreeCreditsIntro) {
       setDismissedLocal(false);
@@ -46,7 +46,26 @@ export function WelcomeGate() {
   }, [hasCompletedSignup, hasSentFirstCard, hasSeenFreeCreditsIntro]);
 
   if (!hydrated) return null;
-  // v0.7: three-flag gate. All must be true to enter the app.
+
+  // v0.7.0.23: returning-user escape hatch.
+  //
+  // hasSentFirstCard is client-side only (AsyncStorage). When a user
+  // signs out, reinstalls, or installs a new build, that flag resets
+  // to false even though their server-side profile + postcards exist.
+  // Without this hatch, returning users get force-funneled through the
+  // welcome flow AGAIN, hit "INSUFFICIENT_CREDITS" because they already
+  // spent their free credits in the previous session, and dead-end.
+  //
+  // If the user is authenticated AND has at least one postcard on the
+  // server (proves they've sent before), they're a returning user.
+  // Welcome flow doesn't apply. Let them in.
+  const hasAnyServerPostcards = !!authedUserId && postcards.length > 0;
+  const isReturningUser =
+    !!authedUserId && hasCompletedSignup && hasAnyServerPostcards;
+
+  if (isReturningUser) return null;
+
+  // Original 3-flag gate for genuinely new users.
   const fullyOnboarded =
     hasSeenFreeCreditsIntro && hasCompletedSignup && hasSentFirstCard;
   if (fullyOnboarded || dismissedLocal) return null;

@@ -1018,9 +1018,29 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  // v0.7.0.23: hide "Self (me)" friend records from every UI surface.
+  // The welcome flow's self-send path creates a friend with name ending
+  // in " (me)" to make send_postcard's existing friend lookup work for
+  // self-recipient sends. The downstream cost is that this self-friend
+  // shows up as a node in the constellation, a pin on the map, and a
+  // row in the friends list — none of which are correct, you can't be
+  // your own friend. Filter at the context level so all consumers
+  // (My Card, friends tab, constellation, map, PostcardDetailSheet)
+  // get the clean list. The actions layer (send_postcard, friend
+  // lookups by ID) still reads from the unfiltered state below, so
+  // self-send continues to work.
+  //
+  // Proper fix queued for build 35: add `is_self` boolean to friends
+  // schema, set it true on self-friend creation, filter on that flag
+  // instead of name suffix. For tonight the suffix is the marker.
+  const visibleFriends = useMemo(
+    () => friends.filter((f) => !/\s+\(me\)\s*$/i.test(f.name)),
+    [friends],
+  );
+
   const value = useMemo<MailClubState>(() => ({
     currentUser: userInfo,
-    friends,
+    friends: visibleFriends,
     postcards,
     routes,
     milestones,
@@ -1055,7 +1075,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     resetPassword: resetPasswordAction,
     deleteAccount: deleteAccountAction,
   }), [
-    userInfo, friends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup, hasSentFirstCard,
+    userInfo, visibleFriends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup, hasSentFirstCard,
     hydrated, authedUserId, voidReplies, notifications, privacy,
     sendPostcardAction, sendPostcardViaLinkAction, sendIntoVoidAction, purchaseCreditsAction, refreshProfileAction, markFreeCreditsIntroSeenAction,
     updateAboutMeAction, removeFriendAction, addFriendByAddressAction, queueInvitationAction,
