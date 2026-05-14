@@ -430,17 +430,21 @@ export function WelcomeSheet({
   // case so a slow Lob/upload doesn't block the celebration screen — the
   // DB row exists either way, and a server-side reconcile job can catch
   // stragglers later (TODO Phase 7).
+  // v0.7.0.17: returns { ok, error } instead of bare boolean so callers
+  // can surface the actual Lob failure to the user. Retrying with the same
+  // address doesn't help if Lob rejected the address itself — the user
+  // needs to know to fix the input or contact us.
   async function submitWelcomePostcardToLob(
     postcardId: string,
     snapshot: WelcomePrintSnapshot,
-  ): Promise<boolean> {
+  ): Promise<{ ok: boolean; error?: string }> {
     setPrintSnapshot(snapshot);
     // Two ticks for layout + paint. send.tsx uses 250ms; we use the same.
     await new Promise((resolve) => setTimeout(resolve, 250));
     if (!printFrontRef.current || !printBackRef.current) {
       // eslint-disable-next-line no-console
       console.warn("[WelcomeSheet] print refs not mounted; skipping Lob submit");
-      return false;
+      return { ok: false, error: "Couldn't capture the postcard preview. Try again." };
     }
     try {
       const captured = await capturePostcardForPrint(printFrontRef, printBackRef);
@@ -452,7 +456,7 @@ export function WelcomeSheet({
       if (!result.ok) {
         // eslint-disable-next-line no-console
         console.warn("[WelcomeSheet] Lob submit failed:", result.error);
-        return false;
+        return { ok: false, error: result.error };
       }
       // v0.7.0.10: the lob-send-postcard Edge Function persists the
       // rendered front PNG URL into postcards.photo_path on success,
@@ -461,15 +465,34 @@ export function WelcomeSheet({
       // Function runs with service-role.)
       // eslint-disable-next-line no-console
       console.log("[WelcomeSheet] Lob submit ok", result.lobId);
-      return true;
+      return { ok: true };
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.warn("[WelcomeSheet] Lob submit threw:", err?.message ?? err);
-      return false;
+      return { ok: false, error: err?.message ?? "Network error talking to our print service." };
     } finally {
       // Release the snapshot so the off-screen views go quiet.
       setPrintSnapshot(null);
     }
+  }
+
+  // v0.7.0.17: translate raw Lob errors into actionable user messages.
+  // Lob's strictness rejections look opaque ("does not meet your minimum
+  // deliverability strictness") — we surface a hint about what to do.
+  function humanizeLobError(raw: string | undefined): string {
+    if (!raw) return "Couldn't print your card. Tap Mail it again — we'll retry.";
+    const lower = raw.toLowerCase();
+    if (lower.includes("deliverability strictness") || lower.includes("undeliverable")) {
+      return "USPS couldn't verify that address. Double-check the street number, ZIP, and apt/suite — even one digit off and we can't ship.";
+    }
+    if (lower.includes("address") && (lower.includes("invalid") || lower.includes("not found"))) {
+      return "That address didn't validate. Double-check the street number, city, and ZIP.";
+    }
+    if (lower.includes("network") || lower.includes("fetch")) {
+      return "Couldn't reach our print service. Check your connection and tap Mail it again.";
+    }
+    // Fallback: surface the raw error so we can debug from the user's screen.
+    return `Couldn't print your card: ${raw}`;
   }
 
   // ----- Final commit ------------------------------------------------------
@@ -524,7 +547,7 @@ export function WelcomeSheet({
         // v0.7.0.11: throw if it fails so the user sees a real error
         // instead of the silent "MAILED" lie the audit caught.
         if (sendRes.postcardId) {
-          const lobOk = await submitWelcomePostcardToLob(sendRes.postcardId, {
+          const lobResult = await submitWelcomePostcardToLob(sendRes.postcardId, {
             photoUri: photoUri ?? "",
             message: message.trim(),
             recipient: {
@@ -541,7 +564,7 @@ export function WelcomeSheet({
               state: yourAddress.state.trim().toUpperCase(),
             },
           });
-          if (!lobOk) {
+          if (!lobResult.ok) {
             // v0.7.0.17: refund the credit the RPC just charged. Without
             // this the user gets stuck — their card row exists, their
             // credit is gone, and the next Mail-it tap fails on
@@ -549,7 +572,7 @@ export function WelcomeSheet({
             // row, so retry creates a fresh postcard.
             await refundPostcardCredit(sendRes.postcardId);
             await refreshProfile();
-            throw new Error("Couldn't print your card. Tap Mail it again — we'll retry.");
+            throw new Error(humanizeLobError(lobResult.error));
           }
         }
       } else if (recipientKind === "link") {
@@ -605,7 +628,7 @@ export function WelcomeSheet({
         }
         // v0.7.0.8: hand off to Lob — same path as friend, recipient = self.
         if (sendRes.postcardId) {
-          const lobOk = await submitWelcomePostcardToLob(sendRes.postcardId, {
+          const lobResult = await submitWelcomePostcardToLob(sendRes.postcardId, {
             photoUri: photoUri ?? "",
             message: message.trim(),
             recipient: {
@@ -622,12 +645,12 @@ export function WelcomeSheet({
               state: yourAddress.state.trim().toUpperCase(),
             },
           });
-          if (!lobOk) {
+          if (!lobResult.ok) {
             // v0.7.0.17: refund the credit on Lob failure. See friend path
             // above for the full rationale.
             await refundPostcardCredit(sendRes.postcardId);
             await refreshProfile();
-            throw new Error("Couldn't print your card. Tap Mail it again — we'll retry.");
+            throw new Error(humanizeLobError(lobResult.error));
           }
         }
       } else if (recipientKind === "penpal") {
