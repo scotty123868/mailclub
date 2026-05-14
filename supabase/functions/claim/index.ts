@@ -112,13 +112,18 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
   // writes the error to postcards.lob_error and we surface it elsewhere
   // (the sender can retry from the Journal via the orphan retry UI).
   const internalSecret = Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "";
-  if (internalSecret) {
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (internalSecret && anonKey) {
     const lobFnUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/lob-send-postcard`;
     fetch(lobFnUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-mailroom-internal": internalSecret,
+        // Supabase platform JWT gate requires a bearer even though our
+        // function code prefers the internal-secret path. Anon key
+        // satisfies the gate without granting any extra privileges.
+        Authorization: `Bearer ${anonKey}`,
       },
       body: JSON.stringify({
         postcard_id: data.postcard_id,
@@ -130,7 +135,7 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
     });
   } else {
     // eslint-disable-next-line no-console
-    console.warn("[claim] MAILROOM_INTERNAL_SECRET not set — skipping Lob handoff");
+    console.warn("[claim] MAILROOM_INTERNAL_SECRET or SUPABASE_ANON_KEY not set — skipping Lob handoff");
   }
 
   return jsonResponse({

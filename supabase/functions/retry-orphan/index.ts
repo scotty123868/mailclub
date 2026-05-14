@@ -87,6 +87,9 @@ serve(async (req) => {
     headers: {
       "Content-Type": "application/json",
       "x-mailroom-internal": MAILROOM_INTERNAL_SECRET,
+      // Platform JWT gate accepts anon key. Function-level auth then
+      // takes the internal-secret path.
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify({
       postcard_id: body.postcard_id,

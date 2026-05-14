@@ -30,10 +30,12 @@ import {
 } from "@/src/components/PostcardPreview";
 import {
   fetchAddressSuggestions,
+  fetchPlaceDetails,
+  newSessionToken,
   type AddressSuggestion,
 } from "@/src/services/addressAutocomplete";
 import { isAppleSignInAvailable } from "@/src/services/apple-auth";
-import { lookupReciprocation } from "@/src/services/api";
+import { lookupReciprocation, refundPostcardCredit } from "@/src/services/api";
 import {
   capturePostcardForPrint,
   lobRenderDimensions,
@@ -128,6 +130,7 @@ export function WelcomeSheet({
     sendPostcard,
     sendPostcardViaLink,
     sendIntoVoid,
+    refreshProfile,
     hasCompletedSignup,
   } = useMailClub();
 
@@ -539,6 +542,13 @@ export function WelcomeSheet({
             },
           });
           if (!lobOk) {
+            // v0.7.0.17: refund the credit the RPC just charged. Without
+            // this the user gets stuck — their card row exists, their
+            // credit is gone, and the next Mail-it tap fails on
+            // INSUFFICIENT_CREDITS. The refund RPC also deletes the orphan
+            // row, so retry creates a fresh postcard.
+            await refundPostcardCredit(sendRes.postcardId);
+            await refreshProfile();
             throw new Error("Couldn't print your card. Tap Mail it again — we'll retry.");
           }
         }
@@ -613,6 +623,10 @@ export function WelcomeSheet({
             },
           });
           if (!lobOk) {
+            // v0.7.0.17: refund the credit on Lob failure. See friend path
+            // above for the full rationale.
+            await refundPostcardCredit(sendRes.postcardId);
+            await refreshProfile();
             throw new Error("Couldn't print your card. Tap Mail it again — we'll retry.");
           }
         }
@@ -1962,6 +1976,10 @@ function AddressFields({
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  // v0.7.0.15: Google Places session token. One token per "type-then-pick"
+  // cycle — billing groups all autocomplete + the final getPlace call
+  // as ONE session, cheaper than per-request billing.
+  const sessionTokenRef = useRef<string>(newSessionToken());
 
   useEffect(() => {
     const expected = addressToTextNoLine2(address);
@@ -1969,11 +1987,11 @@ function AddressFields({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address.line1, address.city, address.state, address.zip]);
 
-  // Debounced Nominatim lookup. 350ms after the last keystroke we hit
-  // the API. Aborts in-flight on new keystrokes so only the latest
-  // query&apos;s results show up.
+  // Debounced Google Places lookup. 350ms after the last keystroke.
+  // Aborts in-flight on new keystrokes so only the latest query's
+  // results show up.
   useEffect(() => {
-    if (raw.trim().length < 4) {
+    if (raw.trim().length < 3) {
       setSuggestions([]);
       setLoadingSuggestions(false);
       return;
@@ -1982,10 +2000,13 @@ function AddressFields({
     const ac = new AbortController();
     const t = setTimeout(async () => {
       try {
-        const rows = await fetchAddressSuggestions(raw, { signal: ac.signal });
+        const rows = await fetchAddressSuggestions(raw, {
+          signal: ac.signal,
+          sessionToken: sessionTokenRef.current,
+        });
         setSuggestions(rows);
       } catch {
-        // aborted or network error — fall through silently
+        /* aborted or network error — fall through silently */
       } finally {
         setLoadingSuggestions(false);
       }
@@ -1996,17 +2017,34 @@ function AddressFields({
     };
   }, [raw]);
 
-  function applySuggestion(s: AddressSuggestion) {
+  async function applySuggestion(s: AddressSuggestion) {
+    // Google Places returns suggestions with only the display label +
+    // placeId. Fetch the structured fields via getPlace, then apply.
+    // This is the second call that ends the session — start a fresh
+    // session token after.
+    const details = await fetchPlaceDetails(s.placeId, {
+      sessionToken: sessionTokenRef.current,
+    });
+    sessionTokenRef.current = newSessionToken();
+    if (!details) {
+      // Got a placeId but couldn't resolve full fields. Fall back to
+      // raw label so the user isn't blocked — they can edit the apt
+      // field manually.
+      setRaw(s.label);
+      setShowSuggestions(false);
+      setSuggestions([]);
+      return;
+    }
     // Preserve any apt/suite the user already typed in the dedicated
-    // field — Nominatim doesn't return unit data, so blowing line2 away
-    // would frustrate users who entered "Apt 5" before picking from the
-    // suggestion dropdown.
+    // field. If Google returned a subpremise (e.g. "Apt 4B") AND the
+    // user hasn't typed one, prefer Google's. Otherwise keep the
+    // user's input.
     const next: AddressDraft = {
-      line1: s.line1,
-      line2: address.line2 || "",
-      city: s.city,
-      state: s.state,
-      zip: s.zip,
+      line1: details.line1,
+      line2: address.line2 || details.line2 || "",
+      city: details.city,
+      state: details.state,
+      zip: details.zip,
     };
     setRaw(addressToTextNoLine2(next));
     setShowSuggestions(false);
@@ -2069,9 +2107,14 @@ function AddressFields({
         </View>
       ) : null}
 
-      <Text style={fieldStyles.helper}>
-        {loadingSuggestions ? "Looking up addresses..." : "Start typing — we'll suggest addresses."}
-      </Text>
+      {/* v0.7.0.17: only show the "Start typing" hint when the address is
+          empty. Once a line1 is filled (autocomplete or manual), the hint
+          becomes noise that contradicts what the user just did. */}
+      {loadingSuggestions ? (
+        <Text style={fieldStyles.helper}>Looking up addresses...</Text>
+      ) : address.line1.trim().length === 0 ? (
+        <Text style={fieldStyles.helper}>Start typing — we'll suggest addresses.</Text>
+      ) : null}
 
       {/* Apt / suite / unit — separate field, optional. Maps to line2.
           Every shipping form does this. Keeps the autofill flow clean

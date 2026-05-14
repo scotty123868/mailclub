@@ -764,6 +764,46 @@ export async function retryOrphanShipping(postcardId: string): Promise<{ ok: boo
   }
 }
 
+/**
+ * Refund the credit for a postcard whose Lob handoff failed.
+ *
+ * Why this exists: send_postcard / send_postcard_via_claim atomically
+ * (1) create the postcards row AND (2) deduct credits. Lob handoff happens
+ * AFTER, client-side. If Lob fails (network, address rejection, anything),
+ * the row exists and the credit is gone — user gets stuck mid-signup with
+ * 0 credits, unable to retry. Calling this RPC after a Lob failure refunds
+ * the credit and deletes the orphan postcard row.
+ *
+ * Idempotent: calling twice on the same id is a no-op on the second call
+ * (the row's already gone, RPC returns `not_found`). Safe to call from
+ * any failure path. Never throws — failures swallow because the user is
+ * already stuck and a thrown error here would make it worse.
+ */
+export async function refundPostcardCredit(
+  postcardId: string,
+): Promise<{ ok: boolean; refunded: number; reason?: string }> {
+  try {
+    const { data, error } = await supabase.rpc("refund_postcard_credit", {
+      p_postcard_id: postcardId,
+    });
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.warn("[api.refundPostcardCredit] RPC error", error.message);
+      return { ok: false, refunded: 0, reason: error.message };
+    }
+    const result = (data ?? {}) as { ok?: boolean; refunded?: number; reason?: string };
+    return {
+      ok: result.ok ?? false,
+      refunded: result.refunded ?? 0,
+      reason: result.reason,
+    };
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.warn("[api.refundPostcardCredit] threw", err?.message ?? err);
+    return { ok: false, refunded: 0, reason: err?.message ?? "threw" };
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Auth
 // -----------------------------------------------------------------------------
