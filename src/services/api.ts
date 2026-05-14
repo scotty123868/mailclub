@@ -148,13 +148,27 @@ export async function markFreeCreditsIntroSeen() {
   if (error) throw error;
 }
 
-export async function completeSignup(input: { name: string; city: string; state: string }) {
+export async function completeSignup(input: {
+  name: string;
+  city: string;
+  state: string;
+  deviceId?: string | null;
+}) {
   const { data, error } = await supabase.rpc("complete_signup", {
     p_name: input.name,
     p_city: input.city,
     p_state: input.state,
+    p_device_id: input.deviceId ?? null,
   });
-  if (error) throw error;
+  if (error) {
+    // v0.7.0.11: surface the device-cap rejection as a user-friendly
+    // string. The RPC raises `DEVICE_LIMIT_REACHED` when the same iOS
+    // vendor id is already linked to N profiles.
+    if (typeof error.message === "string" && error.message.includes("DEVICE_LIMIT_REACHED")) {
+      throw new Error("This device already has Mailroom accounts. Sign in with an existing one or use a different phone.");
+    }
+    throw error;
+  }
   return profileFromRow(data as ProfileRow);
 }
 

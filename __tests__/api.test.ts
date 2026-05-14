@@ -72,7 +72,7 @@ describe("api.completeSignup", () => {
     });
     const result = await api.completeSignup({ name: "  Pat ", city: " Boise ", state: "ID" });
     expect(sb.rpc).toHaveBeenCalledWith("complete_signup", {
-      p_name: "  Pat ", p_city: " Boise ", p_state: "ID",
+      p_name: "  Pat ", p_city: " Boise ", p_state: "ID", p_device_id: null,
     });
     expect(result.currentUser.name).toBe("Pat");
   });

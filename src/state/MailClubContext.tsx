@@ -867,9 +867,28 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       }
     }
 
-    // After auth (or if already authed), call the server RPC
+    // After auth (or if already authed), call the server RPC.
+    // v0.7.0.11: capture the iOS vendor id and pass it to complete_signup
+    // so the server can enforce the per-device account cap (max 2). The
+    // vendor id is stable across reinstalls as long as ANY Mailroom app
+    // remains on the device; full reset requires deleting all Mailroom
+    // apps, which is enough friction that the abuse vector closes.
+    let deviceId: string | null = null;
     try {
-      const profile = await api.completeSignup({ name: trimmedName, city: trimmedCity, state: trimmedState });
+      // Lazy import so the bundle doesn't need expo-application on
+      // platforms where this code path doesn't fire.
+      const ExpoApp = await import("expo-application");
+      if (typeof ExpoApp.getIosIdForVendorAsync === "function") {
+        deviceId = await ExpoApp.getIosIdForVendorAsync();
+      }
+    } catch {
+      // expo-application missing or threw — proceed without the cap.
+      // Server treats null device_id as "skip the cap check" so this
+      // gracefully degrades for older clients during the rollout.
+    }
+
+    try {
+      const profile = await api.completeSignup({ name: trimmedName, city: trimmedCity, state: trimmedState, deviceId });
       // The complete_signup RPC doesn't take birthday — patch it on after.
       // The column already exists in profiles; updateProfile handles it.
       if (trimmedBirthday) {
