@@ -43,10 +43,23 @@ export function SettingsSheet({
           text: "Sign out",
           style: "destructive",
           onPress: async () => {
-            // v0.6.1 codex Phase 6.5 P0: always close the sheet, even if
-            // sign-out throws. Previously a Haptics failure (iOS sim) would
-            // throw before onClose fired, leaving the user looking at the
-            // Settings sheet with no apparent reaction — "sign out failed".
+            // v0.7.0.20: close SettingsSheet FIRST, then sign out. Reason:
+            // signOut flips hasCompletedSignup→false, which causes
+            // WelcomeGate to mount a fullScreen Modal. If SettingsSheet
+            // is still open (pageSheet) at that moment, iOS silently
+            // drops the WelcomeSheet presentation because two modals
+            // can't stack on the same view controller — the user lands
+            // on a frozen My Card with no welcome modal in sight. Closing
+            // first gives iOS a clean modal stack before state changes.
+            //
+            // Previous code awaited signOut before onClose to ensure the
+            // sheet stayed open if sign-out threw — but a thrown error
+            // here is rare and now surfaces via Alert anyway, so the
+            // visual ordering matters more.
+            onClose();
+            // Small tick so iOS has a frame to start the sheet dismissal
+            // animation before the state flip pulls the rug.
+            await new Promise((resolve) => setTimeout(resolve, 50));
             try {
               await signOut();
             } catch (err: any) {
@@ -54,8 +67,6 @@ export function SettingsSheet({
                 "Couldn't sign out cleanly",
                 err?.message ?? "Your local data was cleared, but the server session may still be active. Try again or relaunch the app.",
               );
-            } finally {
-              onClose();
             }
           },
         },
@@ -83,12 +94,16 @@ export function SettingsSheet({
                   text: "Yes, delete",
                   style: "destructive",
                   onPress: async () => {
+                    // v0.7.0.20: same modal-stack fix as Sign Out. Close
+                    // SettingsSheet first, then delete + reset, so the
+                    // WelcomeGate's fullScreen modal isn't blocked by an
+                    // open pageSheet when state flips.
+                    onClose();
+                    await new Promise((resolve) => setTimeout(resolve, 50));
                     const result = await deleteAccount();
                     if (!result.ok) {
                       Alert.alert("Couldn't delete account", result.error ?? "Try again.");
-                      return;
                     }
-                    onClose();
                   },
                 },
               ]
