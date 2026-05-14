@@ -69,14 +69,24 @@ export async function capturePostcardForPrint(
   frontRef: any,
   backRef: any,
 ): Promise<CapturedPostcard> {
-  const [frontUri, backUri] = await Promise.all([
-    // Front is a photo — JPEG q=0.92 is visually indistinguishable from
-    // PNG at print viewing distance and ~5-8x smaller.
-    captureViewToFile(frontRef, "jpg", 0.92),
-    // Back has handwritten message text, QR code, and hairline dividers.
-    // Keep lossless to avoid JPEG artifacts around letters + scan errors.
-    captureViewToFile(backRef, "png", 1),
-  ]);
+  // v0.7.0.22 — serialize the captures. The previous code used
+  // Promise.all to capture front + back in parallel, but
+  // react-native-view-shot's iOS implementation shares internal state
+  // across captureRef calls and parallel invocations confuse it. The
+  // visible symptom: the second capture (back) returned the actual
+  // postcard back, but the first capture (front) returned a screenshot
+  // of the user's current screen (the welcome form). Verified by
+  // pulling the stored front.png from Supabase Storage — it was the
+  // "From you" form with the error message visible, not the photo.
+  //
+  // Sequential captures fix it. ~50ms slower (still under a second
+  // total) — worth it for actually capturing the right view.
+  const frontUri = await captureViewToFile(frontRef, "jpg", 0.92);
+  // Brief settle so iOS's CALayer animations / view-shot's internal
+  // context reset cleanly between calls. Without this the second
+  // capture sometimes inherits state from the first on slower devices.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const backUri = await captureViewToFile(backRef, "png", 1);
   return { frontUri, backUri };
 }
 
