@@ -228,8 +228,15 @@ export default function ConstellationScreen() {
 
   function onTapNode(node: GraphNode) {
     if (node.isSelf) {
-      // Tapping yourself clears any active drilldown.
+      // v0.7.0.27: tapping your own center node routes to My Card.
+      // Previously this was an explicit no-op that cleared the
+      // active drilldown — but the user reported "nothing happens
+      // when I click on my name on the constellation", which is
+      // accurate. The expected behavior is "tapping yourself shows
+      // you your own profile." My Card is the canonical surface for
+      // that. Also clears any open drilldown on the way out.
       setActiveFriendId(null);
+      router.push("/my-card");
       return;
     }
     // v0.7.0.7: pending node → open the postcard detail sheet so the

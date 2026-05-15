@@ -55,7 +55,16 @@ export const PostcardPreviewSheet = forwardRef<PostcardPreviewSheetRef>(
       () => ({
         open: (nextCtx) => {
           setCtx(nextCtx);
-          sheetRef.current?.snapToIndex(0);
+          // v0.7.0.27: same snap-race fix that PostcardDetailSheet got
+          // in build 39. setCtx() schedules a re-render; calling
+          // snapToIndex synchronously fires against the still-empty
+          // (index=-1) sheet from before the re-render, and the snap
+          // is dropped. Map dot taps surfaced this — onCityPress
+          // would set state but no sheet would rise. requestAnimationFrame
+          // defers the snap until the re-render commits.
+          requestAnimationFrame(() => {
+            sheetRef.current?.snapToIndex(0);
+          });
         },
         close: () => {
           sheetRef.current?.close();

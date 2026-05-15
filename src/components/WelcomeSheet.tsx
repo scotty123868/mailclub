@@ -1857,8 +1857,12 @@ function MailedStep({
   const heroScale = useSharedValue(0.85);
   const heroOpacity = useSharedValue(0);
   const heroTranslateY = useSharedValue(80); // starts below the stage
-  const heroBob = useSharedValue(0); // continuous loop, ±6px sway
-  const heroSway = useSharedValue(0); // continuous loop, ±2deg rotation
+  // v0.7.0.27: heroSway now starts at a small initial tilt (-2deg) so
+  // the "settle to 0" animation has visible motion. Used to start at 0
+  // with a continuous loop providing the visible sway; now it's a
+  // one-shot settle so the start value has to be non-zero.
+  const heroBob = useSharedValue(0); // one-shot exhale, no repeat
+  const heroSway = useSharedValue(-2); // one-shot settle from -2deg to 0
   const env1X = useSharedValue(0);
   const env1Y = useSharedValue(0);
   const env1Opacity = useSharedValue(0);
@@ -1889,36 +1893,32 @@ function MailedStep({
       easing: Easing.bezier(0.16, 1, 0.3, 1),
     });
 
-    // BEAT 1.5 (after entry): continuous floating loop, calmer.
+    // BEAT 1.5 (one-shot exhale, then hold).
     //
-    // v0.7.0.25: previous values (±6px, ±2deg, 1.2-1.6s periods) read
-    // as "bouncing side to side" to the user — too active for a
-    // celebration moment. Slowed to ±4px Y / ±1deg rotation with
-    // longer 2.4s/3.2s periods so the balloon breathes instead of
-    // bouncing. Total motion is half the previous amplitude, twice
-    // the period — much more "lazy hot-air balloon in still air"
-    // than the original "jittery flag" feel.
+    // v0.7.0.27: replaced the infinite bob loop entirely. Even at
+    // ±4px / 2.4s the continuous oscillation read as "bouncing up
+    // and down" to the user — too restless for a celebration. Hot-
+    // air balloons in still air don't bounce; they hold position
+    // and breathe.
+    //
+    // Sequence: 200ms after the entry settles, the balloon does ONE
+    // gentle exhale (4px up, 4px back down over 1.8s with sin-ease)
+    // then holds at zero. Rotation: a single tilt from -1deg to
+    // 0deg over 1.2s — a "settling into stillness" beat, not a sway.
+    //
+    // Net result: animation has a clear ENTRY → EXHALE → HOLD shape.
+    // Envelopes flying out + stamp slam carry the energy after that.
+    // The hero stays put, like a postcard that's been delivered.
     heroBob.value = withDelay(
-      700,
-      withRepeat(
-        withSequence(
-          withTiming(-4, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
-          withTiming(4, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1, // infinite
-        false,
+      900,
+      withSequence(
+        withTiming(-4, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 900, easing: Easing.inOut(Easing.sin) }),
       ),
     );
     heroSway.value = withDelay(
       700,
-      withRepeat(
-        withSequence(
-          withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
-          withTiming(-1, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        false,
-      ),
+      withTiming(0, { duration: 1200, easing: Easing.out(Easing.cubic) }),
     );
 
     // BEAT 2 (300-900ms): three envelope dots fly out from the hero

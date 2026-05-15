@@ -460,7 +460,17 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         return { kind: "handwritten", friendId: input.friendId, message: input.message };
       })();
       const { postcard, creditsRemaining } = await api.sendPostcard(rpcInput);
-      setPostcards((cards) => [postcard, ...cards]);
+      // v0.7.0.27 PHOTO BUGFIX: same as sendPostcardViaLinkAction. The
+      // postcard returned from the RPC has photoUri = storage path
+      // ("<userId>/<ts>-photo.jpg") which <Image> can't load. Substitute
+      // the local file:// URI from the original input so the journal
+      // tile renders the photo immediately. fetchPostcards on next
+      // refresh signs the storage path into a working https:// URL.
+      const localPhotoUri = (input.kind === "photo" || input.kind === "place") ? input.photoUri : undefined;
+      const postcardWithLocalPhoto: Postcard = localPhotoUri
+        ? { ...postcard, photoUri: localPhotoUri }
+        : postcard;
+      setPostcards((cards) => [postcardWithLocalPhoto, ...cards]);
       setFriends((items) => items.map((f) => (
         f.id === friend.id ? { ...f, cardsSent: f.cardsSent + 1, lastInteractionAt: new Date().toISOString() } : f
       )));
@@ -571,6 +581,29 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       // We construct the Postcard from the data we have. Some fields
       // (toCity, claim metadata beyond URL, lobId) are unknown at this
       // moment — that's fine, they fill in on the next fetch.
+      // v0.7.0.27 PHOTO BUGFIX: store the LOCAL file:// URI in the
+      // optimistic insert, not the raw storage path.
+      //
+      // Previous version stored `photoPath` (a Supabase Storage object
+      // path like `<userId>/<ts>-photo.jpg`). React Native's <Image>
+      // component can't load a relative storage path as a URI — it
+      // needs an absolute URL or a file:// path. The journal tile
+      // rendered a blank box for every freshly-sent link card until
+      // fetchPostcards came back with a signed URL.
+      //
+      // For brand-new users on a slow connection, "until fetchPostcards
+      // came back" could be the entire viewing session (the welcome
+      // flow already triggered the fetch but local state had no row,
+      // so post-send rendered the optimistic stub with the broken
+      // path, and the next fetch may have been minutes away).
+      //
+      // Fix: use input.photoUri (the local file:// path from
+      // ImagePicker) as the optimistic photoUri. <Image> renders local
+      // file:// paths natively without any signing. When the
+      // background fetchPostcards completes with the signed Storage
+      // URL, the dedupe-by-id logic replaces the optimistic stub with
+      // the server row (signed URL takes over). Visual continuity
+      // either way — both URLs point at the same image bytes.
       const optimistic: Postcard = {
         id: result.postcardId,
         senderId: authedUserId,
@@ -582,7 +615,11 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         status: "awaiting_address",
         message: input.message,
         sentAt: new Date().toISOString(),
-        photoUri: photoPath,
+        // Local URI renders immediately. If photoPath upload succeeded
+        // but the user has no input.photoUri (shouldn't happen for
+        // photo category but defensive), fall back to the storage path
+        // — at least the server fetch will sign it eventually.
+        photoUri: input.photoUri || photoPath,
         placeName: input.placeName,
         claimUrl: result.claimUrl,
         lobId: null,
@@ -594,11 +631,27 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       });
       try {
         const fresh = await api.fetchPostcards();
-        // Same empty-overwrite guard as the auth-fetch effect — if the
-        // server returns empty during an RLS race, keep what we have
-        // (including the optimistic insert above) until a real fetch
-        // succeeds.
-        setPostcards((prev) => (fresh.length === 0 && prev.length > 0 ? prev : fresh));
+        // Empty-overwrite guard. If fetch returned empty (RLS race),
+        // keep what we have. If fetch returned rows, merge: prefer
+        // server rows but keep our optimistic row's photoUri (local
+        // file://) for any server row whose photo is null (signing
+        // failed) OR which exists in fresh but hasn't yet rendered
+        // its signed URL.
+        setPostcards((prev) => {
+          if (fresh.length === 0 && prev.length > 0) return prev;
+          // For each fresh row, if it matches our optimistic insert by
+          // id AND the server row's photoUri isn't a working URL,
+          // keep the local file:// URI we have. Otherwise trust the
+          // server row.
+          return fresh.map((freshRow) => {
+            if (freshRow.id !== optimistic.id) return freshRow;
+            const serverHasRenderableUri =
+              freshRow.photoUri &&
+              (freshRow.photoUri.startsWith("http") || freshRow.photoUri.startsWith("file://"));
+            if (serverHasRenderableUri) return freshRow;
+            return { ...freshRow, photoUri: optimistic.photoUri };
+          });
+        });
       } catch { /* non-fatal */ }
       // v0.7: send-via-link COUNTS as the first send. The card queues
       // immediately and the user is unlocked into the app, even if the
@@ -648,7 +701,13 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     setFreeCreditsRemaining((b) => Math.max(0, b - 1));
     try {
       const postcard = await api.sendIntoVoid(message, photoUri);
-      setPostcards((items) => [postcard, ...items]);
+      // v0.7.0.27 PHOTO BUGFIX: substitute local file:// URI so the
+      // journal tile renders immediately. See sendPostcardAction +
+      // sendPostcardViaLinkAction for full rationale.
+      const postcardWithLocalPhoto: Postcard = photoUri
+        ? { ...postcard, photoUri }
+        : postcard;
+      setPostcards((items) => [postcardWithLocalPhoto, ...items]);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true };
     } catch (err: any) {
