@@ -23,16 +23,17 @@ describe("CreditsSheet", () => {
     expect(getByText(/stamps in your pocket/)).toBeTruthy();
     expect(getByTestId("credits-pack-p5")).toBeTruthy();
     expect(getByTestId("credits-pack-p25")).toBeTruthy();
+    // v0.7.0.27: p50 is back (50 cards · $35 · $0.70/card).
+    expect(getByTestId("credits-pack-p50")).toBeTruthy();
   });
 
-  it("does not render retired packs (p10, p50)", () => {
+  it("does not render retired packs (p10)", () => {
     const { queryByTestId } = render(
       <AllProviders>
         <CreditsSheet visible={true} onClose={() => {}} />
       </AllProviders>
     );
     expect(queryByTestId("credits-pack-p10")).toBeNull();
-    expect(queryByTestId("credits-pack-p50")).toBeNull();
   });
 
   it("features the 25-pack with a 'Less than a stamp' pill", () => {

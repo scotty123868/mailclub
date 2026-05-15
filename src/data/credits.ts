@@ -26,19 +26,24 @@ export type CreditPack = {
   featured?: boolean;
 };
 
-// Two packs, two decisions. Each credit buys one "stamp" — one printed,
-// addressed, USPS-mailed postcard. The matrix is intentionally tight:
+// Three packs, three decisions. Each credit buys one "stamp" — one
+// printed, addressed, USPS-mailed postcard. v0.7.0.27 pricing matrix
+// per founder:
 //
 //   5 stamps  ·  $5   ·  $1.00/stamp  (entry — pay the convenience markup)
-//   25 stamps ·  $20  ·  $0.80/stamp  (HEADLINE — cheaper than a real stamp)
+//   25 stamps ·  $20  ·  $0.80/stamp  (HEADLINE — cheaper than a 82¢ USPS stamp)
+//   50 stamps ·  $35  ·  $0.70/stamp  (best per-stamp price for power users)
 //
-// We dropped the 10-pack (same per-stamp price as the 5, no reason to exist)
-// and the 50-pack (slightly better per-stamp but the leap from $20 → $35 was
-// hurting conversion on the only pack that delivers the brand promise).
-// Two-option choice architecture: try it small, or commit to the better deal.
+// The 50-pack is back. Earlier comment claimed the $20 → $35 leap hurt
+// conversion, but the founder restored it for users who want bulk —
+// the per-stamp savings vs. the 25-pack is real (70¢ vs 80¢, a 12.5%
+// discount), and even committed senders run through 25 stamps faster
+// than expected. Headline stays on the 25-pack: $0.80 reads as a
+// recognizable "cheaper than a stamp" hook without the $35 commitment.
 export const CREDIT_PACKS: CreditPack[] = [
   { id: "p5", credits: 5, priceUsd: 5 },
   { id: "p25", credits: 25, priceUsd: 20, featured: true },
+  { id: "p50", credits: 50, priceUsd: 35 },
 ];
 
 export const CATEGORY_LABELS: Record<CardCategory, string> = {

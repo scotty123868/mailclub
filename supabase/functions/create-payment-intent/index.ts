@@ -38,15 +38,17 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "
 // Server-side source of truth for stamp pack pricing. Must stay in sync with
 // src/data/credits.ts. Amounts are in CENTS (Stripe's unit).
 //
-// Two-pack matrix as of 2026-05-12:
+// Three-pack matrix as of 2026-05-15:
 //   p5  · 5 stamps   · $5  · $1.00/stamp · entry
 //   p25 · 25 stamps  · $20 · $0.80/stamp · FEATURED (less than the 82¢ USPS stamp)
+//   p50 · 50 stamps  · $35 · $0.70/stamp · best per-stamp for power users
 //
-// Old packs (p10, p25 at $25, p50) are retired. If a client somehow still
-// references them, they'll get a clean 400 "Unknown pack_id" response.
+// Old retired packs (p10, p25 at $25) still get a clean 400 "Unknown
+// pack_id" response if a client somehow references them.
 const SERVER_PACKS: Record<string, { credits: number; amountCents: number; description: string }> = {
   p5: { credits: 5, amountCents: 500, description: "Mailroom — 5 stamps" },
   p25: { credits: 25, amountCents: 2000, description: "Mailroom — 25 stamps" },
+  p50: { credits: 50, amountCents: 3500, description: "Mailroom — 50 stamps" },
 };
 
 const CORS_HEADERS = {
