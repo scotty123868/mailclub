@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Mailroom postcard back — design comparison</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700;800&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { background: #2a2620; margin: 0; padding: 32px; font-family: Inter, sans-serif; color: #f4ede0; }
+  h1 { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 36px; margin: 0 0 8px; letter-spacing: -0.02em; }
+  .intro { color: #c9bfa8; font-style: italic; max-width: 800px; margin: 0 0 32px; line-height: 1.6; font-size: 15px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; max-width: 1320px; }
+  .opt { background: #1a1814; padding: 24px; border-radius: 8px; border: 1px solid #3a3530; }
+  .opt h2 { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 22px;
+            margin: 0 0 4px; letter-spacing: -0.02em; color: #f4ede0; }
+  .opt .tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8a7f6a;
+              letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 12px; }
+  .opt .pitch { color: #c9bfa8; font-style: italic; font-size: 13px; line-height: 1.5; margin: 0 0 18px; }
+  .opt iframe { width: 600px; height: 408px; border: 0; border-radius: 4px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: block; }
+  .legend { background: rgba(200, 54, 42, 0.05); border-left: 3px solid #B8483A;
+            padding: 12px 16px; margin: 24px 0 32px; max-width: 800px;
+            font-size: 13px; line-height: 1.6; color: #c9bfa8; }
+  .legend strong { color: #f4ede0; }
+  .legend code { font-family: 'JetBrains Mono', monospace; font-size: 12px;
+                 background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Mailroom postcard back — four options</h1>
+<p class="intro">
+  Each mock-up is rendered at print scale (600×408px = 6.25"×4.25" at 96dpi). The pale red dashed rectangles mark Lob's <strong>protected zones</strong> — the address block + IMb barcode area where Lob auto-prints. We can't put any ink in those zones; they're shown here only so you understand the design constraint.
+</p>
+
+<div class="legend">
+  <strong>What to evaluate:</strong> Does the stamp art feel like Mailroom? Where does your eye go first? Does the QR feel like part of the brand or like a tacked-on QR? Read the message — does the layout get out of the way? If you got this in the mail and didn't know it was an app, what would you think the sender was telling you?
+</div>
+
+<div class="grid">
+
+  <div class="opt">
+    <h2>Option A — Mirror Retro</h2>
+    <div class="tag">QR LEFT · STAMP RIGHT · SEAL CORNER</div>
+    <p class="pitch">Direct copy of Retro's anatomy with our envelope-balloon art. QR + sender handle top-left, big balloon stamp top-right, round "for the fridge not the feed" seal further right. Familiar but ours.</p>
+    <iframe src="A-mirror-retro.html"></iframe>
+  </div>
+
+  <div class="opt">
+    <h2>Option B — Bold M wordmark</h2>
+    <div class="tag">BRAND-FORWARD · TYPE ANCHOR · 70¢ SERIAL</div>
+    <p class="pitch">The "M" tile (marketing-site logo) is the brand anchor, not the stamp. Big wordmark dominates top-left, QR drops below as metadata. Stamp top-right with serial price "PRSRT · 70¢" — postage-stamp authenticity.</p>
+    <iframe src="B-bold-wordmark.html"></iframe>
+  </div>
+
+  <div class="opt">
+    <h2>Option C — Vintage purist</h2>
+    <div class="tag">PERFORATED STAMP · WAX SEAL · CENTER DIVIDER</div>
+    <p class="pitch">Stamp-centric. Top-right stamp has real perforated edges, Playfair Display, "70¢" denomination — feels like an actual postage stamp. QR becomes a small wax seal "M". Classic USPS center divider preserves postcard tradition.</p>
+    <iframe src="C-vintage-purist.html"></iframe>
+  </div>
+
+  <div class="opt">
+    <h2>Option D — Minimal modern</h2>
+    <div class="tag">TRUST THE MESSAGE · NO CHROME · 70% SPACE FOR INK</div>
+    <p class="pitch">Less is more. Sender's name as a single type line (no big tile). Small stamp top-right. QR shrinks to 36×36 bottom-left, almost an afterthought. The handwritten message gets the canvas. Reads like a personal note, not a marketing surface.</p>
+    <iframe src="D-minimal-modern.html"></iframe>
+  </div>
+
+</div>
+
+</body></html>

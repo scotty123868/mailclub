@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Option B: Bold wordmark</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { background: #2a2620; margin: 0; padding: 40px; font-family: Inter, sans-serif; color: #f4ede0; }
+  h1 { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 28px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .pitch { color: #c9bfa8; font-style: italic; max-width: 600px; margin: 0 0 24px; line-height: 1.5; }
+  .stage { width: 600px; height: 408px; background: #FBF4DE; border-radius: 4px;
+           box-shadow: 0 12px 40px rgba(0,0,0,0.4); position: relative; overflow: hidden;
+           color: #17223B; }
+  .lob-zone-right { position: absolute; right: 27px; bottom: 24px; width: 315px; height: 228px;
+                    background: rgba(200, 54, 42, 0.04); border: 1px dashed rgba(200, 54, 42, 0.18); }
+  .lob-zone-bot { position: absolute; left: 0; right: 0; bottom: 0; height: 60px;
+                  background: rgba(200, 54, 42, 0.04); border-top: 1px dashed rgba(200, 54, 42, 0.18); }
+  .zone-label { font-size: 8px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(200, 54, 42, 0.5);
+                position: absolute; top: 2px; left: 4px; font-family: Inter, sans-serif; }
+
+  /* --- OPTION B: Big M wordmark as the brand anchor --- */
+
+  /* Big "M" wordmark stamp — top left, dominates the brand zone */
+  .wordmark { position: absolute; top: 20px; left: 24px; display: flex; align-items: center; gap: 10px; }
+  .M-tile { width: 56px; height: 56px; background: #B8483A; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Cormorant Garamond', serif; font-weight: 700; font-size: 42px;
+            color: #FBF4DE; transform: rotate(-3deg); box-shadow: 2px 2px 0 #17223B; }
+  .wordmark-text { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 22px;
+                   color: #17223B; letter-spacing: -0.02em; line-height: 1; }
+  .wordmark-text .small { font-family: Inter, sans-serif; font-weight: 500; font-size: 9px;
+                          color: #5E6472; letter-spacing: 0.15em; text-transform: uppercase;
+                          margin-top: 4px; }
+
+  /* QR pushed below the wordmark, smaller and quieter */
+  .qr-small { position: absolute; top: 88px; left: 28px; display: flex; gap: 10px; align-items: flex-start; }
+  .qr { width: 48px; height: 48px; background: linear-gradient(45deg, #17223B 25%, transparent 25%) 0 0/6px 6px,
+                                              linear-gradient(-45deg, #17223B 25%, transparent 25%) 0 0/6px 6px,
+                                              linear-gradient(45deg, transparent 75%, #17223B 75%) 3px 3px/6px 6px,
+                                              linear-gradient(-45deg, transparent 75%, #17223B 75%) 3px 3px/6px 6px,
+                                              #FBF4DE; border: 0.5px solid #17223B; }
+  .qr-tag { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 9px;
+            color: #5E6472; line-height: 1.3; padding-top: 4px; }
+
+  /* Top-right: stamp with envelope balloon art */
+  .stamp { position: absolute; top: 20px; right: 24px; width: 82px; height: 100px;
+           background: #fdf6e5; border: 1px dashed #B8483A; padding: 4px;
+           transform: rotate(2deg); display: flex; flex-direction: column;
+           align-items: center; justify-content: center; gap: 4px;
+           box-shadow: 1px 1px 0 rgba(0,0,0,0.06); }
+  .stamp-art { width: 52px; height: 52px;
+               background: url("../../assets/onboarding/hero-envelope-balloon.jpg") center/cover; }
+  .stamp-meta { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 9px;
+                color: #B8483A; text-align: center; letter-spacing: 0.5px; line-height: 1.1; }
+  .stamp-meta .big { font-size: 11px; }
+  .stamp-meta .serial { font-family: 'JetBrains Mono', monospace; font-size: 6px;
+                        color: rgba(184, 72, 58, 0.6); letter-spacing: 0; }
+
+  /* Handwritten message — shifted down to clear the wordmark + QR */
+  .msg { position: absolute; top: 158px; left: 28px; width: 250px; height: 200px;
+         font-family: 'Caveat', cursive; font-size: 17px; line-height: 1.45;
+         color: #17223B; word-wrap: break-word; }
+
+  .addr { position: absolute; top: 175px; right: 40px; width: 280px;
+          font-family: Inter, sans-serif; font-size: 10px; line-height: 1.5;
+          color: rgba(23, 34, 59, 0.55); }
+  .addr .small { font-size: 8px; letter-spacing: 0.15em; }
+</style>
+</head>
+<body>
+
+<h1>Option B — Bold M wordmark</h1>
+<p class="pitch">The "M" tile (matching the marketing site logo) is the brand anchor, not the stamp. Big wordmark + small Mailroom kicker top-left. QR drops below it, much smaller — feels like metadata, not a brand asset. Stamp top-right with the envelope-balloon art + serial number for a postage-stamp feel. Cleaner hierarchy, less crowded than Option A.</p>
+
+<div class="stage">
+  <div class="lob-zone-right"><span class="zone-label">Lob auto-prints address + IMb</span></div>
+  <div class="lob-zone-bot"><span class="zone-label">IMb barcode zone</span></div>
+
+  <!-- Big M wordmark -->
+  <div class="wordmark">
+    <div class="M-tile">M</div>
+    <div class="wordmark-text">
+      Mailroom
+      <div class="small">Real postcards · Real friends</div>
+    </div>
+  </div>
+
+  <!-- Smaller QR + tag, pushed down -->
+  <div class="qr-small">
+    <div class="qr"></div>
+    <div class="qr-tag">
+      Scan to write back —<br>
+      free for the recipient.
+    </div>
+  </div>
+
+  <!-- Top-right: stamp -->
+  <div class="stamp">
+    <div class="stamp-art"></div>
+    <div class="stamp-meta">
+      <div>MAILROOM</div>
+      <div class="big">2026</div>
+      <div class="serial">PRSRT · 70¢</div>
+    </div>
+  </div>
+
+  <!-- Handwritten message -->
+  <div class="msg">Hi Tati. I love you and this photo of us. It was a really special early day in spring, one of the first nice days to be outside. — Scotty</div>
+
+  <div class="addr">
+    <div class="small">T16  P1  ******AUTO**MIXED AADC 750</div>
+    <div class="small">5531    1186382709</div>
+    <div style="margin-top:4px;">TATIANA BARBIC</div>
+    <div>861 N HUMBOLDT ST APT B</div>
+    <div>DENVER CO 80218-3517</div>
+  </div>
+</div>
+
+</body></html>

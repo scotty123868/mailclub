@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Mailroom postcard back — Option A: Mirror Retro</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Full-page chrome to compare options side by side. Card itself sits in
+     the centered .stage box rendered at print scale (1× = 6.25"×4.25" =
+     600×408 at 96dpi). */
+  body { background: #2a2620; margin: 0; padding: 40px; font-family: Inter, sans-serif; color: #f4ede0; }
+  h1 { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 28px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .pitch { color: #c9bfa8; font-style: italic; max-width: 600px; margin: 0 0 24px; line-height: 1.5; }
+  .stage { width: 600px; height: 408px; background: #FBF4DE; border-radius: 4px;
+           box-shadow: 0 12px 40px rgba(0,0,0,0.4); position: relative; overflow: hidden;
+           color: #17223B; }
+
+  /* Lob's protected zones — shown as a soft red tint so the layout's
+     constraints are visible. Will not print on the actual postcard. */
+  .lob-zone-right { position: absolute; right: 27px; bottom: 24px; width: 315px; height: 228px;
+                    background: rgba(200, 54, 42, 0.04); border: 1px dashed rgba(200, 54, 42, 0.18); }
+  .lob-zone-bot { position: absolute; left: 0; right: 0; bottom: 0; height: 60px;
+                  background: rgba(200, 54, 42, 0.04); border-top: 1px dashed rgba(200, 54, 42, 0.18); }
+  .zone-label { font-size: 8px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(200, 54, 42, 0.5);
+                position: absolute; top: 2px; left: 4px; font-family: Inter, sans-serif; }
+
+  /* --- OPTION A: mirror Retro's layout (QR left, stamp right) --- */
+
+  /* Top-left: QR + sender handle */
+  .qr-block { position: absolute; top: 18px; left: 24px; display: flex; gap: 12px; align-items: flex-start; }
+  .qr { width: 64px; height: 64px; background: linear-gradient(45deg, #17223B 25%, transparent 25%) 0 0/8px 8px,
+                                              linear-gradient(-45deg, #17223B 25%, transparent 25%) 0 0/8px 8px,
+                                              linear-gradient(45deg, transparent 75%, #17223B 75%) 4px 4px/8px 8px,
+                                              linear-gradient(-45deg, transparent 75%, #17223B 75%) 4px 4px/8px 8px,
+                                              #FBF4DE; border: 1px solid #17223B; }
+  .qr-meta { font-family: Inter, sans-serif; font-size: 10px; line-height: 1.4; color: #17223B; padding-top: 2px; }
+  .qr-meta .handle { font-weight: 700; font-size: 11px; }
+  .qr-meta .add { color: #5E6472; font-style: italic; }
+  .qr-meta .date { color: #5E6472; margin-top: 6px; font-size: 9px; }
+
+  /* Top-right: custom Mailroom stamp */
+  .stamp { position: absolute; top: 18px; right: 95px; width: 76px; height: 92px;
+           background: #fdf6e5; border: 1px dashed #B8483A; padding: 4px;
+           transform: rotate(-2deg); display: flex; flex-direction: column;
+           align-items: center; justify-content: center; gap: 4px; }
+  .stamp::before { content: ''; position: absolute; inset: -1px;
+                   background: radial-gradient(circle at 0% 50%, transparent 2px, #fdf6e5 2px) 0 0/6px 6px;
+                   z-index: -1; }
+  .stamp-art { width: 44px; height: 44px;
+               background: url("../../assets/onboarding/hero-envelope-balloon.jpg") center/cover; }
+  .stamp-meta { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 9px;
+                color: #B8483A; text-align: center; letter-spacing: 0.5px; line-height: 1.1; }
+  .stamp-meta .big { font-size: 11px; }
+
+  /* Tagline circle stamp bottom-right corner */
+  .seal { position: absolute; top: 22px; right: 32px; width: 56px; height: 56px;
+          border-radius: 50%; border: 1.5px solid #3C6E8F;
+          display: flex; align-items: center; justify-content: center;
+          transform: rotate(8deg); }
+  .seal-inner { width: 42px; height: 42px; border-radius: 50%;
+                background: rgba(60, 110, 143, 0.04); }
+  .seal-text { position: absolute; inset: 0; font-family: Inter, sans-serif;
+               font-size: 6px; font-weight: 700; letter-spacing: 0.12em;
+               color: #3C6E8F; }
+  .seal-text span { position: absolute; inset: 0; display: flex; align-items: flex-start;
+                    justify-content: center; padding-top: 4px; text-transform: uppercase; }
+
+  /* Handwritten message — left half, plenty of room */
+  .msg { position: absolute; top: 110px; left: 28px; width: 250px; height: 240px;
+         font-family: 'Caveat', cursive; font-size: 17px; line-height: 1.45;
+         color: #17223B; word-wrap: break-word; }
+
+  /* Sample recipient address — Lob auto-prints, shown faint */
+  .addr { position: absolute; top: 175px; right: 40px; width: 280px;
+          font-family: Inter, sans-serif; font-size: 10px; line-height: 1.5;
+          color: rgba(23, 34, 59, 0.55); }
+  .addr .small { font-size: 8px; letter-spacing: 0.15em; }
+
+  .label { font-size: 11px; color: #9a917f; margin-top: 8px;
+           font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+
+<h1>Option A — Mirror Retro</h1>
+<p class="pitch">Straight steal of the Retro anatomy with our art. QR + handle top-left, custom Mailroom stamp top-right (envelope-balloon art, "Mailroom 2026" caption), round tagline seal further right (overlaps Lob's indicia zone — visual only). Message on left, Lob auto-prints address on the right.</p>
+
+<div class="stage">
+  <div class="lob-zone-right"><span class="zone-label">Lob auto-prints address + IMb</span></div>
+  <div class="lob-zone-bot"><span class="zone-label">IMb barcode zone</span></div>
+
+  <!-- Top-left: QR + sender handle -->
+  <div class="qr-block">
+    <div class="qr"></div>
+    <div class="qr-meta">
+      <div class="handle">Scotty</div>
+      <div class="add">@scotty — Add me on mailroom.app</div>
+      <div class="date">Photo taken May 14, 2026</div>
+    </div>
+  </div>
+
+  <!-- Top-right: custom Mailroom stamp (envelope-balloon) -->
+  <div class="stamp">
+    <div class="stamp-art"></div>
+    <div class="stamp-meta">
+      <div>WITH LOVE, FROM</div>
+      <div class="big">MAILROOM</div>
+      <div>2026</div>
+    </div>
+  </div>
+
+  <!-- Tagline seal -->
+  <div class="seal">
+    <svg viewBox="0 0 56 56" style="position:absolute;inset:0;">
+      <defs><path id="circA" d="M 28 28 m -22 0 a 22 22 0 1 1 44 0 a 22 22 0 1 1 -44 0" /></defs>
+      <text font-family="Inter" font-size="5.5" font-weight="700" fill="#3C6E8F" letter-spacing="0.5">
+        <textPath href="#circA">FOR THE FRIDGE · NOT THE FEED · MAILROOM.APP ·</textPath>
+      </text>
+    </svg>
+    <div class="seal-inner"></div>
+  </div>
+
+  <!-- Handwritten message -->
+  <div class="msg">Hi Tati. I love you and this photo of us. It was a really special early day in spring, one of the first nice days to just be outside in the grass. — Scotty</div>
+
+  <!-- Sample Lob address area, faint to indicate auto-print -->
+  <div class="addr">
+    <div class="small">T16  P1  ******AUTO**MIXED AADC 750</div>
+    <div class="small">5531    1186382709</div>
+    <div style="margin-top:4px;">TATIANA BARBIC</div>
+    <div>861 N HUMBOLDT ST APT B</div>
+    <div>DENVER CO 80218-3517</div>
+  </div>
+</div>
+
+</body></html>

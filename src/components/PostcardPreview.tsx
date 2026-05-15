@@ -111,10 +111,38 @@ type BackProps = {
    * (e.g. for preview-only contexts or until the token is minted).
    */
   reciprocationUrl?: string;
+  /**
+   * v0.7.0.28 — when true, this render is the off-screen capture going
+   * to Lob's printer. We MUST NOT render anything inside Lob's protected
+   * zones (right column from x=2.97" + bottom 0.625") or our ink fights
+   * Lob's auto-printed address + indicia + IMb barcode.
+   *
+   * Concrete differences when forPrint=true:
+   *   - DROP the recipient address block (Lob auto-prints it on the right)
+   *   - DROP the return-address FROM line (Lob's indicia carries return)
+   *   - DROP the USPS address guide lines (Lob's zone)
+   *   - DROP the postmark circle (decorative, in Lob's zone)
+   *   - Postage stamp stays but lives in the top-right of the SAFE zone
+   *     (above y=1.625"), not overlapping the auto-print area
+   *   - QR moves out of the bottom-right (Lob's zone) into a safe spot
+   *
+   * Real-world bug this fixed: the proof from the first live test send
+   * showed our recipient block printed in serif AND Lob's printed below
+   * in caps — same address twice. Lob's indicia box overlapped our
+   * "M" wax-seal mark. The "FROM: LORI, CHEVY CHASE MD" line at the
+   * top was clipped by the print bleed. Bottom barcode collided with
+   * our address guide lines. Total visual chaos. forPrint=true gives
+   * Lob clear lanes for their auto-print and confines our design to
+   * the designer-available space.
+   *
+   * For in-app preview (default false), keep everything visible so the
+   * user sees a complete render of who they're sending to.
+   */
+  forPrint?: boolean;
 };
 
 export const PostcardBackPreview = forwardRef<View, BackProps>(function PostcardBackPreview(
-  { message, recipient, sender, width = DEFAULT_WIDTH, testID, reciprocationUrl },
+  { message, recipient, sender, width = DEFAULT_WIDTH, testID, reciprocationUrl, forPrint = false },
   ref,
 ) {
   const height = width / ASPECT_RATIO;
@@ -155,9 +183,9 @@ export const PostcardBackPreview = forwardRef<View, BackProps>(function Postcard
           />
         </Svg>
 
-        {/* LEFT HALF — message + return address */}
+        {/* LEFT HALF — message + (preview-only) return address line */}
         <View style={[backStyles.half, backStyles.leftHalf]}>
-          {sender ? (
+          {sender && !forPrint ? (
             <Text
               style={[backStyles.returnAddress, { fontSize: labelSize }]}
               numberOfLines={2}
@@ -181,56 +209,70 @@ export const PostcardBackPreview = forwardRef<View, BackProps>(function Postcard
           </Text>
         </View>
 
-        {/* RIGHT HALF — stamp + postmark + recipient block */}
+        {/* RIGHT HALF — stamp top-right (in the safe top zone) + (preview-
+            only) recipient + USPS guide lines + postmark.
+
+            v0.7.0.28: when forPrint=true, render ONLY the postage stamp.
+            Everything else gets removed because Lob's auto-print covers
+            the right column with the real recipient address, postal
+            indicia, and IMb barcode. Our ink fighting Lob's = the
+            duplicated-address / clipped-text mess shown in the test
+            proof. */}
         <View style={[backStyles.half, backStyles.rightHalf]}>
-          {/* Postage stamp — top-right corner with perforation edges */}
+          {/* Postage stamp — top-right corner. In forPrint mode this is
+              the only thing we render on the right half; positioned in
+              the top 1.625" safe zone (where Lob allows designer ink). */}
           <View style={backStyles.stampWrap}>
             <PostageStamp size={Math.max(38, width * 0.14)} />
           </View>
 
-          {/* Postmark — circular ink stamp, slightly off-register over the stamp */}
-          <View style={[backStyles.postmarkWrap, { width: Math.max(46, width * 0.18) }]}>
-            <PostmarkCircle size={Math.max(46, width * 0.18)} />
-          </View>
+          {!forPrint ? (
+            <>
+              {/* Postmark — circular ink stamp, slightly off-register over the stamp */}
+              <View style={[backStyles.postmarkWrap, { width: Math.max(46, width * 0.18) }]}>
+                <PostmarkCircle size={Math.max(46, width * 0.18)} />
+              </View>
 
-          {/* Recipient address block — centered in the safe area */}
-          <View style={backStyles.addressBlock}>
-            <Text
-              style={[backStyles.addressName, { fontSize: addressSize * 1.18 }]}
-              numberOfLines={1}
-            >
-              {recipient.name || "Recipient name"}
-            </Text>
-            {recipient.addressLine1 ? (
-              <Text style={[backStyles.addressLine, { fontSize: addressSize }]} numberOfLines={1}>
-                {recipient.addressLine1}
-              </Text>
-            ) : null}
-            {recipient.addressLine2 ? (
-              <Text style={[backStyles.addressLine, { fontSize: addressSize }]} numberOfLines={1}>
-                {recipient.addressLine2}
-              </Text>
-            ) : null}
-            <Text style={[backStyles.addressLine, { fontSize: addressSize }]} numberOfLines={1}>
-              {recipient.city}
-              {recipient.state ? `, ${recipient.state}` : ""}
-              {recipient.zip ? `  ${recipient.zip}` : ""}
-            </Text>
-          </View>
+              {/* Recipient address block — centered in the safe area */}
+              <View style={backStyles.addressBlock}>
+                <Text
+                  style={[backStyles.addressName, { fontSize: addressSize * 1.18 }]}
+                  numberOfLines={1}
+                >
+                  {recipient.name || "Recipient name"}
+                </Text>
+                {recipient.addressLine1 ? (
+                  <Text style={[backStyles.addressLine, { fontSize: addressSize }]} numberOfLines={1}>
+                    {recipient.addressLine1}
+                  </Text>
+                ) : null}
+                {recipient.addressLine2 ? (
+                  <Text style={[backStyles.addressLine, { fontSize: addressSize }]} numberOfLines={1}>
+                    {recipient.addressLine2}
+                  </Text>
+                ) : null}
+                <Text style={[backStyles.addressLine, { fontSize: addressSize }]} numberOfLines={1}>
+                  {recipient.city}
+                  {recipient.state ? `, ${recipient.state}` : ""}
+                  {recipient.zip ? `  ${recipient.zip}` : ""}
+                </Text>
+              </View>
 
-          {/* USPS address guide lines — bottom 5 lines */}
-          <View style={backStyles.addressLines}>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <View key={i} style={backStyles.addressGuideLine} />
-            ))}
-          </View>
+              {/* USPS address guide lines — bottom 5 lines */}
+              <View style={backStyles.addressLines}>
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <View key={i} style={backStyles.addressGuideLine} />
+                ))}
+              </View>
+            </>
+          ) : null}
 
-          {/* Reciprocation QR — bottom-right corner of the back. Only rendered
-              when a URL is supplied so the visible preview stays clean on the
-              compose screens before a token is minted. The QR has a quiet zone
-              built in (the white padding) and a "Scan to reply free →" label
-              underneath so the receiver knows what to do. */}
-          {reciprocationUrl ? (
+          {/* Reciprocation QR. forPrint mode: skip entirely — even in the
+              top zone the QR's caption "Scan to reply free →" would risk
+              clipping by Lob's indicia. Preview only. (We can wire a
+              forPrint-safe QR back in once we've verified clean prints
+              without it.) */}
+          {reciprocationUrl && !forPrint ? (
             <View style={[backStyles.qrWrap, { width: qrSize + 6 }]}>
               <View style={[backStyles.qrInner, { padding: Math.max(3, qrSize * 0.05) }]}>
                 <QRCode

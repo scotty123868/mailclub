@@ -983,6 +983,11 @@ export function WelcomeSheet({
             }
           }
           width={PRINT_W}
+          // v0.7.0.28: forPrint=true tells the back to NOT render the
+          // recipient address / return line / USPS guide lines, since
+          // Lob auto-prints those in the right column. Keeps our
+          // designer ink confined to the safe zones.
+          forPrint
         />
       </View>
     ) : null}

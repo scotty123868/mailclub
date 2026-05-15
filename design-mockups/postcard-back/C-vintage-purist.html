@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Option C: Vintage purist</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { background: #2a2620; margin: 0; padding: 40px; font-family: Inter, sans-serif; color: #f4ede0; }
+  h1 { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 28px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .pitch { color: #c9bfa8; font-style: italic; max-width: 600px; margin: 0 0 24px; line-height: 1.5; }
+  .stage { width: 600px; height: 408px; background: #FBF4DE; border-radius: 4px;
+           box-shadow: 0 12px 40px rgba(0,0,0,0.4); position: relative; overflow: hidden;
+           color: #17223B; }
+  .lob-zone-right { position: absolute; right: 27px; bottom: 24px; width: 315px; height: 228px;
+                    background: rgba(200, 54, 42, 0.04); border: 1px dashed rgba(200, 54, 42, 0.18); }
+  .lob-zone-bot { position: absolute; left: 0; right: 0; bottom: 0; height: 60px;
+                  background: rgba(200, 54, 42, 0.04); border-top: 1px dashed rgba(200, 54, 42, 0.18); }
+  .zone-label { font-size: 8px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(200, 54, 42, 0.5);
+                position: absolute; top: 2px; left: 4px; font-family: Inter, sans-serif; }
+
+  /* --- OPTION C: Ornate stamp + perforated edges, vintage USPS feel --- */
+
+  /* Small QR top-left, treated as wax seal */
+  .seal { position: absolute; top: 22px; left: 28px; width: 52px; height: 52px;
+          background: #B8483A; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.25); transform: rotate(-4deg); }
+  .seal-mark { font-family: 'Cormorant Garamond', serif; font-weight: 700; font-size: 22px;
+               color: #FBF4DE; letter-spacing: -0.02em; }
+  .qr-tag { position: absolute; top: 30px; left: 90px; font-family: 'Cormorant Garamond', serif;
+            font-style: italic; font-size: 10px; color: #5E6472; line-height: 1.3; max-width: 130px; }
+  .qr-tag .url { font-family: Inter, sans-serif; font-style: normal; font-weight: 600; font-size: 9px;
+                 color: #B8483A; letter-spacing: 0.05em; }
+
+  /* Ornate vintage stamp top-right with perforated edges + serial */
+  .stamp-wrap { position: absolute; top: 18px; right: 18px; transform: rotate(3deg); }
+  .stamp {
+    position: relative; width: 88px; height: 108px; padding: 8px;
+    background: #fdf6e5;
+    /* Perforated edges via radial-gradient mask */
+    -webkit-mask: radial-gradient(circle at 0% 50%, transparent 3px, #000 3.5px) 0 0/100% 8px,
+                  radial-gradient(circle at 50% 0%, transparent 3px, #000 3.5px) 0 0/8px 100%;
+    -webkit-mask-composite: source-in;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    border: 2px solid #B8483A;
+  }
+  .stamp-inner-border { position: absolute; inset: 4px; border: 0.5px solid rgba(184, 72, 58, 0.6); pointer-events: none; }
+  .stamp-art { width: 56px; height: 50px; margin-top: 8px;
+               background: url("../../assets/onboarding/hero-envelope-balloon.jpg") center/cover;
+               border-radius: 1px; }
+  .stamp-title { font-family: 'Playfair Display', serif; font-weight: 800; font-size: 11px;
+                 color: #B8483A; letter-spacing: 0.5px; }
+  .stamp-cost { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 14px;
+                color: #B8483A; line-height: 1; }
+  .stamp-cost .small { font-size: 8px; font-weight: 500; }
+  .stamp-year { font-family: 'JetBrains Mono', monospace; font-size: 6px;
+                color: rgba(184, 72, 58, 0.6); letter-spacing: 0.2em; }
+
+  /* Hairline divider down the middle, true to USPS postcard tradition */
+  .divider { position: absolute; left: 280px; top: 28px; bottom: 70px;
+             width: 0.5px; background: rgba(194, 165, 109, 0.4); }
+
+  /* Handwritten message — left half */
+  .msg { position: absolute; top: 90px; left: 28px; width: 240px; height: 260px;
+         font-family: 'Caveat', cursive; font-size: 17px; line-height: 1.5;
+         color: #17223B; word-wrap: break-word; }
+
+  /* Tiny wax-seal date stamp bottom-left, period-correct touch */
+  .date-stamp { position: absolute; bottom: 12px; left: 28px;
+                font-family: 'JetBrains Mono', monospace; font-size: 7px;
+                color: rgba(23, 34, 59, 0.5); letter-spacing: 0.15em; text-transform: uppercase; }
+
+  .addr { position: absolute; top: 175px; right: 40px; width: 280px;
+          font-family: Inter, sans-serif; font-size: 10px; line-height: 1.5;
+          color: rgba(23, 34, 59, 0.55); }
+  .addr .small { font-size: 8px; letter-spacing: 0.15em; }
+</style>
+</head>
+<body>
+
+<h1>Option C — Vintage purist</h1>
+<p class="pitch">Stamp-centric. The top-right stamp is the hero artifact: ornate perforated edges, Playfair Display headline, denomination ("70¢"), serial year. Top-left has a tiny wax-seal mark for the QR (less obtrusive than a full code square) with a small tagline. Center divider preserves the classic USPS postcard layout. Reads as a real piece of postal craft, not an app artifact.</p>
+
+<div class="stage">
+  <div class="lob-zone-right"><span class="zone-label">Lob auto-prints address + IMb</span></div>
+  <div class="lob-zone-bot"><span class="zone-label">IMb barcode zone</span></div>
+
+  <!-- Wax seal "M" -->
+  <div class="seal"><div class="seal-mark">M</div></div>
+  <div class="qr-tag">
+    <em>Write back free.</em><br>
+    <span class="url">mailroom.app/r/A8B4F2</span>
+  </div>
+
+  <!-- Vintage stamp -->
+  <div class="stamp-wrap">
+    <div class="stamp">
+      <div class="stamp-inner-border"></div>
+      <div class="stamp-art"></div>
+      <div class="stamp-title">MAILROOM</div>
+      <div class="stamp-cost">70<span class="small">¢</span></div>
+      <div class="stamp-year">· 2026 ·</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="msg">Hi Tati. I love you and this photo of us. It was a really special early day in spring, one of the first nice days to be outside. — Scotty</div>
+
+  <div class="date-stamp">⌖ Chevy Chase MD · May 14 2026</div>
+
+  <div class="addr">
+    <div class="small">T16  P1  ******AUTO**MIXED AADC 750</div>
+    <div class="small">5531    1186382709</div>
+    <div style="margin-top:4px;">TATIANA BARBIC</div>
+    <div>861 N HUMBOLDT ST APT B</div>
+    <div>DENVER CO 80218-3517</div>
+  </div>
+</div>
+
+</body></html>

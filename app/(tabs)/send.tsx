@@ -894,6 +894,9 @@ export default function SendScreen() {
           }
           width={PRINT_W}
           reciprocationUrl={printSnapshot?.reciprocationUrl}
+          // v0.7.0.28: Lob auto-prints recipient address + indicia + IMb.
+          // forPrint hides our own renders of those so we don't fight Lob.
+          forPrint
         />
       </View>
     </AppShell>

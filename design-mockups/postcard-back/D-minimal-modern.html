@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Option D: Minimal modern</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { background: #2a2620; margin: 0; padding: 40px; font-family: Inter, sans-serif; color: #f4ede0; }
+  h1 { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 28px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .pitch { color: #c9bfa8; font-style: italic; max-width: 600px; margin: 0 0 24px; line-height: 1.5; }
+  .stage { width: 600px; height: 408px; background: #FBF4DE; border-radius: 4px;
+           box-shadow: 0 12px 40px rgba(0,0,0,0.4); position: relative; overflow: hidden;
+           color: #17223B; }
+  .lob-zone-right { position: absolute; right: 27px; bottom: 24px; width: 315px; height: 228px;
+                    background: rgba(200, 54, 42, 0.04); border: 1px dashed rgba(200, 54, 42, 0.18); }
+  .lob-zone-bot { position: absolute; left: 0; right: 0; bottom: 0; height: 60px;
+                  background: rgba(200, 54, 42, 0.04); border-top: 1px dashed rgba(200, 54, 42, 0.18); }
+  .zone-label { font-size: 8px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(200, 54, 42, 0.5);
+                position: absolute; top: 2px; left: 4px; font-family: Inter, sans-serif; }
+
+  /* --- OPTION D: Trust the photo, almost no chrome --- */
+
+  /* Just a small stamp top-right and a thread-line type sender mark */
+  .sender { position: absolute; top: 22px; left: 28px;
+            font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 13px;
+            color: #5E6472; letter-spacing: 0.3px; }
+  .sender .name { color: #17223B; font-weight: 600; font-size: 14px; }
+  .sender .when { font-style: italic; font-size: 10px; color: #9a917f; margin-top: 2px;
+                  font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* Tiny QR — bottom corner of left half, almost an afterthought */
+  .qr-mini { position: absolute; bottom: 18px; left: 28px; display: flex; align-items: center; gap: 8px; }
+  .qr { width: 36px; height: 36px; background: linear-gradient(45deg, #17223B 25%, transparent 25%) 0 0/5px 5px,
+                                              linear-gradient(-45deg, #17223B 25%, transparent 25%) 0 0/5px 5px,
+                                              linear-gradient(45deg, transparent 75%, #17223B 75%) 2.5px 2.5px/5px 5px,
+                                              linear-gradient(-45deg, transparent 75%, #17223B 75%) 2.5px 2.5px/5px 5px,
+                                              #FBF4DE; border: 0.5px solid #17223B; }
+  .qr-meta { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 9px;
+             color: #5E6472; line-height: 1.3; }
+  .qr-meta .strong { font-family: Inter, sans-serif; font-style: normal; font-weight: 600;
+                     color: #B8483A; letter-spacing: 0.05em; font-size: 8px;
+                     text-transform: uppercase; }
+
+  /* Small stamp top-right with envelope-balloon art */
+  .stamp { position: absolute; top: 22px; right: 95px; width: 64px; height: 78px;
+           background: #fdf6e5; border: 1px dashed rgba(184, 72, 58, 0.5);
+           padding: 4px; transform: rotate(-2deg);
+           display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+  .stamp-art { width: 38px; height: 38px;
+               background: url("../../assets/onboarding/hero-envelope-balloon.jpg") center/cover; }
+  .stamp-meta { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 8px;
+                color: #B8483A; text-align: center; letter-spacing: 0.4px; line-height: 1.1; }
+
+  /* Handwritten message — gets the full canvas it deserves */
+  .msg { position: absolute; top: 60px; left: 28px; width: 244px; height: 280px;
+         font-family: 'Caveat', cursive; font-size: 18px; line-height: 1.5;
+         color: #17223B; word-wrap: break-word; }
+
+  .addr { position: absolute; top: 175px; right: 40px; width: 280px;
+          font-family: Inter, sans-serif; font-size: 10px; line-height: 1.5;
+          color: rgba(23, 34, 59, 0.55); }
+  .addr .small { font-size: 8px; letter-spacing: 0.15em; }
+</style>
+</head>
+<body>
+
+<h1>Option D — Minimal modern</h1>
+<p class="pitch">Less is more. Sender's name top-left as a single type line (no QR cluster, no big tile). Small stamp top-right (just the balloon art + "Mailroom"). The QR shrinks to 36×36 and lives bottom-left as a quiet wayfinder. The message gets the whole canvas. Reads like a thoughtful handwritten note from a person — not a marketing surface.</p>
+
+<div class="stage">
+  <div class="lob-zone-right"><span class="zone-label">Lob auto-prints address + IMb</span></div>
+  <div class="lob-zone-bot"><span class="zone-label">IMb barcode zone</span></div>
+
+  <!-- Sender as a type-only line -->
+  <div class="sender">
+    <span class="name">Scotty</span> &middot; from Chevy Chase, MD
+    <div class="when">May 14, 2026</div>
+  </div>
+
+  <!-- Small stamp top right -->
+  <div class="stamp">
+    <div class="stamp-art"></div>
+    <div class="stamp-meta">
+      MAILROOM<br>2026
+    </div>
+  </div>
+
+  <!-- Handwritten message takes the canvas -->
+  <div class="msg">Hi Tati. I love you and this photo of us. It was a really special early day in spring, one of the first nice days to be outside in the grass. — Scotty</div>
+
+  <!-- Tiny QR bottom-left -->
+  <div class="qr-mini">
+    <div class="qr"></div>
+    <div class="qr-meta">
+      <span class="strong">Reply free</span><br>
+      Scan with iPhone camera
+    </div>
+  </div>
+
+  <div class="addr">
+    <div class="small">T16  P1  ******AUTO**MIXED AADC 750</div>
+    <div class="small">5531    1186382709</div>
+    <div style="margin-top:4px;">TATIANA BARBIC</div>
+    <div>861 N HUMBOLDT ST APT B</div>
+    <div>DENVER CO 80218-3517</div>
+  </div>
+</div>
+
+</body></html>
