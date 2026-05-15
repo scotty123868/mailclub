@@ -135,9 +135,13 @@ describe("api.sendIntoVoid", () => {
     });
     const result = await api.sendIntoVoid("hi");
     expect(result.toFriendId).toBe("void");
-    expect(sb.rpc).toHaveBeenCalledWith("send_postcard", expect.objectContaining({
-      p_to_kind: "void",
-      p_to_friend_id: null,
+    // v0.7.0.28: sendIntoVoid now calls send_into_void_with_matching
+    // (Postcrossing-style stranger matching) instead of the legacy
+    // send_postcard RPC. Old send_postcard stays in place for friend
+    // sends.
+    expect(sb.rpc).toHaveBeenCalledWith("send_into_void_with_matching", expect.objectContaining({
+      p_message: "hi",
+      p_category: "handwritten",
     }));
   });
 });

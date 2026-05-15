@@ -676,7 +676,20 @@ export async function fetchReceivedPostcards(): Promise<ReceivedPostcard[]> {
 }
 
 export async function sendIntoVoid(message: string, photoUri?: string): Promise<Postcard> {
-  // v0.7.0.25: penpal sends now carry an optional photo.
+  // v0.7.0.28: switched to send_into_void_with_matching RPC which does
+  // Postcrossing-style stranger matching:
+  //   - Pops the oldest queue entry (user ≠ sender) as recipient
+  //   - Inserts the postcard with to_profile_id = matched user
+  //   - Retro-matches the recipient's earliest orphan to this sender
+  //   - Queues this sender to receive on the next stranger send
+  // See migration 2026051502_penpal_postcrossing.sql for the full
+  // matching algorithm. Old send_postcard RPC stays in place for the
+  // friend-mode send path.
+  //
+  // v0.7.0.25 photo upload (still applies): RN's fetch().blob() bug
+  // ate uploads in earlier builds; uploadPostcardPhoto now uses
+  // arrayBuffer. Upload happens at call time so penpal cards mirror
+  // the friend flow.
   //
   // Previously this RPC call hardcoded p_photo_uri:null and
   // p_category:"handwritten" — the consequence: penpal cards rendered
@@ -700,16 +713,13 @@ export async function sendIntoVoid(message: string, photoUri?: string): Promise<
     photoPath = await uploadPostcardPhoto(photoUri, "penpal.jpg");
     if (photoPath) category = "photo";
   }
-  const { data, error } = await supabase.rpc("send_postcard", {
-    p_to_kind: "void",
-    p_to_friend_id: null,
-    p_category: category,
+  // v0.7.0.28: new dedicated RPC that runs the Postcrossing-style
+  // matching atomically. Old send_postcard RPC is still used for
+  // friend / claim / self sends.
+  const { data, error } = await supabase.rpc("send_into_void_with_matching", {
     p_message: message,
-    p_photo_uri: photoPath,
-    p_place_name: null,
-    p_custom_description: null,
-    p_custom_tone: null,
-    p_reference_photo_uris: [],
+    p_photo_path: photoPath,
+    p_category: category,
   });
   if (error) throw error;
   return postcardFromRow(data as PostcardRow);
