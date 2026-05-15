@@ -300,33 +300,30 @@ export function WelcomeSheet({
     );
   }
 
-  // v0.7.0.25: "link" recipient now ALSO goes through their-info.
+  // v0.7.0.1: only the "friend" recipient kind needs full recipient info
+  // (name + mailing address). All others skip their-info and go straight
+  // to your-info:
+  //   - link: dropped name + contact fields. The receiver enters their
+  //     own info via the App Clip (build 39+) or the web fallback. Zero
+  //     friction on the sender side — the iOS Share sheet during the
+  //     mailed step delivers the claim URL with a pre-filled message.
+  //   - self: uses the user's own address (collected on your-info).
+  //   - penpal: anonymous, no recipient info. Routed through sendIntoVoid.
   //
-  // Original v0.7.0.1 decision was to skip their-info for link mode and
-  // rely on the iOS Share sheet for delivery. The user pushback (build
-  // 37 feedback): "When I click the 'ask for a link' button it doesn't
-  // solicit the link sharing from the user, just asks for the user name
-  // and location and lets them in the app." Without TheirInfoStep, link
-  // signups dropped into your-info → mailed without ever capturing the
-  // recipient's name OR triggering a share — they sat in "Awaiting
-  // address" forever with no recipient identity attached.
-  //
-  // Restoring the step makes the flow: recipient kind = link →
-  // their-info (name + contact hint) → your-info → mailed → Share sheet
-  // auto-opens with the claim URL. TheirInfoStep already special-cases
-  // isLink to ask for "Their phone or email" instead of a mailing
-  // address (see line 1605-1626 in this file), so the UX fits.
-  //
-  // self + penpal still skip their-info — they have no recipient identity
-  // to capture.
-  const needsTheirInfo = recipientKind === "friend" || recipientKind === "link";
+  // v0.7.0.25 follow-up: an earlier build 38 attempt routed "link"
+  // through their-info too, on the (wrong) theory that the bug "Send a
+  // Link doesn't solicit the share" meant we needed to ask for the
+  // recipient's name + phone. The real bug was the WelcomeGate race
+  // that unmounted MailedStep before it could fire Share.share. With
+  // the WelcomeGate latch in place, MailedStep mounts and the Share
+  // sheet auto-opens — no need to harvest recipient info up front.
+  // Sender-side friction is the whole reason link mode exists.
+  const needsTheirInfo = recipientKind === "friend";
 
   const canAdvanceTheirInfo =
     recipientKind === "friend"
       ? theirName.trim().length > 0 && isAddressComplete(theirAddress)
-      : recipientKind === "link"
-        ? theirName.trim().length > 0 && theirContact.trim().length > 0
-        : true;
+      : true;
 
   // v0.7.0.17: only "self" sends need the user's full street address —
   // they ARE the recipient, so we need the full mailable address. For
@@ -1823,7 +1820,10 @@ function MailedStep({
   const env3Y = useSharedValue(0);
   const env3Opacity = useSharedValue(0);
   const stampScale = useSharedValue(0);
-  const stampRotate = useSharedValue(-18);
+  // v0.7.0.25: start tilted further so the slam-in feels weighty,
+  // settle at -12deg in the corner (reads as a real-world rubber-stamp
+  // press, not a centered overlay).
+  const stampRotate = useSharedValue(-22);
   const captionOpacity = useSharedValue(0);
   const captionTranslateY = useSharedValue(12);
 
@@ -1840,15 +1840,21 @@ function MailedStep({
       easing: Easing.bezier(0.16, 1, 0.3, 1),
     });
 
-    // BEAT 1.5 (after entry): continuous gentle floating loop.
-    // Two oscillations running on different periods so the bob never
-    // looks mechanical. ±6px Y sway, ±2deg rotation, total period ~2.4s.
+    // BEAT 1.5 (after entry): continuous floating loop, calmer.
+    //
+    // v0.7.0.25: previous values (±6px, ±2deg, 1.2-1.6s periods) read
+    // as "bouncing side to side" to the user — too active for a
+    // celebration moment. Slowed to ±4px Y / ±1deg rotation with
+    // longer 2.4s/3.2s periods so the balloon breathes instead of
+    // bouncing. Total motion is half the previous amplitude, twice
+    // the period — much more "lazy hot-air balloon in still air"
+    // than the original "jittery flag" feel.
     heroBob.value = withDelay(
       700,
       withRepeat(
         withSequence(
-          withTiming(-6, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
-          withTiming(6, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+          withTiming(-4, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+          withTiming(4, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
         ),
         -1, // infinite
         false,
@@ -1858,8 +1864,8 @@ function MailedStep({
       700,
       withRepeat(
         withSequence(
-          withTiming(2, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
-          withTiming(-2, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
+          withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
+          withTiming(-1, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
         ),
         -1,
         false,
@@ -1887,7 +1893,7 @@ function MailedStep({
       duration: 320,
       easing: Easing.bezier(0.34, 1.7, 0.5, 1), // springier
     }));
-    stampRotate.value = withDelay(800, withTiming(-6, { duration: 320 }));
+    stampRotate.value = withDelay(800, withTiming(-12, { duration: 320 }));
 
     // BEAT 4 (1100ms+): caption fades in and rises slightly
     captionOpacity.value = withDelay(1100, withTiming(1, { duration: 400 }));
@@ -2086,25 +2092,36 @@ const mailedStyles = StyleSheet.create({
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
   },
-  // MAILED rubber stamp — bigger, more dramatic. Sits dead-center over
-  // the hero and slams down at the end of the sequence.
+  // MAILED rubber stamp — v0.7.0.25 moved out of dead-center.
+  //
+  // Original v0.7.0.10 had this slamming down on the geometric center of
+  // the stage, which sits directly over the mail-truck-on-a-balloon
+  // illustration. User feedback: "MAILED blocks the coolest part of the
+  // design, the mail truck on a balloon." Fix: pin to the bottom-right
+  // corner of the stage and rotate ~-12deg like a real rubber stamp on
+  // the corner of a piece of paper. Slight overhang past the image's
+  // right edge to read as a real-world rubber-stamp accent rather than a
+  // centered modal overlay. The slam-in animation is preserved; only the
+  // resting position changed.
   stamp: {
     position: "absolute",
-    paddingHorizontal: 18,
-    paddingVertical: 8,
+    bottom: 14,
+    right: -6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderWidth: 4,
     borderColor: colors.postalRed,
     borderRadius: 6,
-    backgroundColor: "rgba(255,253,247,0.85)",
+    backgroundColor: "rgba(255,253,247,0.92)",
     shadowColor: colors.postalRed,
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.4,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 8,
   },
   stampText: {
     color: colors.postalRed,
     fontFamily: fonts.sansBold,
-    fontSize: 28,
+    fontSize: 24,
     letterSpacing: 4,
   },
   kicker: {

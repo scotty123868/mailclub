@@ -287,8 +287,36 @@ export function MailClubProvider({ children }: PropsWithChildren) {
           setPrivacy(profile.privacy);
         }
         setFriends(fetchedFriends);
-        setPostcards(fetchedPostcards);
-        setVoidReplies(fetchedReplies);
+        // v0.7.0.25 BUGFIX: never overwrite a non-empty local cache with
+        // an empty server fetch.
+        //
+        // Symptom: user upgrades from build 37 → 38, opens My Card, sees
+        // "2 credits remaining, 0 sent" — impossible state because the
+        // credit debit is server-side and only happens on a successful
+        // send_postcard RPC (which inserts the row). The rows EXIST on
+        // the server; the client just got an empty result and blew away
+        // its AsyncStorage cache.
+        //
+        // Root cause: this useEffect runs on `authedUserId` change. If
+        // `onAuthStateChange` fires INITIAL_SESSION with a null id (mid-
+        // session refresh) and a follow-up with the real id, the fetch
+        // can race the RLS context — query returns [] because auth.uid()
+        // hasn't propagated to the database session yet. Same race exists
+        // on the realtime channel below.
+        //
+        // Guard: use the functional updater so we see the latest local
+        // state, and only overwrite when (a) fresh has rows, or
+        // (b) fresh is empty AND cache was already empty. Worst case if
+        // the server REALLY deleted everything: cache stays stale until
+        // the next non-empty fetch or an explicit sign-out. That's
+        // dramatically better than the "impossible state" bug which is
+        // user-facing every cold start until they re-send.
+        setPostcards((prev) =>
+          fetchedPostcards.length === 0 && prev.length > 0 ? prev : fetchedPostcards,
+        );
+        setVoidReplies((prev) =>
+          fetchedReplies.length === 0 && prev.length > 0 ? prev : fetchedReplies,
+        );
         // v0.7: server is the truth for postcard history. If they have any
         // postcard rows server-side, they&apos;ve done the first send.
         if (fetchedPostcards.length > 0 || fetchedReplies.length > 0) {
@@ -330,7 +358,14 @@ export function MailClubProvider({ children }: PropsWithChildren) {
           // and the postcards list is small (<100 rows for most users).
           try {
             const fresh = await api.fetchPostcards();
-            setPostcards(fresh);
+            // v0.7.0.25: same guard as the initial fetch — never blow
+            // away a non-empty cache with an empty result. Realtime
+            // events can fire with stale auth context, especially right
+            // after sign-in or after a token refresh, returning [] until
+            // the RLS session catches up.
+            setPostcards((prev) =>
+              fresh.length === 0 && prev.length > 0 ? prev : fresh,
+            );
           } catch {
             // ignore — next fetch on tab focus picks it up
           }
