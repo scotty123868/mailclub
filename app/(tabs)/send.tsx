@@ -562,18 +562,27 @@ export default function SendScreen() {
             subtitle:
               `When ${recipientFirst} taps the link and shares their address, we'll print and ship your postcard. You'll get a notification when it's on its way.`,
           });
-          resetCompose();
         } else {
-          // User dismissed without sharing. Keep the compose state so they
-          // can pick a different share target on the next tap. The
-          // postcard row + claim URL still exist server-side and appear in
-          // the gallery as "AWAITING ADDRESS" — they can re-share from
-          // PostcardDetailSheet → "Share again" anytime.
+          // User dismissed without sharing. The postcard row + claim URL
+          // are already saved server-side (the credit was spent on
+          // sendPostcardViaLink before the share sheet opened) and show
+          // up in the journal as "AWAITING ADDRESS" with a "Share again"
+          // button on PostcardDetailSheet. Surface the path so the user
+          // knows where to find it. Then reset compose — re-tapping Send
+          // here would create a DUPLICATE postcard (same photo/note
+          // sent twice). Forcing them through Journal → Share Again is
+          // both clearer and prevents the duplicate.
           Alert.alert(
             "Link not shared yet",
-            "Your postcard is saved in your journal. Tap it anytime to share the link again.",
+            "Your postcard is saved in your journal. Open My Card → tap the card to share the link again.",
           );
         }
+        // Reset regardless of share success — the postcard is created in
+        // both cases, so compose state has done its job and a fresh state
+        // prevents accidental duplicate sends. (codex P0: build 37 had
+        // this race surface as duplicate journal rows when users tapped
+        // Send → dismiss → Send again.)
+        resetCompose();
         return;
       }
 
