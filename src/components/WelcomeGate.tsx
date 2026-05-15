@@ -43,7 +43,6 @@ export function WelcomeGate() {
     hasSentFirstCard,
     hydrated,
     authedUserId,
-    postcards,
   } = useMailClub();
   const [dismissedLocal, setDismissedLocal] = useState(false);
   // v0.7.0.25: ref that latches true once we've decided to show the
@@ -79,13 +78,32 @@ export function WelcomeGate() {
       hasSeenFreeCreditsIntro && hasCompletedSignup && hasSentFirstCard;
     if (fullyOnboarded) return false;
 
-    // Returning-user hatch: authenticated AND has server-side postcards
-    // AND completed signup → must be a returning user, not a fresh signup.
-    // Only relevant for the INITIAL decision; once we latch hasStartedFlow,
-    // postcards mid-flow don't dismiss the sheet.
-    const hasAnyServerPostcards = !!authedUserId && postcards.length > 0;
-    const isReturningUser =
-      !!authedUserId && hasCompletedSignup && hasAnyServerPostcards;
+    // Returning-user hatch v0.7.0.27 — broadened.
+    //
+    // Previous (build 39) version required server-side postcards to
+    // exist. That failed two real cases:
+    //   a) User signed up, completed profile, then bailed before first
+    //      send. Coming back on a new device: hasCompletedSignup=true
+    //      but 0 server postcards. WelcomeGate kept showing welcome.
+    //      Worse, their previous-session credits had been debited (the
+    //      RPC charges before client-side share completion in some
+    //      paths), so they hit INSUFFICIENT_CREDITS at "Mail it" and
+    //      got stuck. User feedback: "if a user is going through the
+    //      sign up flow, then they shouldn't have already been signed
+    //      up."
+    //   b) User in build < 41 sent cards but the journal-overwrite race
+    //      blew them away locally. Server has the rows but local
+    //      `postcards` was stuck empty during this evaluation. Welcome
+    //      showed again, INSUFFICIENT_CREDITS again, loop.
+    //
+    // New gate: if the user has completed signup server-side, they're
+    // done with welcome forever. The "must send a card to enter the
+    // app" enforcement was always client-side aspirational; the real
+    // checkpoint is server-side profile creation. If they have 0
+    // credits + 0 visible postcards, that's a "buy more stamps"
+    // problem to solve inside the app shell, not a "redo welcome"
+    // problem.
+    const isReturningUser = !!authedUserId && hasCompletedSignup;
     if (isReturningUser) return false;
 
     return true;
@@ -96,7 +114,6 @@ export function WelcomeGate() {
     hasCompletedSignup,
     hasSentFirstCard,
     authedUserId,
-    postcards.length,
   ]);
 
   // Latch the started flag the first time we decide to show.

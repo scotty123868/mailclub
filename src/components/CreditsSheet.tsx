@@ -134,8 +134,18 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
             {CREDIT_PACKS.map((pack) => {
               const isBusy = busyPackId === pack.id;
               const disabled = !stripeReady || Boolean(busyPackId);
+              // v0.7.0.27: render as dollars when >= $1, cents otherwise.
+              // User feedback: "100 cents per stamp" reads as nonsense
+              // (it's $1) — switch to dollar formatting above the cent
+              // threshold. The USPS Forever Stamp reference below stays
+              // in cents since it's actually < $1 (82¢).
               const perStampCents = Math.round((pack.priceUsd / pack.credits) * 100);
-              const perStampDisplay = `${perStampCents}¢ per stamp`;
+              const perStampDisplay =
+                perStampCents >= 100
+                  ? (perStampCents % 100 === 0
+                      ? `$${perStampCents / 100} per stamp`
+                      : `$${(perStampCents / 100).toFixed(2)} per stamp`)
+                  : `${perStampCents}¢ per stamp`;
               return (
                 <View
                   key={pack.id}

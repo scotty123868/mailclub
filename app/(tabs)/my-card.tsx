@@ -1,9 +1,11 @@
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
-import { Mail, Pencil, Send, Users } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import { Camera, Mail, Pencil, Send, Users } from "lucide-react-native";
 import { useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
+import { uploadProfilePhoto } from "@/src/services/api";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { EditAboutMeSheet } from "@/src/components/EditAboutMeSheet";
 import { AboutAppSheet } from "@/src/components/AboutAppSheet";
@@ -46,7 +48,45 @@ import { fonts } from "@/src/theme/typography";
  */
 export default function MyMailCardScreen() {
   const router = useRouter();
-  const { currentUser, friends, postcards, voidReplies, authedUserId } = useMailClub();
+  const { currentUser, friends, postcards, voidReplies, authedUserId, updateAboutMe } = useMailClub();
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // v0.7.0.27: tap the avatar circle to add or replace your profile
+  // photo. User feedback: "I wanna be able to add a photo on the my
+  // card just by clicking the circle next to the name." Wraps the
+  // existing image-picker → upload → updateAboutMe pipeline behind a
+  // single press handler. The uploaded photo lives in the
+  // `profile-photos` Supabase Storage bucket and the public URL gets
+  // saved on the user's profile (currentUser.photoUrl), so
+  // IdentityAvatar's existing photoUrl branch renders it.
+  async function onPressAvatar() {
+    if (uploadingAvatar) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        "Photo access needed",
+        "Mailroom needs photo access to set your profile picture. Enable it in Settings.",
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1], // square crop — circle avatar
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+    setUploadingAvatar(true);
+    try {
+      const publicUrl = await uploadProfilePhoto(result.assets[0].uri);
+      await updateAboutMe({ photoUrl: publicUrl });
+    } catch (err: any) {
+      Alert.alert("Couldn't save your photo", err?.message ?? "Try again in a moment.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editAboutOpen, setEditAboutOpen] = useState(false);
@@ -106,9 +146,32 @@ export default function MyMailCardScreen() {
 
       <OnboardingFreeCreditsBanner />
 
-      {/* Hero: avatar + name + city. No since-line. */}
+      {/* Hero: avatar + name + city. No since-line. v0.7.0.27: avatar
+          is now tappable — opens the photo picker, uploads, and saves
+          to the profile. Camera badge overlay communicates the
+          affordance; an activity indicator replaces the badge while
+          the upload is in flight. */}
       <View style={styles.hero}>
-        <IdentityAvatar user={currentUser} size={96} variant="hero" />
+        <Pressable
+          onPress={onPressAvatar}
+          accessibilityRole="button"
+          accessibilityLabel={
+            currentUser.photoUrl
+              ? "Change your profile photo"
+              : "Add a profile photo"
+          }
+          testID="my-card-avatar-btn"
+          hitSlop={6}
+        >
+          <IdentityAvatar user={currentUser} size={96} variant="hero" />
+          <View style={styles.avatarBadge}>
+            {uploadingAvatar ? (
+              <ActivityIndicator color={colors.paper} size="small" />
+            ) : (
+              <Camera color={colors.paper} size={14} strokeWidth={2} />
+            )}
+          </View>
+        </Pressable>
         <View style={styles.heroCopy}>
           <Text
             style={styles.name}
@@ -243,6 +306,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   heroCopy: { flex: 1 },
+  // v0.7.0.27: little camera badge that overlays the bottom-right of
+  // the avatar disc. Communicates "tap to change photo" without
+  // wrapping the avatar in chrome that would compete with the user's
+  // face/initials. While uploading, an ActivityIndicator replaces the
+  // camera icon so the user has feedback. Positioned via absolute
+  // coords on the parent Pressable so it doesn't shift the layout.
+  avatarBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.ink,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.paper,
+  },
   name: {
     color: colors.ink,
     fontFamily: fonts.serifSemi,

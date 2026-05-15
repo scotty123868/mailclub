@@ -50,8 +50,9 @@ describe("CreditsSheet", () => {
         <CreditsSheet visible={true} onClose={() => {}} />
       </AllProviders>
     );
-    // 5-pack at $5 → 100¢ per stamp
-    expect(getByText(/100¢ per stamp/)).toBeTruthy();
+    // v0.7.0.27: ≥100¢ renders as $X, <100¢ stays in cents.
+    // 5-pack at $5 → $1 per stamp
+    expect(getByText(/\$1 per stamp/)).toBeTruthy();
     // 25-pack at $20 → 80¢ per stamp, with USPS comparison
     expect(getByText(/80¢ per stamp · the USPS Forever Stamp is 82¢/)).toBeTruthy();
   });

@@ -9,16 +9,26 @@ import { fonts } from "@/src/theme/typography";
 /**
  * Persistent stamp-balance pill for the right side of the Header.
  *
- * v0.7: replaced the 1¢-stamp tile + count combo (which read as two
- * numerals on a glance — "1¢ 3" looked like "13") with a clean envelope
- * icon + the count. One icon, one number, unambiguous.
+ * v0.7.0.27 — alignment rewrite (third attempt).
  *
- * - Reads `credits` from MailClubContext so the count updates the moment a
- *   send completes or a purchase lands. No prop drilling.
- * - Owns its own CreditsSheet modal so any tab using <Header /> gets a
- *   one-tap path to buy stamps without screens wiring up state.
- * - Quiet visual: cream-paper pill, inked envelope, single number. Same
- *   serif-semibold treatment as the rest of the wordmark family.
+ * Previous two attempts (glyphBox bounding + translateY transform)
+ * couldn't get the digit and envelope to sit on the same optical line
+ * because we were trying to align a SERIF digit ("0", "1", "3") with
+ * a sans-serif/geometric SVG icon. Serif digits have variable cap-
+ * height ratios and baseline-relative descenders that don't match
+ * SVG icon bounding boxes — no amount of lineHeight or translateY
+ * could square the circle without breaking other digits.
+ *
+ * The fix: use the sans-serif Inter font for the digit. Inter has
+ * uniform tabular figures that center cleanly against an SVG icon
+ * when both live in a flex row with alignItems:center. Drop every
+ * single bounding-box / translateY / lineHeight hack. The render is
+ * now whatever iOS gives us for a plain Text in a flex row — which
+ * turns out to be exactly right when the font isn't fighting us.
+ *
+ * Reads `credits` from MailClubContext so the count updates the moment
+ * a send completes or a purchase lands. Owns its own CreditsSheet so
+ * any tab using <Header /> gets a one-tap path to buy stamps.
  */
 export function CreditsPill() {
   const { credits } = useMailClub();
@@ -34,30 +44,15 @@ export function CreditsPill() {
         testID="header-credits-pill"
         hitSlop={8}
       >
-        {/* v0.7.0.18: wrap both glyphs in explicit ICON_SIZE-tall boxes so
-            they share an identical bounding height. iOS Text adds ascender
-            padding that flex-center can't strip, so lineHeight alone wasn't
-            enough — the "3" sat a hair below the envelope. Forcing equal
-            height + justifyContent: center pins the optical centers. */}
-        <View style={styles.glyphBox}>
-          <Mail color={colors.ink} size={ICON_SIZE} strokeWidth={1.8} />
-        </View>
-        <View style={styles.glyphBox}>
-          <Text style={styles.count}>{credits}</Text>
-        </View>
+        <Mail color={colors.ink} size={16} strokeWidth={1.8} />
+        <Text style={styles.count} allowFontScaling={false}>
+          {credits}
+        </Text>
       </Pressable>
       <CreditsSheet visible={open} onClose={() => setOpen(false)} />
     </>
   );
 }
-
-// Alignment note: the envelope icon and the number must visually share a
-// baseline. Lucide icons render via SVG (no font-padding) but React Native
-// text adds top/bottom ascender padding by default. We compensate with
-// lineHeight=icon-size + includeFontPadding=false. Both end up centered
-// inside the pill with no manual nudges. If you change `iconSize`, change
-// `count.lineHeight` to match.
-const ICON_SIZE = 16;
 
 const styles = StyleSheet.create({
   pill: {
@@ -68,35 +63,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   pillPressed: { opacity: 0.6 },
-  // v0.7.0.18: shared bounding box. Both the envelope SVG and the number
-  // Text live in identical ICON_SIZE-tall boxes that center their content.
-  // This is the only way to get pixel-level visual alignment between an
-  // SVG glyph and a Text glyph on iOS — flex alignItems on the parent
-  // alone uses different baselines for each child type.
-  glyphBox: {
-    alignItems: "center",
-    height: ICON_SIZE,
-    justifyContent: "center",
-    minWidth: 12,
-  },
+  // Sans-serif digit. Inter's tabular figures align cleanly against
+  // an SVG icon's geometric center when both sit in a flex row.
+  // includeFontPadding only matters on Android; on iOS it's a no-op
+  // but harmless. No lineHeight override (let the font's natural
+  // metrics drive height). No transform hacks. allowFontScaling:false
+  // on the Text element above prevents the user's iOS text-size
+  // setting from blowing the pill apart on accessibility builds.
   count: {
     color: colors.ink,
-    fontFamily: fonts.serifSemi,
-    fontSize: 15,
+    fontFamily: fonts.sansBold,
+    fontSize: 14,
     includeFontPadding: false,
-    lineHeight: ICON_SIZE,
+    minWidth: 12,
     textAlign: "center",
-    // v0.7.0.25: nudge the digit down 1.5px to match the envelope's
-    // optical center. Serif digits sit higher than SVG icon centers
-    // by ~1.5px on iOS even with matching lineHeight + ICON_SIZE
-    // bounding box — the font's cap-height fraction puts the visual
-    // mass above the geometric center. Tiny transform makes the pill
-    // look balanced. (User feedback: "still off center" — build 37
-    // had glyphBox alignment but no compensation for font metrics.)
-    transform: [{ translateY: 1.5 }],
   },
 });

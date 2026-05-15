@@ -114,14 +114,19 @@ export async function updateProfile(patch: Partial<CurrentUser>) {
 export async function uploadProfilePhoto(localUri: string): Promise<string> {
   const userId = (await supabase.auth.getUser()).data.user?.id;
   if (!userId) throw new Error("Not signed in.");
-  // Read the local file as a blob via fetch — works on RN.
+  // v0.7.0.27: same arrayBuffer fix that uploadPostcardPhoto got — RN's
+  // fetch(file://).blob() returns 0-byte Blobs on RN 0.81.5, so the
+  // upload "succeeded" with an empty file and the avatar rendered blank.
   const response = await fetch(localUri);
-  const blob = await response.blob();
+  const arrayBuffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  if (bytes.byteLength === 0) throw new Error("Couldn't read photo.");
   const ext = (localUri.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
   const path = `${userId}/avatar-${Date.now()}.${ext}`;
+  const contentType = ext === "png" ? "image/png" : "image/jpeg";
   const { error } = await supabase.storage
     .from("profile-photos")
-    .upload(path, blob, { upsert: true, contentType: blob.type || `image/${ext}` });
+    .upload(path, bytes, { upsert: true, contentType });
   if (error) throw error;
   const { data } = supabase.storage.from("profile-photos").getPublicUrl(path);
   return data.publicUrl;
