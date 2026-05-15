@@ -453,7 +453,10 @@ export default function SendScreen() {
       // step ever runs. sendIntoVoid handles recipient selection server-
       // side via the void claim queue.
       if (recipientKind === "penpal") {
-        const result = await sendIntoVoid(message.trim());
+        // v0.7.0.25: pass photoUri through. The penpal RPC now uploads
+        // the photo + sets category="photo" so the journal + detail
+        // sheet render the real image instead of a blank box.
+        const result = await sendIntoVoid(message.trim(), photoUri ?? undefined);
         if (!result.ok) {
           Alert.alert("Couldn't send to pen pal", "Try again in a moment.");
           return;

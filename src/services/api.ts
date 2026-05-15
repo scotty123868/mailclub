@@ -656,13 +656,37 @@ export async function fetchReceivedPostcards(): Promise<ReceivedPostcard[]> {
   }));
 }
 
-export async function sendIntoVoid(message: string): Promise<Postcard> {
+export async function sendIntoVoid(message: string, photoUri?: string): Promise<Postcard> {
+  // v0.7.0.25: penpal sends now carry an optional photo.
+  //
+  // Previously this RPC call hardcoded p_photo_uri:null and
+  // p_category:"handwritten" — the consequence: penpal cards rendered
+  // with empty photo frames in the user's journal and in the
+  // PostcardDetailSheet. User complaint (build 38): "the bug persists
+  // where the photo doesn't show up the your postcard journal or when
+  // you click on it the photo is blank." This is the SECOND photo
+  // surface that was broken (the first was the empty-Blob upload bug
+  // patched alongside this in api.ts:uploadPostcardPhoto).
+  //
+  // Upload happens here at call time so penpal sends mirror the
+  // friend-flow path: caller passes a local file:// URI, we upload to
+  // postcard-photos bucket, store the storage path, and Lob renders it
+  // when the card actually mails. If the upload fails we still send the
+  // card (no photo) rather than blocking — the postcard gets through to
+  // the recipient as a handwritten-only card and the user keeps their
+  // credit's worth of value.
+  let photoPath: string | null = null;
+  let category: CardCategory = "handwritten";
+  if (photoUri && photoUri.length > 0) {
+    photoPath = await uploadPostcardPhoto(photoUri, "penpal.jpg");
+    if (photoPath) category = "photo";
+  }
   const { data, error } = await supabase.rpc("send_postcard", {
     p_to_kind: "void",
     p_to_friend_id: null,
-    p_category: "handwritten",
+    p_category: category,
     p_message: message,
-    p_photo_uri: null,
+    p_photo_uri: photoPath,
     p_place_name: null,
     p_custom_description: null,
     p_custom_tone: null,

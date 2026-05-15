@@ -109,7 +109,7 @@ type MailClubState = {
     photoUri?: string;
     placeName?: string;
   }) => Promise<SendViaLinkResult>;
-  sendIntoVoid: (message: string) => Promise<{ ok: boolean }>;
+  sendIntoVoid: (message: string, photoUri?: string) => Promise<{ ok: boolean }>;
   purchaseCredits: (packId: string) => Promise<CreditsPurchaseResult>;
   refreshProfile: () => Promise<void>;
   markFreeCreditsIntroSeen: () => Promise<void>;
@@ -557,7 +557,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
   }, [authedUserId, credits, hasSentFirstCard]);
 
-  const sendIntoVoidAction = useCallback(async (message: string) => {
+  const sendIntoVoidAction = useCallback(async (message: string, photoUri?: string) => {
     if (credits < 1) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       Alert.alert("Not enough credits", "Sending into the void costs 1 credit.");
@@ -590,7 +590,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     setCredits((c) => c - 1);
     setFreeCreditsRemaining((b) => Math.max(0, b - 1));
     try {
-      const postcard = await api.sendIntoVoid(message);
+      const postcard = await api.sendIntoVoid(message, photoUri);
       setPostcards((items) => [postcard, ...items]);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true };

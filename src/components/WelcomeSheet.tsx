@@ -686,11 +686,9 @@ export function WelcomeSheet({
         // Mailroom-curated recipient is assigned later. From the
         // sender&apos;s POV: card is mailed, app opens, they&apos;re in.
         const note = message.trim();
-        const voidRes = await sendIntoVoid(
-          // Include the user&apos;s first name in the message so the
-          // recipient knows who sent it.
-          note,
-        );
+        // v0.7.0.25: pass photoUri so penpal sends carry a real photo
+        // (was hardcoded null before, blank tiles in the journal).
+        const voidRes = await sendIntoVoid(note, photoUri ?? undefined);
         if (!voidRes.ok) {
           throw new Error("Couldn't send to a pen pal. Try again in a moment.");
         }

@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["824QVPJ3B5.com.mailrooms.app"],
+        "components": [
+          { "/": "/claim*" }
+        ]
+      }
+    ]
+  },
+  "appclips": {
+    "apps": ["824QVPJ3B5.com.mailrooms.app.Clip"]
+  }
+}
