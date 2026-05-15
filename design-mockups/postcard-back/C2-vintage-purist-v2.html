@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Option C v2 — Vintage purist (corrected dimensions)</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Render at 2× the prior mockup (1200×816 = 6.25"×4.25" at 192px/in)
+     so the type + stamp art are visible at real-world scale on screen.
+     The dashed red rectangles show Lob's protected zones — those are
+     ACCURATE to Lob's published constraints:
+       - Address zone: 3.2835" × 2.375", positioned 0.275" from right
+         edge and 0.25" from bottom edge.
+       - IMb zone: bottom 0.625" full width.
+     The DESIGNER-SAFE space (where our ink goes) is:
+       - Top strip: 0 → 6.25" wide, 0 → 1.625" tall (300px high here)
+       - Left column: 0 → 2.69" wide, 1.625 → 3.625" tall (300px high)
+     Total safe area: 1626 sq.px (top) + 516×384 (left) = ~74% of card. */
+
+  body { background: #2a2620; margin: 0; padding: 40px;
+         font-family: Inter, sans-serif; color: #f4ede0; }
+  h1 { font-family: 'Cormorant Garamond', serif; font-weight: 600;
+       font-size: 28px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .pitch { color: #c9bfa8; font-style: italic; max-width: 1200px;
+           margin: 0 0 24px; line-height: 1.5; font-size: 14px; }
+  .stage { width: 1200px; height: 816px; background: #FBF4DE;
+           border-radius: 6px; box-shadow: 0 16px 50px rgba(0,0,0,0.5);
+           position: relative; overflow: hidden; color: #17223B; }
+
+  /* Lob protected zones — accurate to inches × 192px/in scale */
+  .lob-zone-addr { position: absolute;
+                   /* 0.275in × 192 = 53px from right */
+                   right: 53px;
+                   /* 0.25in × 192 = 48px from bottom */
+                   bottom: 48px;
+                   /* 3.2835in × 192 = 630px wide */
+                   width: 630px;
+                   /* 2.375in × 192 = 456px tall */
+                   height: 456px;
+                   background: rgba(200, 54, 42, 0.04);
+                   border: 1.5px dashed rgba(200, 54, 42, 0.25); }
+  .lob-zone-imb { position: absolute; left: 0; right: 0; bottom: 0;
+                  /* 0.625in × 192 = 120px tall */
+                  height: 120px;
+                  background: rgba(200, 54, 42, 0.04);
+                  border-top: 1.5px dashed rgba(200, 54, 42, 0.25); }
+  .zone-label { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+                color: rgba(200, 54, 42, 0.55); position: absolute; top: 4px; left: 8px;
+                font-family: 'JetBrains Mono', monospace; }
+
+  /* --- OPTION C v2: QR top-left, vintage stamp top-right, message
+     constrained to left safe zone, no overlap with Lob's address zone --- */
+
+  /* TOP-LEFT: real-looking QR + tiny tagline. Within top safe strip
+     (y < 1.625in = y < 312px) and well clear of right zone (x < 2.69in
+     = x < 517px). */
+  .qr-wrap { position: absolute; top: 36px; left: 48px;
+             display: flex; gap: 16px; align-items: center; }
+  .qr {
+    width: 132px; height: 132px;
+    background:
+      /* QR-like dotted pattern fake */
+      linear-gradient(45deg, #17223B 25%, transparent 25%) 0 0/14px 14px,
+      linear-gradient(-45deg, #17223B 25%, transparent 25%) 0 0/14px 14px,
+      linear-gradient(45deg, transparent 75%, #17223B 75%) 7px 7px/14px 14px,
+      linear-gradient(-45deg, transparent 75%, #17223B 75%) 7px 7px/14px 14px,
+      #FBF4DE;
+    border: 1.5px solid #17223B; padding: 6px; box-sizing: border-box;
+    background-clip: content-box, content-box, content-box, content-box, padding-box;
+  }
+  .qr-meta { padding-top: 8px; }
+  .qr-meta .label { font-family: Inter, sans-serif; font-weight: 700;
+                    font-size: 12px; color: #B8483A; letter-spacing: 0.18em;
+                    text-transform: uppercase; }
+  .qr-meta .copy { font-family: 'Cormorant Garamond', serif; font-style: italic;
+                   font-size: 17px; color: #5E6472; line-height: 1.35;
+                   margin-top: 5px; max-width: 200px; }
+  .qr-meta .url { font-family: 'JetBrains Mono', monospace; font-size: 11px;
+                  color: #17223B; letter-spacing: 0.05em; margin-top: 6px;
+                  font-weight: 500; }
+
+  /* TOP-RIGHT: vintage perforated stamp. Top safe strip means
+     y < 312px. Right edge of stamp must clear the address zone
+     start (x = 517px) and Lob's stamp-clearance which extends to
+     the right edge. We allow it to extend INTO the right half but
+     ONLY in the top safe strip (above 1.625" = above 312px). */
+  .stamp-wrap { position: absolute; top: 24px; right: 36px; transform: rotate(3deg); }
+  .stamp {
+    position: relative; width: 200px; height: 240px; padding: 14px;
+    background: #fdf6e5;
+    -webkit-mask:
+      radial-gradient(circle at 0% 50%, transparent 6px, #000 6.5px) 0 0/100% 16px,
+      radial-gradient(circle at 50% 0%, transparent 6px, #000 6.5px) 0 0/16px 100%;
+    -webkit-mask-composite: source-in;
+    border: 4px solid #B8483A;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  }
+  .stamp-inner-border { position: absolute; inset: 7px;
+                        border: 1px solid rgba(184, 72, 58, 0.55);
+                        pointer-events: none; }
+  .stamp-art { width: 128px; height: 112px; margin-top: 14px;
+               background: url("../../assets/onboarding/hero-envelope-balloon.jpg") center/cover;
+               border-radius: 2px; }
+  .stamp-title { font-family: 'Playfair Display', serif; font-weight: 800;
+                 font-size: 22px; color: #B8483A; letter-spacing: 1.5px;
+                 margin-top: 4px; }
+  .stamp-cost { font-family: 'Cormorant Garamond', serif; font-weight: 600;
+                font-size: 32px; color: #B8483A; line-height: 1;
+                margin-bottom: 4px; }
+  .stamp-cost .small { font-size: 18px; font-weight: 500; }
+  .stamp-year { font-family: 'JetBrains Mono', monospace; font-size: 12px;
+                color: rgba(184, 72, 58, 0.65); letter-spacing: 0.3em; }
+
+  /* Center divider — between message and address zone. Sits at the
+     boundary between left safe column and right Lob zone. */
+  .divider { position: absolute; left: 517px; top: 56px; bottom: 144px;
+             width: 1px; background: rgba(194, 165, 109, 0.45); }
+
+  /* MESSAGE — left safe column ONLY. Strictly bounded:
+       left: 48px (0.25in margin from edge)
+       right edge: 490px (clears x=517px Lob zone start with 27px buffer)
+       top: 200px (clears the 132+24=156px tall top-left QR area + buffer)
+       bottom: 660px (clears the 120px IMb zone at y=696px)
+     This is 442px wide × 460px tall = ~36 lines @ 20px line-height.
+     Plenty of canvas, NO overflow into address area. */
+  .msg {
+    position: absolute;
+    top: 200px; left: 48px;
+    width: 442px;
+    /* The bottom edge is the IMb zone start at y=696px, minus a small
+       buffer so the last line doesn't kiss the barcode rectangle. */
+    height: 460px;
+    font-family: 'Caveat', cursive;
+    font-size: 32px; line-height: 1.4;
+    color: #17223B;
+    word-wrap: break-word; overflow-wrap: break-word;
+    overflow: hidden; /* never overflows visible bounds */
+  }
+
+  /* Tiny postmark / date stamp bottom-left (just above IMb zone) */
+  .postmark { position: absolute; left: 48px; bottom: 138px;
+              font-family: 'JetBrains Mono', monospace; font-size: 11px;
+              color: rgba(23, 34, 59, 0.5); letter-spacing: 0.2em;
+              text-transform: uppercase; }
+
+  /* Sample Lob auto-print preview inside the protected zone, faded */
+  .addr { position: absolute; top: 380px; right: 95px; width: 540px;
+          font-family: Inter, sans-serif; font-size: 18px; line-height: 1.45;
+          color: rgba(23, 34, 59, 0.5); }
+  .addr .meta { font-size: 13px; letter-spacing: 0.1em;
+                color: rgba(23, 34, 59, 0.4); font-weight: 500; }
+  .addr .name { font-weight: 600; color: rgba(23, 34, 59, 0.65);
+                margin-top: 8px; font-size: 19px; }
+</style>
+</head>
+<body>
+
+<h1>Option C v2 — Vintage purist, corrected</h1>
+<p class="pitch">
+  Per founder feedback: QR moves to top-left (replaces the wax-seal "M" — the
+  right-side stamp already says MAILROOM, no need for a second logo). Message
+  is now strictly bounded to the left safe column (left: 48px, width: 442px,
+  bottom: 660px) so it can never overflow into Lob's address zone.
+  Dimensions match Lob's published constraints exactly: address zone is
+  3.2835" × 2.375" inset 0.275" from right + 0.25" from bottom; IMb zone is
+  bottom 0.625" full width. Mock-up rendered at 2× resolution
+  (1200 × 816 = 6.25" × 4.25" at 192 px/in) so the stamp + handwriting are
+  visible at near-print quality.
+</p>
+
+<div class="stage">
+  <div class="lob-zone-addr"><span class="zone-label">LOB AUTO-PRINTS ADDRESS + IMB</span></div>
+  <div class="lob-zone-imb"><span class="zone-label">IMB BARCODE ZONE</span></div>
+
+  <!-- Top-left: QR + tagline (replaces the wax-seal M) -->
+  <div class="qr-wrap">
+    <div class="qr"></div>
+    <div class="qr-meta">
+      <div class="label">Reply free →</div>
+      <div class="copy">Open with iPhone camera. No app needed for them.</div>
+      <div class="url">mailroom.app/r/A8B4F2</div>
+    </div>
+  </div>
+
+  <!-- Top-right: vintage perforated stamp (the brand anchor) -->
+  <div class="stamp-wrap">
+    <div class="stamp">
+      <div class="stamp-inner-border"></div>
+      <div class="stamp-art"></div>
+      <div class="stamp-title">MAILROOM</div>
+      <div class="stamp-cost">70<span class="small">¢</span></div>
+      <div class="stamp-year">· 2026 ·</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Message — strictly bounded to left safe column -->
+  <div class="msg">Hi Tati. I love you and this photo of us — it was a really special early day in spring, one of the first nice days to just be outside in the grass. I had just come back from the sphere with a new lawn towel that we put to good use. — Scotty</div>
+
+  <!-- Date stamp tucked just above IMb zone -->
+  <div class="postmark">⌖ Chevy Chase MD · May 14 2026</div>
+
+  <!-- Faded preview of what Lob auto-prints in their zone -->
+  <div class="addr">
+    <div class="meta">T16  P1  ******AUTO**MIXED AADC 750</div>
+    <div class="meta">5531    1186382709</div>
+    <div class="name">TATIANA BARBIC</div>
+    <div>861 N HUMBOLDT ST APT B</div>
+    <div>DENVER CO 80218-3517</div>
+  </div>
+</div>
+
+</body></html>

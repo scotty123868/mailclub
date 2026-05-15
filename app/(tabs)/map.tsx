@@ -130,10 +130,15 @@ export default function MapScreen() {
       const baseCity = p.fromCity || currentUser?.city || "";
       const coord = resolveCoord(baseCity, currentUser.state);
       if (!coord) return;
-      // Spread pending pins slightly so they don't stack. ~0.3 deg
-      // ≈ ~30km — visible but doesn't lie about location.
+      // v0.7.0.28: bumped offset from 0.3deg → 0.9deg (~100km) so the
+      // pin AND its "awaiting address" label don't overlap the home
+      // pin's "Chevy Chase" label. User report from build-46 proof:
+      // the gold awaiting-address dot was sitting almost on top of
+      // the solid home dot, and the two labels were stacking on each
+      // other. 0.9deg is enough visual separation at any zoom the
+      // user can pan to, while still clearly being "near" home.
       const angle = (idx * 137.5 * Math.PI) / 180; // golden angle
-      const r = 0.3 + idx * 0.05;
+      const r = 0.9 + idx * 0.15;
       const jittered = {
         latitude: coord.latitude + Math.sin(angle) * r,
         longitude: coord.longitude + Math.cos(angle) * r,
