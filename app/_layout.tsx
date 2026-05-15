@@ -30,6 +30,7 @@ import {
   CormorantGaramond_700Bold,
 } from "@expo-google-fonts/cormorant-garamond";
 import { Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from "@expo-google-fonts/inter";
+import { CelebrationOverlay } from "@/src/components/CelebrationOverlay";
 import { WelcomeGate } from "@/src/components/WelcomeGate";
 import { MailClubProvider } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
@@ -74,6 +75,13 @@ export default function RootLayout() {
           <StatusBar style="dark" />
           <Stack screenOptions={{ headerShown: false }} />
           <WelcomeGate />
+          {/* v0.7.0.26: global celebration overlay. Triggered via
+              MailClubContext.showCelebration(). The link-mode send
+              path uses this to play the envelope-balloon animation
+              AFTER the iOS share sheet returns sharedAction —
+              fixes the build-39 bug where the celebration ran
+              regardless of whether the share completed. */}
+          <CelebrationOverlay />
         </MailClubProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

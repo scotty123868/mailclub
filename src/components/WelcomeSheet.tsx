@@ -139,6 +139,7 @@ export function WelcomeSheet({
     sendIntoVoid,
     refreshProfile,
     hasCompletedSignup,
+    showCelebration,
   } = useMailClub();
 
   // ----- Step + linear nav --------------------------------------------------
@@ -610,6 +611,28 @@ export function WelcomeSheet({
       } else if (recipientKind === "link") {
         // Send-link flow: card queues immediately + the user gets a
         // shareable claim URL.
+        //
+        // v0.7.0.26 rewrite of the timing. Previously the link path
+        // stashed the URL and walked the user through MailedStep
+        // (envelope-balloon celebration), THEN fired Share.share on
+        // dismiss. User feedback: "the celebration for mail sent
+        // should happen after the link has been sent." That's right
+        // — playing the celebration before the actual share misled
+        // the user, especially if they then dismissed the share sheet.
+        //
+        // New order:
+        //   1. RPC creates the postcard server-side.
+        //   2. Welcome modal dismisses immediately (onComplete()).
+        //   3. After 300ms (iOS modal teardown), Share.share fires.
+        //   4. iOS share sheet returns sharedAction OR dismissedAction.
+        //   5. If shared: trigger CelebrationOverlay (a global modal
+        //      that lives in app/_layout.tsx, decoupled from the
+        //      welcome flow). Envelope-balloon plays AFTER the actual
+        //      send completes.
+        //   6. If dismissed: the postcard is still in the user's
+        //      journal (sendPostcardViaLinkAction added it optimistically)
+        //      with a "Share again" button on PostcardDetailSheet.
+        //      No celebration — the user didn't actually send.
         const sendRes = await sendPostcardViaLink({
           category: "photo",
           message: message.trim(),
@@ -618,14 +641,42 @@ export function WelcomeSheet({
         if (!sendRes.ok || !sendRes.claimUrl) {
           throw new Error("Couldn't create the link.");
         }
-        // v0.7.0.18: don't call Share.share inline. iOS blocks
-        // UIActivityViewController from presenting over a fullScreen
-        // modal — the share sheet either never appears or appears
-        // *behind* the welcome modal. Stash the URL; MailedStep shows
-        // it visibly + the onDismiss handler fires Share.share AFTER
-        // the modal closes (with a 300ms delay so iOS has time to
-        // tear down the modal's view controller).
-        setShareUrl(sendRes.claimUrl);
+        const claimUrl = sendRes.claimUrl;
+        const recipientFirstForCopy =
+          theirName.trim().split(" ")[0] || "your friend";
+        const senderFirst = yourFirstName.trim() || "I";
+        // Close the welcome modal NOW. The share sheet will fire after
+        // a short delay so iOS can tear down the modal's view
+        // controller and present UIActivityViewController over the
+        // app shell (not over a fullScreen modal, which iOS blocks).
+        onComplete();
+        setTimeout(() => {
+          Share.share({
+            message: `I want to send you a postcard! ${senderFirst} is using Mailroom. Tap the link below to share your mailing address — we'll print and ship it for you.\n\n${claimUrl}`,
+          })
+            .then((result) => {
+              // Only celebrate on actual share completion. iOS share
+              // sheet returns { action: "sharedAction" } on share,
+              // { action: "dismissedAction" } on cancel.
+              if (result.action === Share.sharedAction) {
+                showCelebration({
+                  kind: "link",
+                  recipientName: recipientFirstForCopy,
+                  shareUrl: claimUrl,
+                });
+              }
+              // If dismissed: silent. The postcard is in the journal
+              // and the user can re-share from PostcardDetailSheet.
+            })
+            .catch(() => {
+              // Real error opening the share sheet — surface nothing
+              // intrusive. The card still exists; they can re-share
+              // from My Card → Journal → tap card → "Share again".
+            });
+        }, 300);
+        // Bail out of commitSignupAndSend — we already called onComplete
+        // and don't want to setStep("mailed") below.
+        return;
       } else if (recipientKind === "self") {
         // Send to yourself: create a friend row with your own address
         // (so future repeat-sends to self work) and send.

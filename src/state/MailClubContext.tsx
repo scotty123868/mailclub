@@ -131,6 +131,16 @@ type MailClubState = {
   addMayaConnection: () => Promise<void>;
   updateNotifications: (patch: Partial<NotificationPrefs>) => Promise<void>;
   updatePrivacy: (patch: Partial<PrivacyPrefs>) => Promise<void>;
+  // v0.7.0.26: in-app post-send celebration. Trigger from any code path
+  // after a send action has fully resolved (incl. iOS Share completion
+  // for link mode). Renders the envelope-balloon animation as a global
+  // overlay above the tab bar. Cleared by the overlay's "Open Mailroom"
+  // button. The state lives at context level so the WelcomeSheet's link
+  // path can fire it AFTER the welcome modal has dismissed and the iOS
+  // share sheet has resolved with action=sharedAction.
+  celebration: { kind: "link" | "friend" | "self" | "penpal"; recipientName?: string; shareUrl?: string } | null;
+  showCelebration: (opts: { kind: "link" | "friend" | "self" | "penpal"; recipientName?: string; shareUrl?: string }) => void;
+  hideCelebration: () => void;
   signOut: () => Promise<void>;
   completeSignup: (input: { name: string; city: string; state: string; birthday?: string; email?: string; password?: string }) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
@@ -168,6 +178,11 @@ export function MailClubProvider({ children }: PropsWithChildren) {
   const [friends, setFriends] = useState<Friend[]>(initialFriends);
   const [postcards, setPostcards] = useState<Postcard[]>(initialPostcards);
   const [voidReplies, setVoidReplies] = useState<VoidReply[]>([]);
+  // v0.7.0.26: global celebration overlay state. See type def above the
+  // context value for rationale.
+  const [celebration, setCelebration] = useState<
+    { kind: "link" | "friend" | "self" | "penpal"; recipientName?: string; shareUrl?: string } | null
+  >(null);
   const [credits, setCredits] = useState(FREE_CREDITS);
   const [freeCreditsRemaining, setFreeCreditsRemaining] = useState(FREE_CREDITS);
   const [hasSeenFreeCreditsIntro, setHasSeenFreeCreditsIntro] = useState(false);
@@ -537,11 +552,53 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         photoUri: photoPath,
         placeName: input.placeName,
       });
-      // Refresh credits + postcards from server so UI reflects the new state
       setCredits(result.creditsRemaining);
+      // v0.7.0.26 FIRST-SEND BUGFIX: optimistically insert the postcard
+      // into local state BEFORE the server fetch. Why both:
+      //
+      //   a) For brand-new users (prev.length === 0), the guard below
+      //      can't save us — if the fetch races and returns empty, prev
+      //      is also empty, so the user lands in the app with a blank
+      //      journal even though their credit was spent and the row
+      //      exists server-side. The optimistic insert closes this gap:
+      //      local state has the card the moment the RPC succeeds.
+      //
+      //   b) The guard still matters: if the fetch races to empty AFTER
+      //      our optimistic insert, we keep the optimistic copy. When
+      //      the next tab-focus or realtime event triggers a successful
+      //      fetch, the real server copy overwrites our optimistic stub.
+      //
+      // We construct the Postcard from the data we have. Some fields
+      // (toCity, claim metadata beyond URL, lobId) are unknown at this
+      // moment — that's fine, they fill in on the next fetch.
+      const optimistic: Postcard = {
+        id: result.postcardId,
+        senderId: authedUserId,
+        toFriendId: "", // claim mode — recipient hasn't claimed yet
+        fromCity: userInfo.city || "",
+        toCity: "",
+        category: input.category,
+        creditCost: cost,
+        status: "awaiting_address",
+        message: input.message,
+        sentAt: new Date().toISOString(),
+        photoUri: photoPath,
+        placeName: input.placeName,
+        claimUrl: result.claimUrl,
+        lobId: null,
+      };
+      setPostcards((prev) => {
+        // Dedupe by id in case the realtime channel already raced ahead.
+        if (prev.some((p) => p.id === optimistic.id)) return prev;
+        return [optimistic, ...prev];
+      });
       try {
         const fresh = await api.fetchPostcards();
-        setPostcards(fresh);
+        // Same empty-overwrite guard as the auth-fetch effect — if the
+        // server returns empty during an RLS race, keep what we have
+        // (including the optimistic insert above) until a real fetch
+        // succeeds.
+        setPostcards((prev) => (fresh.length === 0 && prev.length > 0 ? prev : fresh));
       } catch { /* non-fatal */ }
       // v0.7: send-via-link COUNTS as the first send. The card queues
       // immediately and the user is unlocked into the app, even if the
@@ -1102,6 +1159,9 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     addMayaConnection: addMayaConnectionAction,
     updateNotifications: updateNotificationsAction,
     updatePrivacy: updatePrivacyAction,
+    celebration,
+    showCelebration: setCelebration,
+    hideCelebration: () => setCelebration(null),
     signOut: signOutAction,
     completeSignup: completeSignupAction,
     signInWithEmail: signInWithEmailAction,
@@ -1111,7 +1171,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     deleteAccount: deleteAccountAction,
   }), [
     userInfo, visibleFriends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup, hasSentFirstCard,
-    hydrated, authedUserId, voidReplies, notifications, privacy,
+    hydrated, authedUserId, voidReplies, notifications, privacy, celebration,
     sendPostcardAction, sendPostcardViaLinkAction, sendIntoVoidAction, purchaseCreditsAction, refreshProfileAction, markFreeCreditsIntroSeenAction,
     updateAboutMeAction, removeFriendAction, addFriendByAddressAction, queueInvitationAction,
     addMayaConnectionAction, updateNotificationsAction, updatePrivacyAction, signOutAction,
