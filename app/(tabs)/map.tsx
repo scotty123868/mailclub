@@ -241,11 +241,19 @@ const styles = StyleSheet.create({
   // height, which is why the map screen showed nothing but cream paper.
   //
   // window-height-minus-chrome gives a proper fullscreen-ish map area
-  // (Header is ~64, tab bar ~96, plus a little breathing room). When
-  // the map screen eventually moves out of AppShell into its own
-  // root-level layout (build 36+), this hack goes away.
+  // (Header is ~52, step crumb ~30, tab bar ~90 with the raised FAB,
+  // safe-area bottom inset ~30, plus the borderRadius breathing room).
+  // When the map screen eventually moves out of AppShell into its own
+  // root-level layout (build 38+), this hack goes away.
+  //
+  // v0.7.0.25: bumped from 220 → 280 because Apple Maps attribution
+  // (the "Maps Legal" link at the bottom of every MapView) was being
+  // clipped by the floating tab bar. The map view extended *behind*
+  // the tab bar and the legal text was rendering in the overlap zone.
+  // 280 leaves a clean ~60px gap between the map's bottom edge and
+  // the tab bar, so the attribution is fully visible.
   mapFrame: {
-    height: Dimensions.get("window").height - 220,
+    height: Dimensions.get("window").height - 280,
     marginTop: 8,
     overflow: "hidden",
     borderRadius: 12,

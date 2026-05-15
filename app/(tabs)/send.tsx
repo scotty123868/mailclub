@@ -20,34 +20,44 @@ import { SuccessModal } from "@/src/components/SuccessModal";
 import { CARD_COST_PHOTO } from "@/src/data/credits";
 import { capturePostcardForPrint, lobRenderDimensions, submitToLob } from "@/src/services/lob";
 import { useMailClub } from "@/src/state/MailClubContext";
+import { getSelfAddress, setSelfAddress } from "@/src/state/selfAddress";
 import { colors } from "@/src/theme/colors";
 import { fonts, type } from "@/src/theme/typography";
 import type { Friend } from "@/src/types/mail";
 
 /**
- * Send screen — v0.5.0 multi-step flow (gallery decision).
+ * Send screen — v0.7.0.25 multi-step flow (dynamic per recipient kind).
  *
- * Four sequential pages, one decision per page:
- *   1. Cover         — pick your photo
- *   2. Inside        — write your note
- *   3. Recipient     — who's it for? (name + inline friend match)
- *   4. Delivery      — how does it get to them? (magic link default)
+ * Step 1 is always the recipient TYPE picker (friend / yourself / pen pal).
+ * After step 1 the flow forks by kind, because each kind needs different
+ * downstream steps:
  *
- * Step state lives in this component (single route, internal step machine).
- * Back navigates one step, or exits to the previous tab on step 1.
+ *   • Friend:  Type → Name → Cover → Inside → Delivery        (5 steps)
+ *     Name now lives on its own page (was inline on step 1) so the user
+ *     gets focus on choosing a friend without the type tiles distracting.
+ *
+ *   • Yourself: Type → [SelfAddress] → Cover → Inside          (3 or 4 steps)
+ *     First-time self-senders fill their mailing address; we cache it on-
+ *     device and skip the step on every subsequent self-send. Editable
+ *     from Settings (My Card → Address) — build 38+. No delivery step at
+ *     all — we already know the destination (your mailbox).
+ *
+ *   • Pen pal: Type → Cover → Inside                           (3 steps)
+ *     Card goes to a random stranger in the Mailroom network via
+ *     sendIntoVoid. No delivery step — the network picks the recipient.
+ *
+ * The dynamic `stepsForKind` array is the source of truth; `step` is a
+ * 1-based index into it. `currentStepName` derives from there. canAdvance,
+ * progress dots, and the action-row button label all read from the array
+ * so adding/removing a step only requires updating one map.
  *
  * Lob capture happens off-screen at 1875px wide after a successful direct
- * send, just like before. The send-via-link flow still defers Lob capture
- * until the recipient claims via the magic link.
+ * send. The send-via-link flow defers Lob capture until the recipient
+ * claims via the magic link.
  */
 
-type Step = 1 | 2 | 3 | 4;
+type StepName = "type" | "name" | "selfAddress" | "cover" | "inside" | "delivery";
 type DeliveryMode = "friend" | "link" | "address";
-
-// v0.7.0.24: recipient TYPE picker on step 1. The user picks WHO this card
-// is for (friend / yourself / pen pal) before anything else. Selecting
-// "friend" reveals the name input inline. "self" and "penpal" don't need
-// a name — the type is the identity.
 type RecipientKind = "friend" | "self" | "penpal";
 
 type PrintRecipient = {
@@ -73,6 +83,43 @@ type PrintSnapshot = {
   reciprocationUrl?: string;
 };
 
+/**
+ * Build the step array for the active recipient kind. Pure function of
+ * (kind, hasSavedSelfAddress) so we can call it both inside render and
+ * inside event handlers without worrying about stale closures.
+ */
+function stepsForKind(
+  kind: RecipientKind | null,
+  hasSavedSelfAddress: boolean,
+): StepName[] {
+  if (kind === "friend") return ["type", "name", "cover", "inside", "delivery"];
+  if (kind === "self") {
+    return hasSavedSelfAddress
+      ? ["type", "cover", "inside"]
+      : ["type", "selfAddress", "cover", "inside"];
+  }
+  if (kind === "penpal") return ["type", "cover", "inside"];
+  return ["type"];
+}
+
+/** Human-readable label for the step crumb. */
+function labelForStep(name: StepName): string {
+  switch (name) {
+    case "type":
+      return "Recipient";
+    case "name":
+      return "Friend";
+    case "selfAddress":
+      return "Your address";
+    case "cover":
+      return "Cover";
+    case "inside":
+      return "Inside";
+    case "delivery":
+      return "Delivery";
+  }
+}
+
 export default function SendScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ friendId?: string; mode?: string }>();
@@ -87,7 +134,9 @@ export default function SendScreen() {
   } = useMailClub();
 
   // -- Step machine -------------------------------------------------------
-  const [step, setStep] = useState<Step>(1);
+  // `step` is a 1-based INDEX into the dynamic step array. Use
+  // `currentStepName` below to branch on what the user is actually seeing.
+  const [step, setStep] = useState<number>(1);
 
   // -- Compose state ------------------------------------------------------
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -95,8 +144,6 @@ export default function SendScreen() {
   const [editorOpen, setEditorOpen] = useState(false);
 
   // -- Recipient state ----------------------------------------------------
-  // v0.7.0.24: type picker is the first decision. Defaults to null so
-  // the user must explicitly choose before continuing.
   const [recipientKind, setRecipientKind] = useState<RecipientKind | null>(null);
   // Name input is only used when recipientKind === "friend".
   const [recipientName, setRecipientName] = useState("");
@@ -106,58 +153,90 @@ export default function SendScreen() {
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("link");
   const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
 
+  // -- Self-address state -------------------------------------------------
+  // The address the user enters once on their first self-send, then reuses
+  // forever. Hydrated from AsyncStorage on mount (see effect below). When
+  // null/incomplete, the dynamic step array includes a "selfAddress" step;
+  // when complete, we skip straight to cover/inside/send.
+  const [savedSelfAddress, setSavedSelfAddress] = useState<AddressDraft | null>(null);
+  // Draft state for the selfAddress step. Pre-filled from savedSelfAddress
+  // (lets the user edit and save back) or from currentUser.city/state when
+  // first-time.
+  const [selfAddressDraft, setSelfAddressDraft] = useState<AddressDraft>(EMPTY_ADDRESS);
+
   // -- Send + modal state -------------------------------------------------
   const [sending, setSending] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [success, setSuccess] = useState({ visible: false, title: "", subtitle: "" });
   const [seededFriend, setSeededFriend] = useState<string | undefined>(undefined);
 
-  // Print snapshot: the photo/message/recipient frozen at the moment of send.
-  // The offscreen Lob print views read from this if present, falling back to
-  // live compose state. This decouples Lob's async capture from the user
-  // starting a new postcard. (codex P1, Phase 2.6 review: without this,
-  // `resetCompose()` in submitPostcardToLob's .finally could wipe the next
-  // postcard's state mid-edit.)
   const [printSnapshot, setPrintSnapshot] = useState<PrintSnapshot | null>(null);
 
   // -- Refs ---------------------------------------------------------------
   const printFrontRef = useRef<View>(null);
   const printBackRef = useRef<View>(null);
-  // Synchronous lock against double-tap on the final Send button. React
-  // state (`sending`) only flips after the next render, so two presses in
-  // the same event-loop tick could both pass the gate. A useRef latch is
-  // the authoritative double-press defender.
   const sendingLockRef = useRef(false);
   const { width: PRINT_W } = lobRenderDimensions();
+
+  // -- Hydrate saved self-address on mount -------------------------------
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const a = await getSelfAddress();
+      if (cancelled) return;
+      if (a && isAddressComplete(a)) {
+        setSavedSelfAddress(a);
+        setSelfAddressDraft(a);
+      } else {
+        // First-time self-sender: seed the draft with whatever the user
+        // already gave us during onboarding (name + city/state).
+        setSelfAddressDraft({
+          ...EMPTY_ADDRESS,
+          name: currentUser.name || "",
+          city: currentUser.city || "",
+          state: currentUser.state || "",
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // We only hydrate on mount; currentUser may not be set yet but the
+    // address persists across compose sessions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // -- Derived: dynamic step array ---------------------------------------
+  const steps = useMemo<StepName[]>(
+    () => stepsForKind(recipientKind, !!savedSelfAddress),
+    [recipientKind, savedSelfAddress],
+  );
+  const totalSteps = steps.length;
+  const currentStepName: StepName = steps[step - 1] ?? "type";
 
   // -- Param seeding ------------------------------------------------------
 
   // Seed recipient from ?friendId=... when navigated from a friend sheet.
-  // Pre-fills the name + selectedFriendId AND jumps to step 4 so the user
-  // doesn't have to walk through cover/inside/recipient just to pick a
-  // friend they already chose. They still pick a photo + write a note,
-  // but on their next pass the flow starts at delivery for that friend.
-  // (codex P1: comment now matches behavior — setStep(4) is called.)
   useEffect(() => {
     const friendParam = params?.friendId as string | undefined;
     if (!friendParam || seededFriend === friendParam) return;
     const friend = friends.find((f) => f.id === friendParam);
     if (friend) {
+      setRecipientKind("friend");
       setSelectedFriendId(friend.id);
       setRecipientName(friend.name);
       setDeliveryMode(friend.addressLine1 ? "friend" : "link");
-      // Only jump to step 4 if the user already has a photo + message
-      // queued; otherwise let them assemble the card first.
       if (photoUri && message.trim().length > 0) {
-        setStep(4);
+        // Jump to delivery (last step in friend flow).
+        const friendSteps = stepsForKind("friend", !!savedSelfAddress);
+        const deliveryIdx = friendSteps.indexOf("delivery") + 1;
+        if (deliveryIdx > 0) setStep(deliveryIdx);
       }
     }
     setSeededFriend(friendParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.friendId, friends, seededFriend]);
 
-  // Seed delivery mode from ?mode=... — used by the empty-rolodex
-  // "Send your first card" CTA on the Friends tab to bias toward link mode.
   useEffect(() => {
     const m = params?.mode as DeliveryMode | undefined;
     if (m === "link" || m === "address" || m === "friend") {
@@ -173,9 +252,6 @@ export default function SendScreen() {
     return friends.find((f) => f.id === selectedFriendId) ?? null;
   }, [friends, selectedFriendId]);
 
-  // Friends matching the typed recipient name. Case-insensitive prefix and
-  // substring match. Top 5 results. Hidden once the user locks a specific
-  // friend by tapping a result row (then we show a single confirmation row).
   const friendMatches: Friend[] = useMemo(() => {
     const q = recipientName.trim().toLowerCase();
     if (!q) return [];
@@ -184,11 +260,22 @@ export default function SendScreen() {
       .slice(0, 5);
   }, [recipientName, friends]);
 
-  // Recipient block used by both the BackPreview and the off-screen Lob
-  // capture. Always reflects the latest source-of-truth: locked friend's
-  // address if present, manual address if in address mode, "awaiting" copy
-  // if delivery is by magic link.
   const recipientForPreview = useMemo(() => {
+    // Self-send: render the user's own saved address.
+    if (recipientKind === "self") {
+      const a = savedSelfAddress ?? selfAddressDraft;
+      return {
+        name: a.name || currentUser.name || "You",
+        city: a.city,
+        state: a.state,
+        addressLine1: a.line1,
+        addressLine2: a.line2,
+        zip: a.zip,
+      };
+    }
+    if (recipientKind === "penpal") {
+      return { name: "A stranger in the network", city: "", state: "" };
+    }
     if (deliveryMode === "address") {
       return {
         name: address.name || recipientName || "Recipient",
@@ -213,7 +300,7 @@ export default function SendScreen() {
       };
     }
     return { name: recipientName || "", city: "", state: "" };
-  }, [deliveryMode, address, selectedFriend, recipientName, currentUser]);
+  }, [recipientKind, savedSelfAddress, selfAddressDraft, deliveryMode, address, selectedFriend, recipientName, currentUser]);
 
   // -- Photo picker -------------------------------------------------------
 
@@ -229,7 +316,6 @@ export default function SendScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      // Postcards are 3:2 aspect; cropping to match avoids surprises in print.
       aspect: [3, 2],
       quality: 0.92,
     });
@@ -241,33 +327,44 @@ export default function SendScreen() {
   // -- Step navigation ----------------------------------------------------
 
   function canAdvance(): { ok: true } | { ok: false; reason?: string } {
-    // v0.7.0.24: step 1 is now the type picker. "friend" also requires a
-    // name; "self" + "penpal" don't (they're identity-by-type).
-    if (step === 1) {
-      if (!recipientKind) {
-        return { ok: false, reason: "Pick who this card is for." };
+    switch (currentStepName) {
+      case "type": {
+        if (!recipientKind) {
+          return { ok: false, reason: "Pick who this card is for." };
+        }
+        return { ok: true };
       }
-      if (recipientKind === "friend" && recipientName.trim().length === 0) {
-        return { ok: false, reason: "Type a name so we know which friend." };
+      case "name": {
+        if (recipientName.trim().length === 0) {
+          return { ok: false, reason: "Type a name so we know which friend." };
+        }
+        return { ok: true };
       }
-      return { ok: true };
+      case "selfAddress": {
+        if (!isAddressComplete(selfAddressDraft)) {
+          return {
+            ok: false,
+            reason: "Fill in your full address so we can mail it to you.",
+          };
+        }
+        return { ok: true };
+      }
+      case "cover":
+        return photoUri
+          ? { ok: true }
+          : { ok: false, reason: "Pick a photo first to keep moving." };
+      case "inside":
+        return message.trim().length > 0
+          ? { ok: true }
+          : { ok: false, reason: "Write a quick note for the back." };
+      case "delivery":
+        return { ok: true };
     }
-    if (step === 2) {
-      return photoUri
-        ? { ok: true }
-        : { ok: false, reason: "Pick a photo first to keep moving." };
-    }
-    if (step === 3) {
-      return message.trim().length > 0
-        ? { ok: true }
-        : { ok: false, reason: "Write a quick note for the back." };
-    }
-    return { ok: true };
   }
 
   function goBack() {
     if (step > 1) {
-      setStep((step - 1) as Step);
+      setStep(step - 1);
     } else {
       router.back();
     }
@@ -279,20 +376,29 @@ export default function SendScreen() {
       if (v.reason) Alert.alert("Not quite ready", v.reason);
       return;
     }
-    if (step < 4) {
-      const next = (step + 1) as Step;
+
+    // Side effects on advance from specific steps:
+    if (currentStepName === "selfAddress") {
+      // Persist the draft. Future sends skip this step entirely.
+      setSavedSelfAddress(selfAddressDraft);
+      setSelfAddress(selfAddressDraft).catch(() => undefined);
+    }
+
+    if (step < totalSteps) {
+      const next = step + 1;
       setStep(next);
-      // When advancing to step 4 with a locked friend who has an address,
-      // default to "friend" delivery (their saved address). Otherwise default
-      // to "link" so the user doesn't have to type an address they don't have.
-      if (next === 4 && selectedFriend?.addressLine1) {
-        setDeliveryMode("friend");
-      } else if (next === 4 && deliveryMode === "friend") {
-        // The previously-selected friend has no address; flip to link as the
-        // sensible default rather than leaving them on a broken option.
-        setDeliveryMode("link");
+      // When advancing to delivery with a locked friend who has an address,
+      // default to "friend" delivery. Otherwise default to "link".
+      const nextName = steps[next - 1];
+      if (nextName === "delivery") {
+        if (selectedFriend?.addressLine1) {
+          setDeliveryMode("friend");
+        } else if (deliveryMode === "friend") {
+          setDeliveryMode("link");
+        }
       }
     } else {
+      // Last step → fire the send.
       onSend();
     }
   }
@@ -319,10 +425,9 @@ export default function SendScreen() {
     }
 
     // Delivery-mode-specific gate before we kick off the network round-trip.
-    // codex P1: validate against the RESOLVED address (name falls back to
-    // recipientName) — otherwise an "address-mode" send with a name from
-    // step 3 but no separate edit in step 4 would falsely fail validation.
-    if (deliveryMode === "address") {
+    // Only applies to the friend flow; self + penpal don't run a delivery
+    // step at all.
+    if (recipientKind === "friend" && deliveryMode === "address") {
       const resolved: AddressDraft = {
         ...address,
         name: address.name || recipientName,
@@ -333,7 +438,7 @@ export default function SendScreen() {
         return;
       }
     }
-    if (deliveryMode === "friend" && !selectedFriend?.addressLine1) {
+    if (recipientKind === "friend" && deliveryMode === "friend" && !selectedFriend?.addressLine1) {
       sendingLockRef.current = false;
       Alert.alert(
         "No address on file",
@@ -344,11 +449,9 @@ export default function SendScreen() {
 
     setSending(true);
     try {
-      // v0.7.0.24: penpal + self short-circuits — handled before the
-      // friend/link/address branches because they don't need delivery
-      // mode at all. Penpal goes into the void (sendIntoVoid). Self
-      // creates a friend record with the user's own profile address
-      // and sends via the friend path (mirror of welcome-flow self).
+      // Penpal: card goes to a random user in our network. No delivery
+      // step ever runs. sendIntoVoid handles recipient selection server-
+      // side via the void claim queue.
       if (recipientKind === "penpal") {
         const result = await sendIntoVoid(message.trim());
         if (!result.ok) {
@@ -364,32 +467,34 @@ export default function SendScreen() {
         resetCompose();
         return;
       }
+
+      // Self: address came from the cached self-address (or the just-
+      // saved draft from the selfAddress step). We create-or-update the
+      // "(me)" friend record with this address and send via the friend
+      // path. The (me) friend stays filtered from every visible UI
+      // surface by the visibleFriends gate in MailClubContext.
       if (recipientKind === "self") {
-        // Use the user's own profile address — same pattern as welcome's
-        // self path. The "(me)" friend record this creates is hidden
-        // from every UI surface (constellation, map, friends list) by
-        // the context-level visibleFriends filter (build 34). Proper
-        // schema fix (is_self column, no friend row at all) queued for
-        // a later build.
-        if (!currentUser.city || !currentUser.state) {
+        const a = savedSelfAddress ?? selfAddressDraft;
+        if (!isAddressComplete(a)) {
+          // Shouldn't happen — the step gate catches this — but defend
+          // against a programming error rather than crashing on Lob.
           Alert.alert(
-            "Your address isn't set yet",
-            "Add your address in My Card → Settings, then try sending to yourself again.",
+            "Your address isn't set",
+            "Add your address on the previous step, then try sending to yourself again.",
           );
           return;
         }
-        const firstName = (currentUser.name || "You").split(" ")[0];
+        const firstName = (a.name || currentUser.name || "You").split(" ")[0];
         const selfRes = await addFriendByAddress({
           name: `${firstName} (me)`,
-          city: currentUser.city,
-          state: currentUser.state,
-          addressCity: currentUser.city,
-          addressState: currentUser.state,
+          city: a.city,
+          state: a.state,
+          addressLine1: a.line1,
+          addressLine2: a.line2,
+          addressCity: a.city,
+          addressState: a.state,
+          addressZip: a.zip,
           addressCountry: "US",
-          // We don't have the user's street address on currentUser in
-          // most cases. Fall back to a placeholder — Lob in relaxed mode
-          // typically still accepts and the user is going to retest in
-          // live mode anyway.
         });
         if (!selfRes.ok || !selfRes.friend) {
           Alert.alert("Couldn't save self-address", "Try setting your address in My Card first.");
@@ -416,6 +521,7 @@ export default function SendScreen() {
         return;
       }
 
+      // Friend flow below ----------------------------------------------------
       if (deliveryMode === "link") {
         const result = await sendPostcardViaLink({
           category: "photo",
@@ -444,12 +550,6 @@ export default function SendScreen() {
         return;
       }
 
-      // For "address" mode: silently create the friend first, then send.
-      // For "self" mode: addr is the current user's address (we'd already
-      // have it from onboarding; otherwise fall through to address flow).
-      // codex Phase 6 P1: pass the just-created friend object explicitly
-      // to sendPostcard so the action doesn't rely on a stale `friends`
-      // closure that doesn't yet include this friend.
       let targetFriendId: string;
       let targetName: string;
       let targetFriend: import("@/src/types/mail").Friend | null = null;
@@ -488,10 +588,6 @@ export default function SendScreen() {
       });
       if (!result.ok) return;
 
-      // Mint a reciprocation token for the QR on the back. Best-effort —
-      // if the migration hasn't been deployed yet or the RPC fails, we
-      // ship the postcard without the QR rather than blocking the send.
-      // (Phase 3.)
       let reciprocationUrl: string | undefined;
       if (result.postcardId) {
         try {
@@ -509,12 +605,6 @@ export default function SendScreen() {
         subtitle: `Heading to ${targetName} via USPS First Class Mail. It should arrive in about 1–2 weeks.`,
       });
 
-      // Freeze the print inputs into a snapshot BEFORE we reset compose
-      // state. The offscreen Lob views render from `printSnapshot` if set,
-      // so capture works on stable frozen data even if the user dismisses
-      // the success modal and starts a new postcard mid-flight.
-      // (codex P1, Phase 2.6 review.) Also carries the reciprocation URL
-      // so the QR renders into the Lob-captured back PNG.
       setPrintSnapshot({
         photoUri: photoUri ?? "",
         message,
@@ -534,15 +624,10 @@ export default function SendScreen() {
             console.warn("Lob submission failed (will retry server-side):", err);
           })
           .finally(() => {
-            // Snapshot served its purpose — release it so the offscreen
-            // views go back to mirroring live compose state.
             setPrintSnapshot(null);
           });
       }
 
-      // Safe to reset immediately. The success modal overlays the screen,
-      // so the user doesn't see the compose blanks. The printSnapshot above
-      // is what Lob captures against.
       resetCompose();
     } finally {
       setSending(false);
@@ -575,41 +660,56 @@ export default function SendScreen() {
     setAddress(EMPTY_ADDRESS);
     setDeliveryMode("link");
     setStep(1);
+    // Note: savedSelfAddress + selfAddressDraft persist on purpose — the
+    // whole point of the cached self-address is to survive across compose
+    // sessions. Resetting them would defeat the "ask once" UX.
   }
 
   // -- Render -------------------------------------------------------------
 
   const cantAfford = credits < CARD_COST_PHOTO;
-  // codex P2: distinguish "Send postcard" (we print + mail today) from
-  // "Share a link" (the recipient claims it before we print). Same Lob spend
-  // either way, but the immediate action is different so the button label
-  // should match.
+  // Final action label depends on what the last step is for this kind.
+  // - Friend ends on "delivery" with link/address/friend options.
+  // - Self ends on "inside" — send goes straight to the user's mailbox.
+  // - Penpal ends on "inside" — send goes into the void.
+  //
+  // The "type" step is never the last step. When `recipientKind` is null
+  // the steps array is just ["type"] and `step === totalSteps`, but that
+  // user has nowhere to send to yet — we need the Continue button (which
+  // re-derives the array once they pick a kind), not the final Send CTA.
+  const isLastStep = currentStepName !== "type" && step === totalSteps;
   const finalCtaLabel = sending
     ? "Sending..."
     : cantAfford
       ? "Buy stamps"
-      : deliveryMode === "link"
+      : recipientKind === "friend" && deliveryMode === "link"
         ? "Share a link"
         : "Send postcard";
-  const continueLabel = step < 4 ? "Continue" : finalCtaLabel;
+  const continueLabel = !isLastStep ? "Continue" : finalCtaLabel;
 
   return (
     <AppShell>
       <Header title="Send" />
 
-      <StepHeader step={step} onBack={goBack} />
+      <StepHeader step={step} totalSteps={totalSteps} steps={steps} />
 
-      {step === 1 && (
+      {currentStepName === "type" && (
         <RecipientStep
           recipientKind={recipientKind}
           onPickKind={(k) => {
             setRecipientKind(k);
-            // Reset name + friend lock when switching away from "friend"
+            // Reset friend lock + name when switching away from "friend"
             if (k !== "friend") {
               setRecipientName("");
               unlockFriend();
             }
           }}
+          testID="send-step-1"
+        />
+      )}
+
+      {currentStepName === "name" && (
+        <NameStep
           name={recipientName}
           onNameChange={(t) => {
             setRecipientName(t);
@@ -621,11 +721,19 @@ export default function SendScreen() {
           locked={selectedFriend}
           onLockFriend={lockFriend}
           onUnlockFriend={unlockFriend}
-          testID="send-step-1"
+          testID="send-step-name"
         />
       )}
 
-      {step === 2 && (
+      {currentStepName === "selfAddress" && (
+        <SelfAddressStep
+          address={selfAddressDraft}
+          onAddressChange={setSelfAddressDraft}
+          testID="send-step-self-address"
+        />
+      )}
+
+      {currentStepName === "cover" && (
         <CoverStep
           photoUri={photoUri}
           onPickPhoto={openPhotoPicker}
@@ -633,7 +741,7 @@ export default function SendScreen() {
         />
       )}
 
-      {step === 3 && (
+      {currentStepName === "inside" && (
         <InsideStep
           message={message}
           recipientForPreview={recipientForPreview}
@@ -647,7 +755,7 @@ export default function SendScreen() {
         />
       )}
 
-      {step === 4 && (
+      {currentStepName === "delivery" && (
         <DeliveryStep
           recipientName={recipientName}
           selectedFriend={selectedFriend}
@@ -660,11 +768,6 @@ export default function SendScreen() {
       )}
 
       <View style={styles.actionRow}>
-        {/* v0.7.0.18: hide the back button on step 1. "Cancel" was the
-            previous label, but there's no useful destination — the user
-            is already on the first step. If they want out, the bottom
-            tab bar is right there. Back buttons on steps 2-4 still make
-            sense (they walk back through the send flow). */}
         {step > 1 ? (
           <Pressable
             onPress={goBack}
@@ -678,7 +781,7 @@ export default function SendScreen() {
           </Pressable>
         ) : null}
 
-        {step === 4 ? (
+        {isLastStep ? (
           <View style={styles.sendCol}>
             <Text style={styles.priceMain} numberOfLines={1}>1 stamp</Text>
             <Text style={styles.priceMeta} numberOfLines={1}>You have {credits}</Text>
@@ -688,6 +791,7 @@ export default function SendScreen() {
               onPress={cantAfford ? () => setCreditsOpen(true) : onSend}
               disabled={sending}
               style={styles.sendBtn}
+              testID="send-final-btn"
             />
           </View>
         ) : (
@@ -720,16 +824,6 @@ export default function SendScreen() {
 
       <CreditsSheet visible={creditsOpen} onClose={() => setCreditsOpen(false)} />
 
-      {/*
-        Off-screen 1875×1250 renders for Lob capture. Positioned way
-        off-screen but mounted so layout + paint complete, which is what
-        react-native-view-shot needs.
-
-        Renders from `printSnapshot` if set (frozen at send time) — that's
-        the source of truth during the async Lob capture. Falls back to
-        live compose state when no send is in flight, so the offscreen
-        views stay warm and ready (laid out, painted, ref-able).
-      */}
       <View
         style={styles.offscreen}
         pointerEvents="none"
@@ -761,32 +855,43 @@ export default function SendScreen() {
 }
 
 // =============================================================================
-// STEP HEADER  (progress dots + back affordance is rendered separately)
+// STEP HEADER  (progress dots + crumb)
 // =============================================================================
 
-function StepHeader({ step, onBack: _onBack }: { step: Step; onBack: () => void }) {
-  // v0.7.0.19: recipient first per user feedback. The flow now starts
-  // with "who is this for?" before the photo/note steps, which mirrors
-  // the welcome flow's order and how senders actually think about
-  // composing a card ("I want to send Lori a postcard" → pick Lori,
-  // *then* pick the photo).
-  const labels = ["Recipient", "Cover", "Inside", "Delivery"];
+function StepHeader({
+  step,
+  totalSteps,
+  steps,
+}: {
+  step: number;
+  totalSteps: number;
+  steps: StepName[];
+}) {
+  const currentName = steps[step - 1] ?? "type";
+  // Note: testID intentionally uses 1..N positional step indexes for the
+  // friend flow (the canonical 5-step), so existing tests don't have to
+  // be renamed. For self/penpal flows the testIDs are unique by step
+  // name (`send-step-self-address`, etc).
   return (
     <View style={stepHeaderStyles.row} testID={`send-step-header-${step}`}>
       <Text style={stepHeaderStyles.crumb}>
-        Step {step} of 4 · <Text style={stepHeaderStyles.crumbActive}>{labels[step - 1]}</Text>
+        Step {step} of {totalSteps} ·{" "}
+        <Text style={stepHeaderStyles.crumbActive}>{labelForStep(currentName)}</Text>
       </Text>
       <View style={stepHeaderStyles.dotsRow}>
-        {[1, 2, 3, 4].map((i) => (
-          <View
-            key={i}
-            style={[
-              stepHeaderStyles.dot,
-              i === step && stepHeaderStyles.dotActive,
-              i < step && stepHeaderStyles.dotComplete,
-            ]}
-          />
-        ))}
+        {Array.from({ length: totalSteps }).map((_, i) => {
+          const idx = i + 1;
+          return (
+            <View
+              key={i}
+              style={[
+                stepHeaderStyles.dot,
+                idx === step && stepHeaderStyles.dotActive,
+                idx < step && stepHeaderStyles.dotComplete,
+              ]}
+            />
+          );
+        })}
       </View>
     </View>
   );
@@ -803,7 +908,7 @@ const stepHeaderStyles = StyleSheet.create({
 });
 
 // =============================================================================
-// STEP 1 — COVER (pick your photo)
+// COVER (pick your photo)
 // =============================================================================
 
 function CoverStep({
@@ -863,7 +968,7 @@ const coverStyles = StyleSheet.create({
 });
 
 // =============================================================================
-// STEP 2 — INSIDE (write the note)
+// INSIDE (write the note)
 // =============================================================================
 
 function InsideStep({
@@ -919,28 +1024,16 @@ const insideStyles = StyleSheet.create({
 });
 
 // =============================================================================
-// STEP 3 — RECIPIENT (name + friend match)
+// RECIPIENT (TYPE picker — friend / yourself / pen pal)
 // =============================================================================
 
 function RecipientStep({
   recipientKind,
   onPickKind,
-  name,
-  onNameChange,
-  matches,
-  locked,
-  onLockFriend,
-  onUnlockFriend,
   testID,
 }: {
   recipientKind: RecipientKind | null;
   onPickKind: (k: RecipientKind) => void;
-  name: string;
-  onNameChange: (t: string) => void;
-  matches: Friend[];
-  locked: Friend | null;
-  onLockFriend: (f: Friend) => void;
-  onUnlockFriend: () => void;
   testID?: string;
 }) {
   return (
@@ -948,9 +1041,11 @@ function RecipientStep({
       <Text style={stepStyles.title}>Who's it for?</Text>
       <Text style={stepStyles.subtitle}>Pick a person — friend, yourself, or a pen pal stranger.</Text>
 
-      {/* v0.7.0.24: TYPE picker tiles. Mirrors the welcome flow's
-          recipient step pattern so the experience is consistent
-          across first-send and repeat-send. */}
+      {/* v0.7.0.25: TYPE picker ONLY. The inline name input has moved
+          to its own step (NameStep) for the friend flow — the picker
+          and the name selection now get their own page each, which
+          feels less crowded and gives focus to whichever decision the
+          user is making. */}
       <View style={typePickerStyles.tilesWrap}>
         <RecipientTile
           kind="friend"
@@ -980,80 +1075,10 @@ function RecipientStep({
           testID="send-kind-penpal"
         />
       </View>
-
-      {/* Name input only appears when "friend" is selected — for self
-          and penpal, the type itself is the identity. */}
-      {recipientKind === "friend" ? (
-        <>
-      <TextInput
-        value={name}
-        onChangeText={onNameChange}
-        placeholder="Recipient's name"
-        placeholderTextColor={colors.mutedInk}
-        style={recipientStyles.input}
-        autoFocus
-        autoCapitalize="words"
-        autoCorrect={false}
-        testID="send-name-input"
-      />
-
-      {locked ? (
-        <View style={recipientStyles.lockedRow} testID="send-friend-locked">
-          <Check color={colors.postalBlue} size={18} strokeWidth={2} />
-          <View style={{ flex: 1 }}>
-            <Text style={recipientStyles.lockedName}>{locked.name}</Text>
-            <Text style={recipientStyles.lockedMeta}>
-              From your rolodex · {locked.addressLine1 ? `${locked.city || locked.addressCity}` : "no address on file"}
-            </Text>
-          </View>
-          <Pressable
-            onPress={onUnlockFriend}
-            style={recipientStyles.unlockBtn}
-            testID="send-friend-unlock"
-            accessibilityRole="button"
-            accessibilityLabel="Unlink this friend"
-          >
-            <Text style={recipientStyles.unlockText}>Clear</Text>
-          </Pressable>
-        </View>
-      ) : matches.length > 0 ? (
-        <View style={recipientStyles.matchesList}>
-          <Text style={recipientStyles.matchesLabel}>FROM YOUR ROLODEX</Text>
-          {matches.map((m) => (
-            <Pressable
-              key={m.id}
-              onPress={() => onLockFriend(m)}
-              style={({ pressed }) => [recipientStyles.matchRow, pressed && { opacity: 0.7 }]}
-              testID={`send-friend-match-${m.id}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Send to ${m.name}`}
-            >
-              <View style={recipientStyles.matchAvatar}>
-                <Text style={recipientStyles.matchInitial}>{m.name.charAt(0).toUpperCase()}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={recipientStyles.matchName}>{m.name}</Text>
-                <Text style={recipientStyles.matchMeta}>
-                  {m.addressLine1 ? `${m.city || m.addressCity}` : "no address on file"}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      ) : name.trim() ? (
-        <Text style={recipientStyles.noMatchHelper}>
-          No one in your rolodex by that name. That's fine — we'll send them a private link on the next page.
-        </Text>
-      ) : null}
-        </>
-      ) : null}
     </View>
   );
 }
 
-// v0.7.0.24: tile for the recipient TYPE picker. Same visual language
-// as the welcome-flow recipient step. Selected state = filled border +
-// gold checkmark; unselected = quiet outline.
 function RecipientTile({
   selected,
   icon: Icon,
@@ -1138,6 +1163,96 @@ const typePickerStyles = StyleSheet.create({
   },
 });
 
+// =============================================================================
+// NAME (friend-only: type a name + inline match list)
+// =============================================================================
+
+function NameStep({
+  name,
+  onNameChange,
+  matches,
+  locked,
+  onLockFriend,
+  onUnlockFriend,
+  testID,
+}: {
+  name: string;
+  onNameChange: (t: string) => void;
+  matches: Friend[];
+  locked: Friend | null;
+  onLockFriend: (f: Friend) => void;
+  onUnlockFriend: () => void;
+  testID?: string;
+}) {
+  return (
+    <View style={stepStyles.wrap} testID={testID}>
+      <Text style={stepStyles.title}>Who's the friend?</Text>
+      <Text style={stepStyles.subtitle}>Type their name. We'll match against your rolodex as you go.</Text>
+
+      <TextInput
+        value={name}
+        onChangeText={onNameChange}
+        placeholder="Recipient's name"
+        placeholderTextColor={colors.mutedInk}
+        style={recipientStyles.input}
+        autoFocus
+        autoCapitalize="words"
+        autoCorrect={false}
+        testID="send-name-input"
+      />
+
+      {locked ? (
+        <View style={recipientStyles.lockedRow} testID="send-friend-locked">
+          <Check color={colors.postalBlue} size={18} strokeWidth={2} />
+          <View style={{ flex: 1 }}>
+            <Text style={recipientStyles.lockedName}>{locked.name}</Text>
+            <Text style={recipientStyles.lockedMeta}>
+              From your rolodex · {locked.addressLine1 ? `${locked.city || locked.addressCity}` : "no address on file"}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onUnlockFriend}
+            style={recipientStyles.unlockBtn}
+            testID="send-friend-unlock"
+            accessibilityRole="button"
+            accessibilityLabel="Unlink this friend"
+          >
+            <Text style={recipientStyles.unlockText}>Clear</Text>
+          </Pressable>
+        </View>
+      ) : matches.length > 0 ? (
+        <View style={recipientStyles.matchesList}>
+          <Text style={recipientStyles.matchesLabel}>FROM YOUR ROLODEX</Text>
+          {matches.map((m) => (
+            <Pressable
+              key={m.id}
+              onPress={() => onLockFriend(m)}
+              style={({ pressed }) => [recipientStyles.matchRow, pressed && { opacity: 0.7 }]}
+              testID={`send-friend-match-${m.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Send to ${m.name}`}
+            >
+              <View style={recipientStyles.matchAvatar}>
+                <Text style={recipientStyles.matchInitial}>{m.name.charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={recipientStyles.matchName}>{m.name}</Text>
+                <Text style={recipientStyles.matchMeta}>
+                  {m.addressLine1 ? `${m.city || m.addressCity}` : "no address on file"}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : name.trim() ? (
+        <Text style={recipientStyles.noMatchHelper}>
+          No one in your rolodex by that name. That's fine — we'll send them a private link on the next page.
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 const recipientStyles = StyleSheet.create({
   input: {
     backgroundColor: "rgba(245, 240, 230, 0.6)",
@@ -1167,7 +1282,47 @@ const recipientStyles = StyleSheet.create({
 });
 
 // =============================================================================
-// STEP 4 — DELIVERY (how does it get to them?)
+// SELF ADDRESS (first-time self-sender: capture their mailing address)
+// =============================================================================
+
+function SelfAddressStep({
+  address,
+  onAddressChange,
+  testID,
+}: {
+  address: AddressDraft;
+  onAddressChange: (a: AddressDraft) => void;
+  testID?: string;
+}) {
+  return (
+    <View style={stepStyles.wrap} testID={testID}>
+      <Text style={stepStyles.title}>Your mailing address</Text>
+      <Text style={stepStyles.subtitle}>
+        We'll save this so you don't have to type it again. Edit anytime
+        from Settings.
+      </Text>
+
+      <View style={{ marginTop: 18, gap: 8 }}>
+        <AddressField
+          label="Your name"
+          value={address.name}
+          onChange={(v) => onAddressChange({ ...address, name: v })}
+          placeholder="Full name"
+          autoCapitalize="words"
+        />
+        <AddressFields
+          address={address}
+          onChange={onAddressChange}
+          testIDPrefix="send-self"
+          label="Your address"
+        />
+      </View>
+    </View>
+  );
+}
+
+// =============================================================================
+// DELIVERY (friend-only: link / address / saved-friend)
 // =============================================================================
 
 function DeliveryStep({
@@ -1231,8 +1386,6 @@ function DeliveryStep({
 
       {deliveryMode === "address" && (
         <View style={deliveryStyles.addressForm} testID="send-address-form">
-          {/* Recipient name stays separate — AddressFields covers the
-              mailable address only (line1, line2, city, state, zip). */}
           <AddressField
             label="Recipient name"
             value={address.name || recipientName}
@@ -1240,9 +1393,6 @@ function DeliveryStep({
             placeholder="Full name"
             autoCapitalize="words"
           />
-          {/* v0.7.0.18: single Places-autocomplete textbox + apt below,
-              replacing the previous 4-field form. Same UX as the welcome
-              flow — addresses get validated by Google as the user types. */}
           <AddressFields
             address={address}
             onChange={onAddressChange}
@@ -1383,10 +1533,6 @@ const stepStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  // v0.7.0.17: align to flex-end so the "Back" link sits next to the actual
-  // Send button (which lives at the bottom of the right column on step 4
-  // because of priceMain + priceMeta stacked above it). Previously this
-  // was "center", so Back floated halfway up the column and looked off.
   actionRow: { alignItems: "flex-end", flexDirection: "row", gap: 14, marginTop: 24 },
   backBtn: { alignItems: "center", flexDirection: "row", gap: 4, paddingHorizontal: 4, paddingVertical: 10 },
   backBtnText: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 15 },

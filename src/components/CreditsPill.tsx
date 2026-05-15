@@ -90,5 +90,13 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
     lineHeight: ICON_SIZE,
     textAlign: "center",
+    // v0.7.0.25: nudge the digit down 1.5px to match the envelope's
+    // optical center. Serif digits sit higher than SVG icon centers
+    // by ~1.5px on iOS even with matching lineHeight + ICON_SIZE
+    // bounding box — the font's cap-height fraction puts the visual
+    // mass above the geometric center. Tiny transform makes the pill
+    // look balanced. (User feedback: "still off center" — build 37
+    // had glyphBox alignment but no compensation for font metrics.)
+    transform: [{ translateY: 1.5 }],
   },
 });
