@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+	<key>com.apple.developer.in-app-payments</key>
+	<array>
+		<string>merchant.com.mailrooms.app</string>
+	</array>
+	<!--
+		Universal Links — v0.7.0.26 enabled against mailroomclub.vercel.app.
+
+		AASA file is live at
+		  https://mailroomclub.vercel.app/.well-known/apple-app-site-association
+		(verified 200 + application/json on 2026-05-15). Pattern: any URL
+		matching /claim* routes here.
+
+		On iOS 14+ with the Mailroom app installed, tapping a claim link
+		from iMessage / Mail / Safari opens the app via expo-router's
+		deep link handler. Without the app installed, the App Clip
+		(com.mailrooms.app.Clip) presents the address form natively
+		without an install. Without iOS at all (Android, desktop), the
+		static HTML page at claim/index.html serves as fallback.
+
+		Apple Developer Portal step required before this builds clean:
+		https://developer.apple.com/account → Identifiers →
+		com.mailrooms.app → Associated Domains capability → check.
+		(One-time, takes effect on next provisioning profile refresh
+		which Xcode handles automatically.)
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:mailroomclub.vercel.app</string>
+	</array>
+</dict>
+</plist>

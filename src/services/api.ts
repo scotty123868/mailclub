@@ -336,17 +336,31 @@ function postcardFromRow(row: PostcardRow): Postcard {
   // if any. fetchPostcards LEFT JOINs postcard_claims so send-link cards
   // (to_kind === "claim") expose their share URL on the Postcard type.
   // Past cards in the gallery can then surface the URL for re-share.
+  //
+  // v0.7.0.26: claim URLs now point at the Mailroom marketing domain
+  // (mailroomclub.vercel.app/claim) instead of the raw Supabase Edge
+  // Function URL. Why: the AASA file at
+  //   https://mailroomclub.vercel.app/.well-known/apple-app-site-association
+  // advertises this URL pattern for the Mailroom main app AND its App
+  // Clip target. When a recipient on iOS 14+ taps the link:
+  //   • If they have the full Mailroom app installed → opens the app
+  //     via expo-router /claim?t=TOKEN deep link.
+  //   • If they don't have the app → iOS shows the App Clip card,
+  //     they enter their address in the tiny native UI, no install.
+  //   • If they're on Android / desktop / iOS pre-14 → the
+  //     mailroomclub.vercel.app/claim?t=TOKEN URL renders the static
+  //     HTML web fallback. Same form, same Supabase endpoint.
+  //
+  // Both routes (App Clip + web fallback) POST to the existing Supabase
+  // /claim Edge Function — no server-side changes needed for this
+  // switch. Just the link destination.
   let claimUrl: string | undefined;
   const claimRow = (row as any).postcard_claims;
   const claimToken: string | undefined = Array.isArray(claimRow)
     ? claimRow[0]?.claim_token
     : claimRow?.claim_token;
   if (claimToken) {
-    const supabaseUrl =
-      (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_SUPABASE_URL) ||
-      "https://nlwnmgwylmmnaemdnzlq.supabase.co";
-    const functionsBase = supabaseUrl.replace(".supabase.co", ".functions.supabase.co");
-    claimUrl = `${functionsBase}/claim?t=${claimToken}`;
+    claimUrl = `https://mailroomclub.vercel.app/claim?t=${claimToken}`;
   }
   return {
     id: row.id,
@@ -477,14 +491,14 @@ export async function sendPostcardViaLink(input: SendViaLinkInput): Promise<Send
     claim_token: string;
     credits_remaining: number;
   };
-  const supabaseUrl = (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_SUPABASE_URL)
-    || "https://nlwnmgwylmmnaemdnzlq.supabase.co";
-  // The Functions URL is the same project ref under .functions.supabase.co
-  const functionsBase = supabaseUrl.replace(".supabase.co", ".functions.supabase.co");
+  // v0.7.0.26: claim URLs point at the marketing domain so iOS can
+  // intercept via Universal Links → App Clip / full app, with the
+  // static-HTML page at /claim/index.html acting as the cross-device
+  // web fallback. See postcardFromRow above for the full rationale.
   return {
     postcardId: row.postcard_id,
     claimToken: row.claim_token,
-    claimUrl: `${functionsBase}/claim?t=${row.claim_token}`,
+    claimUrl: `https://mailroomclub.vercel.app/claim?t=${row.claim_token}`,
     creditsRemaining: row.credits_remaining,
   };
 }
