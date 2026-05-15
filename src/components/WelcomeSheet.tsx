@@ -300,19 +300,33 @@ export function WelcomeSheet({
     );
   }
 
-  // v0.7.0.1: only the "friend" recipient kind needs full recipient info
-  // (name + address). All others skip their-info and go straight to
-  // your-info:
-  //   - link: dropped name + contact fields. We use the iOS Share sheet
-  //     to deliver the claim URL after creating the card. Escargot pattern.
-  //   - self: uses the user's own address (collected on your-info).
-  //   - penpal: anonymous, no recipient info. Routed through sendIntoVoid.
-  const needsTheirInfo = recipientKind === "friend";
+  // v0.7.0.25: "link" recipient now ALSO goes through their-info.
+  //
+  // Original v0.7.0.1 decision was to skip their-info for link mode and
+  // rely on the iOS Share sheet for delivery. The user pushback (build
+  // 37 feedback): "When I click the 'ask for a link' button it doesn't
+  // solicit the link sharing from the user, just asks for the user name
+  // and location and lets them in the app." Without TheirInfoStep, link
+  // signups dropped into your-info → mailed without ever capturing the
+  // recipient's name OR triggering a share — they sat in "Awaiting
+  // address" forever with no recipient identity attached.
+  //
+  // Restoring the step makes the flow: recipient kind = link →
+  // their-info (name + contact hint) → your-info → mailed → Share sheet
+  // auto-opens with the claim URL. TheirInfoStep already special-cases
+  // isLink to ask for "Their phone or email" instead of a mailing
+  // address (see line 1605-1626 in this file), so the UX fits.
+  //
+  // self + penpal still skip their-info — they have no recipient identity
+  // to capture.
+  const needsTheirInfo = recipientKind === "friend" || recipientKind === "link";
 
   const canAdvanceTheirInfo =
     recipientKind === "friend"
       ? theirName.trim().length > 0 && isAddressComplete(theirAddress)
-      : true;
+      : recipientKind === "link"
+        ? theirName.trim().length > 0 && theirContact.trim().length > 0
+        : true;
 
   // v0.7.0.17: only "self" sends need the user's full street address —
   // they ARE the recipient, so we need the full mailable address. For

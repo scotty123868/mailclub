@@ -210,6 +210,19 @@ export default function MyMailCardScreen() {
         visible={mailOpen !== null}
         initialTab={mailOpen ?? "sent"}
         onClose={() => setMailOpen(null)}
+        onPressRow={(postcardId) => {
+          // v0.7.0.25: tap a row in the "Your mail" sheet → close it +
+          // open the PostcardDetailSheet for that card. The detail sheet
+          // exposes the claim URL + Share Again for link-mode cards so
+          // the user can re-share without going back through Compose.
+          setMailOpen(null);
+          // Defer the snap to the next frame so the modal dismiss
+          // animation finishes before the bottom sheet rises — keeps
+          // the visual handoff clean instead of competing.
+          requestAnimationFrame(() => {
+            detailSheetRef.current?.open(postcardId);
+          });
+        }}
       />
       <NotificationsSheet visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
       <PrivacySheet visible={privacyOpen} onClose={() => setPrivacyOpen(false)} />

@@ -13,10 +13,20 @@ export function MailHistorySheet({
   visible,
   onClose,
   initialTab = "sent",
+  onPressRow,
 }: {
   visible: boolean;
   onClose: () => void;
   initialTab?: Tab;
+  /**
+   * v0.7.0.25: optional tap handler for a row. When set, each Sent row
+   * becomes a Pressable that fires this callback with the postcard id.
+   * My Card uses this to open PostcardDetailSheet so the user can
+   * re-share a claim link or retry shipping from inside the mail
+   * history. (Replies are read-only — they don't have a detail surface
+   * yet.) If omitted, rows render as plain Views (legacy behavior).
+   */
+  onPressRow?: (postcardId: string) => void;
 }) {
   const { postcards, voidReplies, friends } = useMailClub();
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -97,7 +107,13 @@ export function MailHistorySheet({
               />
             ) : (
               sentSorted.map((card) => (
-                <SentRow key={card.id} card={card} friendName={friendName(card.toFriendId)} when={fmtDate(card.sentAt)} />
+                <SentRow
+                  key={card.id}
+                  card={card}
+                  friendName={friendName(card.toFriendId)}
+                  when={fmtDate(card.sentAt)}
+                  onPress={onPressRow ? () => onPressRow(card.id) : undefined}
+                />
               ))
             )
           ) : (
@@ -130,10 +146,31 @@ function EmptyState({ icon: Icon, title, body, testID }: { icon: any; title: str
   );
 }
 
-function SentRow({ card, friendName, when }: { card: Postcard; friendName: string; when: string }) {
+function SentRow({
+  card,
+  friendName,
+  when,
+  onPress,
+}: {
+  card: Postcard;
+  friendName: string;
+  when: string;
+  onPress?: () => void;
+}) {
   const isCustom = card.category === "custom";
+  // v0.7.0.25: wrap in Pressable when onPress is provided so users can
+  // tap any sent row in the mail history to open the PostcardDetailSheet
+  // (which exposes "Share again" for claim-link cards + "Retry shipping"
+  // for orphans). Without onPress, render as plain View for back-compat.
+  const Wrapper: any = onPress ? Pressable : View;
   return (
-    <View style={rowStyles.row}>
+    <Wrapper
+      onPress={onPress}
+      style={({ pressed }: any) => [rowStyles.row, pressed && rowStyles.rowPressed]}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={onPress ? `Open postcard to ${friendName}` : undefined}
+      testID={`mail-history-row-${card.id}`}
+    >
       <View style={[rowStyles.iconWrap, isCustom && rowStyles.iconWrapCustom]}>
         <SendIcon color={isCustom ? colors.postalRed : colors.postalBlue} size={18} strokeWidth={1.6} />
       </View>
@@ -145,7 +182,7 @@ function SentRow({ card, friendName, when }: { card: Postcard; friendName: strin
         <Text style={rowStyles.category}>{CATEGORY_LABELS[card.category]} · {card.creditCost}c {card.status === "draft" ? "· DRAFT" : ""}</Text>
         <Text style={rowStyles.message} numberOfLines={2}>{card.message || "—"}</Text>
       </View>
-    </View>
+    </Wrapper>
   );
 }
 
@@ -190,6 +227,7 @@ const emptyStyles = StyleSheet.create({
 
 const rowStyles = StyleSheet.create({
   row: { alignItems: "flex-start", backgroundColor: colors.white, borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 12, padding: 12 },
+  rowPressed: { opacity: 0.7 },
   iconWrap: { alignItems: "center", backgroundColor: "rgba(60,110,143,0.08)", borderRadius: 18, height: 36, justifyContent: "center", width: 36 },
   iconWrapCustom: { backgroundColor: "rgba(184,74,58,0.1)" },
   iconWrapReply: { backgroundColor: "rgba(217,180,110,0.18)" },

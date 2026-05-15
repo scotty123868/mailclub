@@ -534,19 +534,46 @@ export default function SendScreen() {
         }
         const senderFirst = (currentUser.name || "Someone").split(" ")[0];
         const recipientFirst = recipientName.trim().split(" ")[0] || "your friend";
-        const shareMsg = `Hi ${recipientFirst}, ${senderFirst} sent you a postcard via Mailroom. Open this link to share your address so we can deliver it:\n\n${result.claimUrl}`;
+        // v0.7.0.25: Slack + several iOS share extensions ignore the `url`
+        // parameter when `message` is also present (or use the URL as the
+        // attachment and discard the message). The user's complaint:
+        // "Type a message here, if you'd like!" placeholder showing instead
+        // of the friendly pre-fill. Fix: bake the URL INTO the message and
+        // drop the separate `url` field. Every share target now gets the
+        // full pre-filled text "I want to send you a postcard, address: <url>".
+        const shareMsg = `I want to send you a postcard! ${senderFirst} is using Mailroom. Tap the link below to share your mailing address — we'll print and ship it for you.\n\n${result.claimUrl}`;
+        let shared = false;
         try {
-          await Share.share({ message: shareMsg, url: result.claimUrl });
+          const shareResult = await Share.share({ message: shareMsg });
+          // iOS returns { action: 'sharedAction' | 'dismissedAction', activityType?: string }
+          // Android returns { action: 'sharedAction' | 'dismissedAction' }
+          // The user complaint: we showed "Link sent" even when they
+          // canceled the share sheet. Only flash the success modal when
+          // the share actually completed.
+          shared = shareResult.action === Share.sharedAction;
         } catch {
-          // user dismissed share sheet — link is still valid
+          // Real error opening the share sheet — treat as not shared.
+          shared = false;
         }
-        setSuccess({
-          visible: true,
-          title: "Link sent.",
-          subtitle:
-            `When ${recipientFirst} taps the link and shares their address, we'll print and ship your postcard. You'll get a notification when it's on its way.`,
-        });
-        resetCompose();
+        if (shared) {
+          setSuccess({
+            visible: true,
+            title: "Link sent.",
+            subtitle:
+              `When ${recipientFirst} taps the link and shares their address, we'll print and ship your postcard. You'll get a notification when it's on its way.`,
+          });
+          resetCompose();
+        } else {
+          // User dismissed without sharing. Keep the compose state so they
+          // can pick a different share target on the next tap. The
+          // postcard row + claim URL still exist server-side and appear in
+          // the gallery as "AWAITING ADDRESS" — they can re-share from
+          // PostcardDetailSheet → "Share again" anytime.
+          Alert.alert(
+            "Link not shared yet",
+            "Your postcard is saved in your journal. Tap it anytime to share the link again.",
+          );
+        }
         return;
       }
 

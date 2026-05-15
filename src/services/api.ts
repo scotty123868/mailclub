@@ -710,18 +710,43 @@ export async function fetchVoidReplies(): Promise<VoidReply[]> {
 
 /**
  * Upload a local image file (from expo-image-picker) to the user's storage
- * folder and return a signed URL. The local URI looks like
- * `file:///var/.../photo.jpg`. We read it as a Blob and upload.
+ * folder and return the storage path. The local URI looks like
+ * `file:///var/.../photo.jpg`.
+ *
+ * v0.7.0.25 BUGFIX: switched from `response.blob()` to
+ * `response.arrayBuffer()` + Uint8Array. React Native's `fetch(file://).blob()`
+ * has a long-standing issue where it returns a Blob with `size: 0` for
+ * local file URIs — the upload "succeeds" with an empty file, the
+ * storage path returns a signed URL that responds with 0 bytes, and the
+ * postcard journal renders a blank photo (the bug surfaced in build 35+
+ * as "F" message visible but no image). ArrayBuffer round-trips the raw
+ * bytes correctly under RN 0.81.5 and the supabase-js v2 SDK accepts
+ * Uint8Array directly.
+ *
+ * Long-term: when we add `expo-file-system` we can switch to
+ * `FileSystem.readAsStringAsync(uri, {encoding:Base64})` + `decode()`
+ * which is the canonical Expo/Supabase pattern. ArrayBuffer is the
+ * smallest-change fix for tonight.
  */
 export async function uploadPostcardPhoto(localUri: string, filename: string): Promise<string | null> {
   try {
     const userId = (await supabase.auth.getUser()).data.user?.id;
     if (!userId) return null;
     const response = await fetch(localUri);
-    const blob = await response.blob();
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    if (bytes.byteLength === 0) {
+      // Defend against the legacy zero-byte read so we never write an
+      // empty file to storage. Surfaces as a console warning and returns
+      // null — the caller will set photo_path to null on the postcard row.
+      // eslint-disable-next-line no-console
+      console.warn("uploadPostcardPhoto: empty read from", localUri);
+      return null;
+    }
     const path = `${userId}/${Date.now()}-${filename}`;
-    const { error: uploadErr } = await supabase.storage.from("postcard-photos").upload(path, blob, {
-      contentType: blob.type || "image/jpeg",
+    const contentType = filename.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+    const { error: uploadErr } = await supabase.storage.from("postcard-photos").upload(path, bytes, {
+      contentType,
       upsert: false,
     });
     if (uploadErr) throw uploadErr;

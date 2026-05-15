@@ -52,7 +52,20 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
       () => ({
         open: (postcardId) => {
           setActiveId(postcardId);
-          sheetRef.current?.snapToIndex(0);
+          // v0.7.0.25 BUGFIX: defer the snap until the next animation
+          // frame. setActiveId() triggers a re-render; calling
+          // snapToIndex(0) synchronously after the setState call fired
+          // BEFORE the re-render, on the current BottomSheet (which was
+          // the placeholder, see early-return removal below). The snap
+          // got dropped on the floor — taps on journal tiles did nothing.
+          //
+          // The cleaner fix was also to drop the conditional placeholder
+          // BottomSheet (the if(!postcard) branch below was returning a
+          // separate element, so the ref pointed at a stale instance for
+          // exactly one render). Both changes ship together.
+          requestAnimationFrame(() => {
+            sheetRef.current?.snapToIndex(0);
+          });
         },
         close: () => {
           sheetRef.current?.close();
@@ -141,24 +154,14 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
       }
     }
 
-    if (!postcard) {
-      return (
-        <BottomSheet
-          ref={sheetRef}
-          index={-1}
-          snapPoints={snapPoints}
-          enablePanDownToClose
-          backdropComponent={renderBackdrop}
-          backgroundStyle={styles.bgPanel}
-          handleIndicatorStyle={styles.handleIndicator}
-        >
-          <BottomSheetScrollView contentContainerStyle={styles.body}>
-            <View />
-          </BottomSheetScrollView>
-        </BottomSheet>
-      );
-    }
-
+    // v0.7.0.25: removed the `if (!postcard) return <BottomSheet ... empty />`
+    // early-return that previously rendered a SEPARATE BottomSheet element
+    // when activeId was null. React/Reanimated treat that as a fresh
+    // BottomSheet instance, so the ref's snap call fires against the wrong
+    // sheet for one render — taps on journal tiles produced no visible
+    // sheet. The single BottomSheet below stays mounted across renders
+    // (index={-1} keeps it hidden); we conditionally render the rich
+    // body only when a postcard is resolved.
     return (
       <BottomSheet
         ref={sheetRef}
@@ -170,6 +173,11 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
         handleIndicatorStyle={styles.handleIndicator}
       >
         <BottomSheetScrollView contentContainerStyle={styles.body}>
+          {!postcard ? (
+            // Mounted but no card yet — render nothing visible.
+            <View />
+          ) : (
+            <>
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -276,6 +284,8 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
               </Pressable>
             </View>
           ) : null}
+            </>
+          )}
         </BottomSheetScrollView>
       </BottomSheet>
     );
