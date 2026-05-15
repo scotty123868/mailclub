@@ -41,7 +41,7 @@ export type PostcardDetailSheetRef = {
 
 export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
   (_, ref) => {
-    const { postcards, friends, currentUser } = useMailClub();
+    const { postcards, friends, currentUser, authedUserId } = useMailClub();
     const sheetRef = useRef<BottomSheet>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -80,13 +80,32 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
     );
 
     const isPending = !!postcard && postcard.toFriendId === "";
+    // v0.7.0.28: detect inbound (we received this) vs outbound (we sent
+    // this). For Postcrossing-matched stranger cards the user receives,
+    // the header should read "From [city]" rather than "To Pen pal
+    // (anonymous)" (which made no sense for a card we received). For
+    // outbound, behavior is unchanged.
+    const isInbound = !!postcard && !!postcard.senderId && !!authedUserId && postcard.senderId !== authedUserId;
+    const headerPrefix = isInbound ? "From" : "To";
     const recipientLabel = useMemo(() => {
       if (!postcard) return "";
       if (isPending) return "Awaiting recipient";
+      if (isInbound) {
+        // We received this. Label by sender identity.
+        if (postcard.toFriendId === "void") {
+          // Matched stranger card. Show city if known.
+          return postcard.fromCity ? `Pen pal · ${postcard.fromCity}` : "Pen pal";
+        }
+        // Inbound from a known friend: friendNamesById lives in the
+        // parent, but we have `friends` here. Look up by senderId.
+        const friend = friends.find((f) => f.id === postcard.senderId);
+        return friend?.name ?? postcard.fromCity ?? "Someone";
+      }
+      // Outbound — original behavior.
       if (postcard.toFriendId === "void") return "Pen pal (anonymous)";
       const friend = friends.find((f) => f.id === postcard.toFriendId);
       return friend?.name ?? postcard.toCity ?? "Recipient";
-    }, [postcard, isPending, friends]);
+    }, [postcard, isPending, isInbound, friends]);
 
     const renderBackdrop = useCallback(
       (props: any) => (
@@ -191,7 +210,7 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
                 {isPending ? "AWAITING ADDRESS" : statusKicker(postcard.status)}
               </Text>
               <Text style={styles.title} numberOfLines={1}>
-                To {recipientLabel}
+                {headerPrefix} {recipientLabel}
               </Text>
               <Text style={styles.subtitle}>{formatDate(postcard.sentAt)}</Text>
             </View>
