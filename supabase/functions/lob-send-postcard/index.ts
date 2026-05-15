@@ -520,34 +520,23 @@ serve(async (req: Request) => {
     // dashboard.lob.com → Settings → Account), you can drop this line,
     // but hardcoding keeps the send working independent of account state.
     use_type: "marketing",
-    // v0.7.0.25 CRITICAL FIX: explicitly set address strictness to
-    // "relaxed" on every send.
+    // v0.7.0.27 REVERT: removed `to_address_strictness: "relaxed"`.
     //
-    // The bug: a user entered "861 N Humboldt St, Denver, CO 80218"
-    // (a real Denver address) and hit "USPS couldn't verify that
-    // address." They'd already set their Lob dashboard strictness to
-    // "relaxed", so the rejection felt impossible.
+    // I added it in 25 thinking it controlled the strictness check on
+    // postcard sends. It does not — `to_address_strictness` is only
+    // valid on Lob's `/us_verifications` endpoint, not `/postcards`.
+    // Passing it to `/postcards` produces "to_address_strictness is
+    // not allowed", which Lob returns as a 422 and the user sees as
+    // "Couldn't print your card."
     //
-    // Root cause: Lob's `to_address_strictness` parameter defaults to
-    // **strict** when omitted — it does NOT inherit from the dashboard
-    // setting (despite what the docs UI implies). Without explicitly
-    // passing "relaxed", every send used strict mode regardless of
-    // user-level config. Lob's strict mode rejects any address that
-    // doesn't match USPS's database exactly, including legitimate
-    // addresses with apartment formats, abbreviations, or recently-
-    // built homes that haven't propagated through CASS.
+    // Strictness on the `/postcards` endpoint is controlled by the
+    // ACCOUNT-LEVEL setting in the Lob dashboard
+    // (dashboard.lob.com → Settings → Account → Address Strictness).
+    // The user has that set to relaxed; nothing else is needed.
     //
-    // "relaxed" lets the postcard go through as long as the address has
-    // valid shape (street + city + state + zip). Worst case: Lob mails
-    // it and USPS returns it as undeliverable. Best case (the common
-    // case): real addresses ship even when USPS's database disagrees
-    // with the user-typed format. For a postcard product where
-    // reaching real people is the whole point, relaxed is the right
-    // default.
-    //
-    // If we ever need strict (e.g. for high-stakes legal mail), make
-    // it per-send via a column on the postcard row.
-    to_address_strictness: "relaxed",
+    // If a specific address still fails, it's a real deliverability
+    // problem (e.g. an apartment number that doesn't exist in CASS),
+    // not a parameter we can override per-send.
   });
 
   let lobResp: Response;
