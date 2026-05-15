@@ -112,16 +112,22 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
 
     async function onShareAgain() {
       if (!postcard?.claimUrl) return;
-      const senderFirst = currentUser?.name?.split(" ")[0] || "I";
       try {
         Haptics.selectionAsync().catch(() => {});
       } catch {
         /* no-op on simulators without haptics */
       }
       try {
+        // v0.7.0.28: dropped third-person sender reference + brand
+        // mention. The chat thread already shows who's sending; the
+        // message just has to communicate intent + the link. User
+        // feedback: previous copy felt "marketing-y, not genuine."
+        // Also dropped the separate `url` param — many iOS share
+        // extensions (Slack especially) ignore message when url is
+        // present and surface only the URL. Baking the URL into the
+        // message guarantees the full text pre-fills everywhere.
         await Share.share({
-          message: `${senderFirst} sent you a postcard on Mailroom. Tap to claim it — ${postcard.claimUrl}`,
-          url: postcard.claimUrl,
+          message: `I'm sending you a postcard. Drop your address in here so it gets to you:\n\n${postcard.claimUrl}`,
         });
       } catch {
         /* user dismissed share sheet — no-op */

@@ -644,7 +644,8 @@ export function WelcomeSheet({
         const claimUrl = sendRes.claimUrl;
         const recipientFirstForCopy =
           theirName.trim().split(" ")[0] || "your friend";
-        const senderFirst = yourFirstName.trim() || "I";
+        // senderFirst removed in v0.7.0.28 — share message dropped the
+        // self-reference (the chat thread already shows who's sending).
         // Close the welcome modal NOW. The share sheet will fire after
         // a short delay so iOS can tear down the modal's view
         // controller and present UIActivityViewController over the
@@ -652,7 +653,7 @@ export function WelcomeSheet({
         onComplete();
         setTimeout(() => {
           Share.share({
-            message: `I want to send you a postcard! ${senderFirst} is using Mailroom. Tap the link below to share your mailing address — we'll print and ship it for you.\n\n${claimUrl}`,
+            message: `I'm sending you a postcard. Drop your address in here so it gets to you:\n\n${claimUrl}`,
           })
             .then((result) => {
               // Only celebrate on actual share completion. iOS share
@@ -924,7 +925,7 @@ export function WelcomeSheet({
                 if (pendingUrl) {
                   setTimeout(() => {
                     Share.share({
-                      message: `I sent you a postcard on Mailroom. Tap to claim it — ${pendingUrl}`,
+                      message: `I'm sending you a postcard. Drop your address in here so it gets to you:\n\n${pendingUrl}`,
                       url: pendingUrl,
                     }).catch(() => {
                       // share dismissed — URL is still visible on the

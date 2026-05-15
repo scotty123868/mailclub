@@ -535,7 +535,8 @@ export default function SendScreen() {
           Alert.alert("Couldn't generate link", result.error ?? "Try again in a moment.");
           return;
         }
-        const senderFirst = (currentUser.name || "Someone").split(" ")[0];
+        // senderFirst removed in v0.7.0.28 — share message dropped the
+        // self-reference. recipientFirst is still used in success modal copy.
         const recipientFirst = recipientName.trim().split(" ")[0] || "your friend";
         // v0.7.0.25: Slack + several iOS share extensions ignore the `url`
         // parameter when `message` is also present (or use the URL as the
@@ -544,7 +545,13 @@ export default function SendScreen() {
         // of the friendly pre-fill. Fix: bake the URL INTO the message and
         // drop the separate `url` field. Every share target now gets the
         // full pre-filled text "I want to send you a postcard, address: <url>".
-        const shareMsg = `I want to send you a postcard! ${senderFirst} is using Mailroom. Tap the link below to share your mailing address — we'll print and ship it for you.\n\n${result.claimUrl}`;
+        // v0.7.0.28: rewritten for genuine first-person voice. Previous
+        // version had third-person "${senderFirst} is using Mailroom"
+        // which reads weirdly inside an iMessage/Slack thread where
+        // the sender's identity is already obvious. Dropped the brand
+        // mention + the corporate "we'll print and ship it for you"
+        // tail. Three sentences, no exclamation, ends with the link.
+        const shareMsg = `I'm sending you a postcard. Drop your address in here so it gets to you:\n\n${result.claimUrl}`;
         let shared = false;
         try {
           const shareResult = await Share.share({ message: shareMsg });
