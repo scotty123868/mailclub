@@ -141,11 +141,361 @@ type BackProps = {
   forPrint?: boolean;
 };
 
+// v0.7.0.28 — Vintage Purist print layout. Used when forPrint=true (the
+// off-screen view-shot capture that gets uploaded to Lob). Mirrors the
+// design-mockups/postcard-back/C2-vintage-purist-v2.html file exactly.
+//
+// Coordinate system: everything positioned by INCHES from the top-left
+// of the 6.25"×4.25" card. `inch(n)` converts to pixels relative to the
+// render width (300px preview, 1875px print). Same component renders
+// correctly at any scale.
+//
+// Zones (in inches):
+//   Top safe strip: 0–6.25 wide × 0–1.625 tall
+//   Left safe col:  0–2.69 wide × 1.625–3.625 tall
+//   Lob owns: everything else (right column from 2.69" + bottom 0.625")
+function PostcardBackPrintLayout({
+  width,
+  height,
+  message,
+  sender,
+  reciprocationUrl,
+}: {
+  width: number;
+  height: number;
+  message: string;
+  sender?: { name: string; city: string; state: string };
+  reciprocationUrl?: string;
+}) {
+  // Inch-to-pixel scale. 6.25" wide card. 1875px at print, 300px at preview.
+  const inch = (n: number) => n * (width / 6.25);
+  const senderFirst = sender?.name?.split(/\s+/)[0] || "the sender";
+  const senderLoc = sender?.city
+    ? `${sender.city} ${sender.state || ""}`.trim()
+    : "";
+
+  // QR top-left: 1.04" square at 0.39in,0.29in
+  const qrSize = inch(1.04);
+  const qrX = inch(0.39);
+  const qrY = inch(0.29);
+
+  // Stamp top-right: 1.45" × 1.74" at right=0.29in, top=0.20in
+  const stampW = inch(1.45);
+  const stampH = inch(1.74);
+  const stampRight = inch(0.29);
+  const stampTop = inch(0.20);
+
+  // Message: left col, bounded so it can never overflow Lob's zone
+  const msgLeft = inch(0.39);
+  const msgTop = inch(1.67);
+  const msgW = inch(2.30); // 2.30in < 2.69in safe column boundary
+  const msgH = inch(1.55); // ends well above the 0.625in IMb zone
+
+  // Postmark just above IMb zone
+  const postmarkLeft = inch(0.39);
+  const postmarkBottom = inch(0.83); // 0.83in from bottom = above IMb zone
+
+  return (
+    <>
+      {/* ---- TOP-LEFT: QR + sender first-name caption ---- */}
+      {reciprocationUrl ? (
+        <View style={{ position: "absolute", left: qrX, top: qrY, flexDirection: "row", alignItems: "flex-start", gap: inch(0.12) }}>
+          <View
+            style={{
+              width: qrSize, height: qrSize,
+              backgroundColor: "#FFFDF7",
+              borderColor: "#17223B", borderWidth: 1,
+              padding: inch(0.05),
+            }}
+          >
+            <QRCode
+              value={reciprocationUrl}
+              size={qrSize - inch(0.1)}
+              color="#17223B"
+              backgroundColor="#FFFDF7"
+              ecl="M"
+            />
+          </View>
+          <View style={{ maxWidth: inch(1.7), paddingTop: inch(0.08) }}>
+            <Text
+              style={{
+                fontFamily: fonts.serifItalic,
+                fontSize: inch(0.15),
+                lineHeight: inch(0.2),
+                color: "#17223B",
+                fontWeight: "500",
+              }}
+              numberOfLines={3}
+            >
+              Respond to {senderFirst} with a postcard for free.
+            </Text>
+            <Text
+              style={{
+                fontFamily: fonts.mono,
+                fontSize: inch(0.09),
+                color: "rgba(23, 34, 59, 0.55)",
+                marginTop: inch(0.08),
+                letterSpacing: 0.5,
+              }}
+              numberOfLines={1}
+            >
+              {extractClaimSlug(reciprocationUrl)}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      {/* ---- TOP-RIGHT: vintage perforated stamp ---- */}
+      <View
+        style={{
+          position: "absolute",
+          right: stampRight,
+          top: stampTop,
+          width: stampW,
+          height: stampH,
+          transform: [{ rotate: "3deg" }],
+        }}
+      >
+        <VintageStamp width={stampW} height={stampH} />
+      </View>
+
+      {/* ---- CENTER DIVIDER: hairline at 2.69" ---- */}
+      <View
+        style={{
+          position: "absolute",
+          left: inch(2.69),
+          top: inch(0.3),
+          bottom: inch(0.75),
+          width: 1,
+          backgroundColor: "rgba(194, 165, 109, 0.5)",
+        }}
+      />
+
+      {/* ---- MESSAGE: strictly bounded to left safe column ---- */}
+      <View
+        style={{
+          position: "absolute",
+          left: msgLeft, top: msgTop,
+          width: msgW, height: msgH,
+          overflow: "hidden",
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: fonts.hand,
+            fontSize: inch(0.18),
+            lineHeight: inch(0.27),
+            color: "#17223B",
+            letterSpacing: 0.2,
+          }}
+        >
+          {message || "Your handwritten note appears here…"}
+        </Text>
+      </View>
+
+      {/* ---- POSTMARK: oval ring + wavy cancellation lines ---- */}
+      {senderLoc ? (
+        <View
+          style={{
+            position: "absolute",
+            left: postmarkLeft,
+            bottom: postmarkBottom,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: inch(0.06),
+          }}
+        >
+          <View
+            style={{
+              borderColor: "rgba(23, 34, 59, 0.45)",
+              borderWidth: 1,
+              borderRadius: inch(0.5),
+              paddingHorizontal: inch(0.09),
+              paddingVertical: inch(0.04),
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: fonts.mono,
+                fontSize: inch(0.08),
+                color: "rgba(23, 34, 59, 0.65)",
+                letterSpacing: 1.2,
+              }}
+              numberOfLines={1}
+            >
+              {senderLoc.toUpperCase()} · {formatPostmarkDate()}
+            </Text>
+          </View>
+          {/* Wavy cancellation lines — repeating dashes (faux pattern). */}
+          <View style={{ flexDirection: "row", gap: inch(0.04), opacity: 0.45 }}>
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => (
+              <View
+                key={i}
+                style={{
+                  width: inch(0.06),
+                  height: inch(0.02),
+                  backgroundColor: "rgba(23, 34, 59, 0.55)",
+                }}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+// Trim "https://" + domain so the URL on the back is short + scannable.
+// e.g. "https://mailroomclub.vercel.app/claim?t=ABC123" → "claim/ABC123"
+function extractClaimSlug(url: string): string {
+  try {
+    const u = new URL(url);
+    const t = u.searchParams.get("t");
+    return t ? `mailroom.app/r/${t}` : url.replace(/^https?:\/\//, "");
+  } catch {
+    return url.replace(/^https?:\/\//, "");
+  }
+}
+
+function formatPostmarkDate(): string {
+  // "MAY 15 · 2026" style. Real postmarks use day · month · year.
+  const d = new Date();
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  return `${months[d.getMonth()]} ${d.getDate()} · ${d.getFullYear()}`;
+}
+
+// =========================================================================
+// Vintage perforated stamp — postal-red border, balloon photo, 70¢ + 2026.
+// Perforated edges via SVG mask circles around the perimeter.
+// =========================================================================
+const HERO_BALLOON = require("@/assets/onboarding/hero-envelope-balloon.jpg");
+
+function VintageStamp({ width, height }: { width: number; height: number }) {
+  const borderW = Math.max(2, width * 0.025);
+  const innerInset = borderW + 3;
+  return (
+    <View style={{ width, height, position: "relative" }}>
+      {/* Stamp body — cream paper with thick postal-red border */}
+      <View
+        style={{
+          width, height,
+          backgroundColor: "#fdf6e5",
+          borderColor: "#B8483A",
+          borderWidth: borderW,
+        }}
+      />
+      {/* Inner thin border, slightly inset */}
+      <View
+        style={{
+          position: "absolute",
+          left: innerInset, top: innerInset,
+          right: innerInset, bottom: innerInset,
+          borderColor: "rgba(184, 72, 58, 0.55)",
+          borderWidth: 0.5,
+        }}
+      />
+      {/* Content stack */}
+      <View
+        style={{
+          position: "absolute", inset: 0,
+          padding: borderW + 5,
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Image
+          source={HERO_BALLOON}
+          style={{
+            width: width * 0.62,
+            height: height * 0.42,
+            marginTop: height * 0.06,
+          }}
+          resizeMode="cover"
+        />
+        <View style={{ alignItems: "center", marginBottom: height * 0.04 }}>
+          <Text
+            style={{
+              fontFamily: fonts.serifSemi,
+              fontSize: width * 0.115,
+              color: "#B8483A",
+              letterSpacing: 1.2,
+              fontWeight: "800",
+            }}
+          >
+            MAILROOM
+          </Text>
+          <Text
+            style={{
+              fontFamily: fonts.mono,
+              fontSize: width * 0.05,
+              color: "rgba(184, 72, 58, 0.75)",
+              letterSpacing: 2,
+              marginTop: 1,
+            }}
+          >
+            FIRST CLASS
+          </Text>
+          <Text
+            style={{
+              fontFamily: fonts.serifSemi,
+              fontSize: width * 0.18,
+              color: "#B8483A",
+              lineHeight: width * 0.18,
+              marginTop: 2,
+            }}
+          >
+            70¢
+          </Text>
+          <Text
+            style={{
+              fontFamily: fonts.mono,
+              fontSize: width * 0.065,
+              color: "rgba(184, 72, 58, 0.65)",
+              letterSpacing: 2.5,
+              marginTop: 2,
+            }}
+          >
+            · 2026 ·
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export const PostcardBackPreview = forwardRef<View, BackProps>(function PostcardBackPreview(
   { message, recipient, sender, width = DEFAULT_WIDTH, testID, reciprocationUrl, forPrint = false },
   ref,
 ) {
   const height = width / ASPECT_RATIO;
+
+  // v0.7.0.28: when forPrint=true, render the Vintage Purist v2 layout
+  // (matches design-mockups/postcard-back/C2-vintage-purist-v2.html).
+  // This is the ONLY thing that ships to Lob's printer. The legacy
+  // layout below (the LEFT/RIGHT half split with stamp + recipient
+  // block + address guide lines) stays in place for the in-app preview
+  // so the user sees a familiar postcard composition during compose.
+  if (forPrint) {
+    return (
+      <View
+        ref={ref}
+        collapsable={false}
+        style={[styles.cardOuter, backStyles.outer, { width, height, backgroundColor: "#FBF4DE" }]}
+        testID={testID ?? "postcard-back-preview-print"}
+        accessibilityRole="text"
+        accessibilityLabel={`Postcard back to ${recipient.name}: ${message}`}
+      >
+        <PostcardBackPrintLayout
+          width={width}
+          height={height}
+          message={message}
+          sender={sender}
+          reciprocationUrl={reciprocationUrl}
+        />
+      </View>
+    );
+  }
+
   const messageSize = Math.max(13, width * 0.052);
   const addressSize = Math.max(10, width * 0.04);
   const labelSize = Math.max(8, width * 0.03);

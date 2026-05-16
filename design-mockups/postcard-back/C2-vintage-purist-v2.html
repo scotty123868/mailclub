@@ -24,6 +24,17 @@
   .stage { width: 1200px; height: 816px; background: #FBF4DE;
            border-radius: 6px; box-shadow: 0 16px 50px rgba(0,0,0,0.5);
            position: relative; overflow: hidden; color: #17223B; }
+  /* Subtle paper-grain noise overlay across the whole back. Reads as
+     "real printed cardstock" instead of "designed-in-Figma". The SVG
+     fractalNoise filter is rasterised cheaply by browsers; mix-blend
+     multiply with low opacity keeps it from washing out the type. */
+  .stage::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    z-index: 1; opacity: 0.4; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.08 0 0 0 0 0.05 0 0 0 0.12 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  /* All actual content sits on z-index 2+ so the noise is below it. */
+  .stage > * { position: absolute; z-index: 2; }
 
   /* Lob protected zones — accurate to inches × 192px/in scale */
   .lob-zone-addr { position: absolute;
@@ -66,16 +77,18 @@
     border: 1.5px solid #17223B; padding: 6px; box-sizing: border-box;
     background-clip: content-box, content-box, content-box, content-box, padding-box;
   }
-  .qr-meta { padding-top: 8px; }
-  .qr-meta .label { font-family: Inter, sans-serif; font-weight: 700;
-                    font-size: 12px; color: #B8483A; letter-spacing: 0.18em;
-                    text-transform: uppercase; }
+  /* QR-side type: single-statement copy + small URL wayfinder.
+     v0.7.0.28: dropped the all-caps "REPLY FREE →" label that used
+     to sit above; the italic action line carries the whole message
+     now. Italic Cormorant matches the rest of the back's serif
+     voice without competing with the stamp's Playfair on the right. */
+  .qr-meta { padding-top: 12px; max-width: 220px; }
   .qr-meta .copy { font-family: 'Cormorant Garamond', serif; font-style: italic;
-                   font-size: 17px; color: #5E6472; line-height: 1.35;
-                   margin-top: 5px; max-width: 200px; }
+                   font-size: 19px; color: #17223B; line-height: 1.3;
+                   font-weight: 500; }
   .qr-meta .url { font-family: 'JetBrains Mono', monospace; font-size: 11px;
-                  color: #17223B; letter-spacing: 0.05em; margin-top: 6px;
-                  font-weight: 500; }
+                  color: rgba(23, 34, 59, 0.55); letter-spacing: 0.05em;
+                  margin-top: 10px; font-weight: 500; }
 
   /* TOP-RIGHT: vintage perforated stamp. Top safe strip means
      y < 312px. Right edge of stamp must clear the address zone
@@ -102,6 +115,9 @@
   .stamp-title { font-family: 'Playfair Display', serif; font-weight: 800;
                  font-size: 22px; color: #B8483A; letter-spacing: 1.5px;
                  margin-top: 4px; }
+  .stamp-class { font-family: 'JetBrains Mono', monospace; font-weight: 500;
+                 font-size: 9px; color: rgba(184, 72, 58, 0.75);
+                 letter-spacing: 0.25em; margin-top: 1px; }
   .stamp-cost { font-family: 'Cormorant Garamond', serif; font-weight: 600;
                 font-size: 32px; color: #B8483A; line-height: 1;
                 margin-bottom: 4px; }
@@ -135,11 +151,34 @@
     overflow: hidden; /* never overflows visible bounds */
   }
 
-  /* Tiny postmark / date stamp bottom-left (just above IMb zone) */
-  .postmark { position: absolute; left: 48px; bottom: 138px;
-              font-family: 'JetBrains Mono', monospace; font-size: 11px;
-              color: rgba(23, 34, 59, 0.5); letter-spacing: 0.2em;
-              text-transform: uppercase; }
+  /* Postmark — bottom of left safe column, just above IMb zone. Real
+     postmarks are circular with wavy concentric rings; ours is a quiet
+     thin oval outline around the city + date so it reads as a true
+     postmark instead of footer metadata. The wavy lines extending right
+     are an additional postal cue (mimics the cancellation marks USPS
+     prints next to the postmark to invalidate the stamp). */
+  .postmark { position: absolute; left: 48px; bottom: 128px;
+              display: flex; align-items: center; gap: 10px; }
+  .postmark-ring {
+    border: 1px solid rgba(23, 34, 59, 0.45);
+    border-radius: 100px;
+    padding: 6px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(23, 34, 59, 0.65);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    background: transparent;
+  }
+  .postmark-waves {
+    flex: 1; max-width: 180px; height: 14px;
+    background: repeating-linear-gradient(
+      90deg,
+      rgba(23, 34, 59, 0.35) 0 2px,
+      transparent 2px 8px
+    );
+    opacity: 0.55;
+  }
 
   /* Sample Lob auto-print preview inside the protected zone, faded */
   .addr { position: absolute; top: 380px; right: 95px; width: 540px;
@@ -170,12 +209,17 @@
   <div class="lob-zone-addr"><span class="zone-label">LOB AUTO-PRINTS ADDRESS + IMB</span></div>
   <div class="lob-zone-imb"><span class="zone-label">IMB BARCODE ZONE</span></div>
 
-  <!-- Top-left: QR + tagline (replaces the wax-seal M) -->
+  <!-- Top-left: QR + tagline (replaces the wax-seal M).
+       v0.7.0.28 founder copy: drop the "open with iPhone camera"
+       instruction (condescending — QR scanning is universal). The
+       caption now tells the recipient WHAT the QR does, not HOW to
+       use it: a single line action statement using the sender's
+       first name. The URL stays as a wayfinder for anyone without
+       an iPhone or who'd rather type it manually. -->
   <div class="qr-wrap">
     <div class="qr"></div>
     <div class="qr-meta">
-      <div class="label">Reply free →</div>
-      <div class="copy">Open with iPhone camera. No app needed for them.</div>
+      <div class="copy">Respond to Scotty with a postcard for free.</div>
       <div class="url">mailroom.app/r/A8B4F2</div>
     </div>
   </div>
@@ -186,6 +230,7 @@
       <div class="stamp-inner-border"></div>
       <div class="stamp-art"></div>
       <div class="stamp-title">MAILROOM</div>
+      <div class="stamp-class">FIRST CLASS</div>
       <div class="stamp-cost">70<span class="small">¢</span></div>
       <div class="stamp-year">· 2026 ·</div>
     </div>
@@ -196,8 +241,11 @@
   <!-- Message — strictly bounded to left safe column -->
   <div class="msg">Hi Tati. I love you and this photo of us — it was a really special early day in spring, one of the first nice days to just be outside in the grass. I had just come back from the sphere with a new lawn towel that we put to good use. — Scotty</div>
 
-  <!-- Date stamp tucked just above IMb zone -->
-  <div class="postmark">⌖ Chevy Chase MD · May 14 2026</div>
+  <!-- Postmark: oval ring + faux cancellation wavy lines -->
+  <div class="postmark">
+    <div class="postmark-ring">Chevy Chase MD · May 14 · 2026</div>
+    <div class="postmark-waves"></div>
+  </div>
 
   <!-- Faded preview of what Lob auto-prints in their zone -->
   <div class="addr">
