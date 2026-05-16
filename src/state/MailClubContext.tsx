@@ -439,12 +439,23 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     setFreeCreditsRemaining((b) => Math.max(0, b - cost));
 
     try {
-      // Upload photo first if present
+      // Upload photo first if present. v0.7.0.30: if the caller has
+      // pre-uploaded (input.photoUri doesn't start with file://, so
+      // it's already a Storage path), skip the upload and pass the
+      // path through directly. This is the send-speed optimisation:
+      // pre-uploading on photo-pick means the user doesn't wait for
+      // the upload again when they tap Send.
       let photoUri: string | undefined;
       let refUris: string[] = [];
       if (input.kind === "photo" || input.kind === "place") {
-        const path = await api.uploadPostcardPhoto(input.photoUri, `${input.kind}.jpg`);
-        photoUri = path ?? undefined;
+        if (input.photoUri && !input.photoUri.startsWith("file://")) {
+          // Pre-uploaded path passed through (e.g. send.tsx's
+          // photoUploadCacheRef). Skip the upload step entirely.
+          photoUri = input.photoUri;
+        } else {
+          const path = await api.uploadPostcardPhoto(input.photoUri, `${input.kind}.jpg`);
+          photoUri = path ?? undefined;
+        }
       } else if (input.kind === "custom" && input.referencePhotoUris.length > 0) {
         const paths: string[] = [];
         for (const uri of input.referencePhotoUris) {
@@ -551,10 +562,17 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
 
     try {
+      // v0.7.0.30: same pre-upload optimisation as sendPostcardAction.
+      // If input.photoUri is already a Storage path (not file://), it
+      // was pre-uploaded by the caller — skip the upload.
       let photoPath: string | undefined;
       if ((input.category === "photo" || input.category === "place") && input.photoUri) {
-        const path = await api.uploadPostcardPhoto(input.photoUri, `${input.category}.jpg`);
-        photoPath = path ?? undefined;
+        if (!input.photoUri.startsWith("file://")) {
+          photoPath = input.photoUri;
+        } else {
+          const path = await api.uploadPostcardPhoto(input.photoUri, `${input.category}.jpg`);
+          photoPath = path ?? undefined;
+        }
       }
       const result = await api.sendPostcardViaLink({
         category: input.category,

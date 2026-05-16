@@ -19,6 +19,7 @@ import { createReciprocationToken } from "@/src/services/api";
 import { SuccessModal } from "@/src/components/SuccessModal";
 import { CARD_COST_PHOTO } from "@/src/data/credits";
 import { capturePostcardForPrint, lobRenderDimensions, submitToLob } from "@/src/services/lob";
+import { uploadPostcardPhoto } from "@/src/services/api";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { getSelfAddress, setSelfAddress } from "@/src/state/selfAddress";
 import { colors } from "@/src/theme/colors";
@@ -131,7 +132,21 @@ export default function SendScreen() {
     sendPostcardViaLink,
     sendIntoVoid,
     addFriendByAddress,
+    showCelebration,
   } = useMailClub();
+
+  // v0.7.0.30: pre-upload state. When the user picks a photo on the
+  // Cover step we kick off the Storage upload IMMEDIATELY in the
+  // background. By the time they finish writing their note and tap
+  // Send, the upload has usually already completed and the pre-
+  // uploaded storage path is in the cache. The Send tap then skips
+  // the (1-3s) upload step and goes straight to the RPC + Lob hand-
+  // off. Cuts perceived send time roughly in half.
+  //
+  // Keyed by the local file:// URI so multiple photo changes don't
+  // confuse the cache. If user picks photo A, switches to B, we want
+  // the cache to track B's upload (A's is throwaway).
+  const photoUploadCacheRef = useRef<{ uri: string; path: Promise<string | null> } | null>(null);
 
   // -- Step machine -------------------------------------------------------
   // `step` is a 1-based INDEX into the dynamic step array. Use
@@ -320,8 +335,37 @@ export default function SendScreen() {
       quality: 0.92,
     });
     if (!result.canceled && result.assets[0]?.uri) {
-      setPhotoUri(result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      setPhotoUri(uri);
+      // v0.7.0.30: kick off the upload immediately in the background.
+      // The promise resolves to a Supabase Storage path that the send
+      // action can use directly without re-uploading. We don't await
+      // it here — user keeps moving through compose steps while the
+      // upload runs in parallel.
+      photoUploadCacheRef.current = {
+        uri,
+        path: uploadPostcardPhoto(uri, "photo.jpg").catch(() => null),
+      };
     }
+  }
+
+  /**
+   * Resolve a pre-uploaded photo path for the given local URI, falling
+   * back to a fresh upload if the cache is missing or stale. Returns the
+   * storage path the RPC expects (e.g. "<userId>/<ts>-photo.jpg") or
+   * null if the upload failed.
+   */
+  async function resolveUploadedPath(localUri: string | null): Promise<string | null> {
+    if (!localUri) return null;
+    const cached = photoUploadCacheRef.current;
+    if (cached && cached.uri === localUri) {
+      // Cache hit — await the in-flight or already-resolved promise.
+      // Almost always already resolved by the time user taps Send.
+      return await cached.path;
+    }
+    // Cache miss (e.g. user manually changed the URI somehow). Fall
+    // back to a fresh upload so we never silently drop the photo.
+    return await uploadPostcardPhoto(localUri, "photo.jpg").catch(() => null);
   }
 
   // -- Step navigation ----------------------------------------------------
@@ -448,25 +492,29 @@ export default function SendScreen() {
     }
 
     setSending(true);
+    // v0.7.0.30: resolve the pre-uploaded photo path ONCE up front so
+    // every branch can hand it to the right action without re-running
+    // the upload. The cache resolves instantly (Promise already settled)
+    // in the common case where the user picked a photo on Cover step
+    // ~10+ seconds before tapping Send.
+    const resolvedPhotoPath = photoUri ? await resolveUploadedPath(photoUri) : null;
     try {
       // Penpal: card goes to a random user in our network. No delivery
       // step ever runs. sendIntoVoid handles recipient selection server-
       // side via the void claim queue.
       if (recipientKind === "penpal") {
-        // v0.7.0.25: pass photoUri through. The penpal RPC now uploads
-        // the photo + sets category="photo" so the journal + detail
-        // sheet render the real image instead of a blank box.
-        const result = await sendIntoVoid(message.trim(), photoUri ?? undefined);
+        // v0.7.0.30: pass the pre-uploaded path (no re-upload).
+        const result = await sendIntoVoid(message.trim(), resolvedPhotoPath ?? undefined);
         if (!result.ok) {
           Alert.alert("Couldn't send to pen pal", "Try again in a moment.");
           return;
         }
-        setSuccess({
-          visible: true,
-          title: "Sent to a stranger.",
-          subtitle:
-            "Your card is on its way to someone else in the Mailroom network. If they want to reply, you'll see it in your inbox.",
-        });
+        // v0.7.0.30: fire the global envelope-balloon celebration
+        // instead of the plain SuccessModal. Same animation the welcome
+        // flow plays on first-card-sent. User feedback: "there should
+        // also be a sent celebration after sending it normally in the
+        // app, only a celebration at the end of the sign up flow."
+        showCelebration({ kind: "penpal" });
         resetCompose();
         return;
       }
@@ -506,7 +554,9 @@ export default function SendScreen() {
         const result = await sendPostcard({
           kind: "photo",
           friendId: selfRes.friend.id,
-          photoUri: photoUri ?? "",
+          // v0.7.0.30: pre-uploaded path passes through; the action
+          // detects the non-file:// prefix and skips the upload step.
+          photoUri: resolvedPhotoPath ?? photoUri ?? "",
           message: message.trim(),
           friend: selfRes.friend,
         });
@@ -514,12 +564,7 @@ export default function SendScreen() {
           Alert.alert("Couldn't send", "Try again in a moment.");
           return;
         }
-        setSuccess({
-          visible: true,
-          title: "Sent to yourself.",
-          subtitle:
-            "Look for it in your mailbox in 4-7 days. We'll drop a pin on your map when it lands.",
-        });
+        showCelebration({ kind: "self", recipientName: currentUser.name?.split(" ")[0] });
         resetCompose();
         return;
       }
@@ -529,7 +574,8 @@ export default function SendScreen() {
         const result = await sendPostcardViaLink({
           category: "photo",
           message,
-          photoUri: photoUri ?? undefined,
+          // v0.7.0.30: pre-uploaded path passes through (no re-upload).
+          photoUri: resolvedPhotoPath ?? photoUri ?? undefined,
         });
         if (!result.ok || !result.claimUrl) {
           Alert.alert("Couldn't generate link", result.error ?? "Try again in a moment.");
@@ -566,11 +612,13 @@ export default function SendScreen() {
           shared = false;
         }
         if (shared) {
-          setSuccess({
-            visible: true,
-            title: "Link sent.",
-            subtitle:
-              `When ${recipientFirst} taps the link and shares their address, we'll print and ship your postcard. You'll get a notification when it's on its way.`,
+          // v0.7.0.30: fire the global envelope-balloon celebration
+          // after the share actually completes (consistent with the
+          // welcome-flow link path landed in build 41).
+          showCelebration({
+            kind: "link",
+            recipientName: recipientFirst,
+            shareUrl: result.claimUrl,
           });
         } else {
           // User dismissed without sharing. The postcard row + claim URL
@@ -628,7 +676,8 @@ export default function SendScreen() {
       const result = await sendPostcard({
         kind: "photo",
         friendId: targetFriendId,
-        photoUri: photoUri ?? "",
+        // v0.7.0.30: pre-uploaded path passes through (no re-upload).
+        photoUri: resolvedPhotoPath ?? photoUri ?? "",
         message,
         friend: targetFriend ?? undefined,
       });
@@ -645,11 +694,8 @@ export default function SendScreen() {
         }
       }
 
-      setSuccess({
-        visible: true,
-        title: `Your postcard is on the way!`,
-        subtitle: `Heading to ${targetName} via USPS First Class Mail. It should arrive in about 1–2 weeks.`,
-      });
+      // v0.7.0.30: fire the global envelope-balloon celebration.
+      showCelebration({ kind: "friend", recipientName: targetName?.split(" ")[0] });
 
       setPrintSnapshot({
         photoUri: photoUri ?? "",

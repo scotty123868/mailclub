@@ -707,11 +707,20 @@ export async function sendIntoVoid(message: string, photoUri?: string): Promise<
   // card (no photo) rather than blocking — the postcard gets through to
   // the recipient as a handwritten-only card and the user keeps their
   // credit's worth of value.
+  // v0.7.0.30: pre-upload optimisation. If photoUri is already a
+  // Storage path (not a file://), skip the upload and use it directly.
+  // send.tsx pre-uploads on photo-pick so the user doesn't wait
+  // again at Send time.
   let photoPath: string | null = null;
   let category: CardCategory = "handwritten";
   if (photoUri && photoUri.length > 0) {
-    photoPath = await uploadPostcardPhoto(photoUri, "penpal.jpg");
-    if (photoPath) category = "photo";
+    if (!photoUri.startsWith("file://")) {
+      photoPath = photoUri;
+      category = "photo";
+    } else {
+      photoPath = await uploadPostcardPhoto(photoUri, "penpal.jpg");
+      if (photoPath) category = "photo";
+    }
   }
   // v0.7.0.28: new dedicated RPC that runs the Postcrossing-style
   // matching atomically. Old send_postcard RPC is still used for
