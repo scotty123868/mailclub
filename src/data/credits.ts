@@ -11,11 +11,14 @@ export const CARD_COSTS: Record<CardCategory, number> = {
   custom: 1,
 };
 
-// Starter balance for new accounts. Quiet gift — not framed as a
-// time-limited "welcome offer" or a behavioral reward. Just what you
-// have, like a fresh notebook. 3 is enough to feel like a real gift
-// and gets the user to the second send (which converts into a pack).
-export const FREE_CREDITS = 3;
+// Starter balance for new accounts. v0.7.0.29: dropped from 3 → 1
+// per founder direction. One free card is enough to validate the
+// product feel (send your first, see it arrive, share the unboxing
+// moment) without giving away enough value that users never convert.
+// The second send becomes a stamp purchase, which is the actual
+// product feedback loop. Three was too generous — half the users
+// never bought a pack.
+export const FREE_CREDITS = 1;
 
 export type CreditPack = {
   id: string;

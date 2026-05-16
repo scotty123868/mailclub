@@ -49,8 +49,8 @@ async function readyHarness() {
 describe("Fix: credit deduct/restore semantics", () => {
   it("Local-only send path deducts both credits and freeCreditsRemaining", async () => {
     const { ref } = await readyHarness();
-    expect(ref.current!.credits).toBe(3);
-    expect(ref.current!.freeCreditsRemaining).toBe(3);
+    expect(ref.current!.credits).toBe(1);
+    expect(ref.current!.freeCreditsRemaining).toBe(1);
 
     await act(async () => {
       await ref.current!.sendPostcard({
@@ -61,11 +61,11 @@ describe("Fix: credit deduct/restore semantics", () => {
     });
 
     await waitFor(() => {
-      expect(ref.current!.credits).toBe(2);
+      expect(ref.current!.credits).toBe(0);
       // The fix: both counters move in lockstep on the local path. If the
       // refund-on-failure logic regresses and the local path stops mirroring,
       // this catches it.
-      expect(ref.current!.freeCreditsRemaining).toBe(2);
+      expect(ref.current!.freeCreditsRemaining).toBe(0);
     });
   });
 

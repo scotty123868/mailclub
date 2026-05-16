@@ -20,7 +20,10 @@ describe("CreditsSheet", () => {
       </AllProviders>
     );
     expect(getByText("Buy stamps")).toBeTruthy();
-    expect(getByText(/stamps in your pocket/)).toBeTruthy();
+    // v0.7.0.29: FREE_CREDITS=1 means initial balance is "1 stamp" (singular)
+    // not "stamps" (plural). Match either form so the test survives future
+    // tweaks to the starter balance.
+    expect(getByText(/stamps? in your pocket/)).toBeTruthy();
     expect(getByTestId("credits-pack-p5")).toBeTruthy();
     expect(getByTestId("credits-pack-p25")).toBeTruthy();
     // v0.7.0.27: p50 is back (50 cards · $35 · $0.70/card).

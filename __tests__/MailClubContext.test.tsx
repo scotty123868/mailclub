@@ -45,7 +45,7 @@ async function readyHarness() {
 describe("MailClubContext — sendPostcard", () => {
   it("sends a handwritten card (1 credit), deducts balance, fires mailbox-thunk haptic", async () => {
     const { ref } = await readyHarness();
-    expect(ref.current!.credits).toBe(3);
+    expect(ref.current!.credits).toBe(1);
 
     let result: { ok: boolean; friendName: string } | null = null;
     await act(async () => {
@@ -62,7 +62,7 @@ describe("MailClubContext — sendPostcard", () => {
     expect(Haptics.impactAsync).toHaveBeenCalledWith("heavy");
 
     await waitFor(() => {
-      expect(ref.current!.credits).toBe(2);
+      expect(ref.current!.credits).toBe(0);
     });
     expect(ref.current!.postcards[0].toFriendId).toBe("tatiana");
     expect(ref.current!.postcards[0].category).toBe("handwritten");
@@ -73,7 +73,7 @@ describe("MailClubContext — sendPostcard", () => {
     const { ref } = await readyHarness();
     await act(async () => { await ref.current!.sendPostcard({ kind: "photo", friendId: "alex", photoUri: "file://x.jpg", message: "hi" }); });
     await waitFor(() => {
-      expect(ref.current!.credits).toBe(2);
+      expect(ref.current!.credits).toBe(0);
     });
     expect(ref.current!.postcards[0].creditCost).toBe(1);
     expect(ref.current!.postcards[0].category).toBe("photo");
@@ -85,7 +85,7 @@ describe("MailClubContext — sendPostcard", () => {
       await ref.current!.sendPostcard({ kind: "place", friendId: "alex", photoUri: "file://x.jpg", placeName: "Florida", message: "Greetings!" });
     });
     await waitFor(() => {
-      expect(ref.current!.credits).toBe(2);
+      expect(ref.current!.credits).toBe(0);
     });
     expect(ref.current!.postcards[0].category).toBe("place");
     expect(ref.current!.postcards[0].placeName).toBe("Florida");
@@ -97,7 +97,7 @@ describe("MailClubContext — sendPostcard", () => {
       await ref.current!.sendPostcard({ kind: "custom", friendId: "nora", description: "Romantic watercolor of our trip", referencePhotoUris: ["file://1.jpg"] });
     });
     await waitFor(() => {
-      expect(ref.current!.credits).toBe(2);
+      expect(ref.current!.credits).toBe(0);
     });
     expect(ref.current!.postcards[0].category).toBe("custom");
     expect(ref.current!.postcards[0].status).toBe("draft");
@@ -148,6 +148,10 @@ describe("MailClubContext — sendPostcard", () => {
 
   it("prepends new postcards (newest first)", async () => {
     const { ref } = await readyHarness();
+    // v0.7.0.29: FREE_CREDITS=1 only allows one send before exhausting
+    // the starter balance. Top up via purchaseCredits so the test has
+    // headroom to send two cards back-to-back. p5 = 5 stamps.
+    await act(async () => { await ref.current!.purchaseCredits("p5"); });
     await act(async () => { await ref.current!.sendPostcard({ kind: "handwritten", friendId: "tatiana", message: "first" }); });
     await act(async () => { await ref.current!.sendPostcard({ kind: "handwritten", friendId: "alex", message: "second" }); });
     await waitFor(() => {
@@ -157,9 +161,9 @@ describe("MailClubContext — sendPostcard", () => {
 
   it("decrements freeCreditsRemaining alongside credits, never below zero", async () => {
     const { ref } = await readyHarness();
-    expect(ref.current!.freeCreditsRemaining).toBe(3);
+    expect(ref.current!.freeCreditsRemaining).toBe(1);
     await act(async () => { await ref.current!.sendPostcard({ kind: "photo", friendId: "alex", photoUri: "x", message: "hi" }); });
-    await waitFor(() => expect(ref.current!.freeCreditsRemaining).toBe(2));
+    await waitFor(() => expect(ref.current!.freeCreditsRemaining).toBe(0));
   });
 });
 
@@ -172,7 +176,8 @@ describe("MailClubContext — purchaseCredits", () => {
     });
     expect(result!.ok).toBe(true);
     expect(result!.creditsAdded).toBe(25);
-    await waitFor(() => expect(ref.current!.credits).toBe(28));
+    // v0.7.0.29: starter balance dropped 3 → 1, so 1 + 25 = 26 (was 28).
+    await waitFor(() => expect(ref.current!.credits).toBe(26));
     expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
   });
 
@@ -337,7 +342,7 @@ describe("MailClubContext — persistence", () => {
       const raw = await AsyncStorage.getItem(STORE_KEY);
       expect(raw).toBeTruthy();
       const parsed = JSON.parse(raw!);
-      expect(parsed.credits).toBe(2);
+      expect(parsed.credits).toBe(0);
       expect(parsed.postcards[0].toFriendId).toBe("tatiana");
     });
   });
@@ -345,7 +350,7 @@ describe("MailClubContext — persistence", () => {
   it("falls back to defaults if AsyncStorage is corrupt", async () => {
     await AsyncStorage.setItem(STORE_KEY, "not-json");
     const { ref } = await readyHarness();
-    expect(ref.current!.credits).toBe(3);
+    expect(ref.current!.credits).toBe(1);
   });
 });
 
@@ -377,10 +382,10 @@ describe("MailClubContext — initial state", () => {
     expect(ref.current!.currentUser.city).toBe("Denver");
   });
 
-  it("starts with 3 credits and 3 free credits", async () => {
+  it("starts with 1 credit and 1 free credit", async () => {
     const { ref } = await readyHarness();
-    expect(ref.current!.credits).toBe(3);
-    expect(ref.current!.freeCreditsRemaining).toBe(3);
+    expect(ref.current!.credits).toBe(1);
+    expect(ref.current!.freeCreditsRemaining).toBe(1);
     expect(ref.current!.hasSeenFreeCreditsIntro).toBe(false);
   });
 });

@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mailrooms.app",
-      "buildNumber": "49",
+      "buildNumber": "50",
       "usesAppleSignIn": true,
       "config": {
         "googleMapsApiKey": ""
