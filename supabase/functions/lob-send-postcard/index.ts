@@ -463,7 +463,7 @@ serve(async (req: Request) => {
         reciprocationUrl = (tokenData as any).url as string;
       } else if (tokenData && typeof tokenData === "object" && (tokenData as any).token) {
         // Some versions of the RPC return just the token; build the URL.
-        reciprocationUrl = `https://themailroom.club/welcome-mail/${(tokenData as any).token}`;
+        reciprocationUrl = `https://app.themailroom.club/welcome-mail/${(tokenData as any).token}`;
       }
     } catch (err) {
       // eslint-disable-next-line no-console

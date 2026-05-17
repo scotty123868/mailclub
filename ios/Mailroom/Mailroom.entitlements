@@ -29,7 +29,7 @@
 	-->
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:themailroom.club</string>
+		<string>applinks:app.themailroom.club</string>
 	</array>
 </dict>
 </plist>
