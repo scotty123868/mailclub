@@ -19,8 +19,8 @@ const STORE_KEY = "mailroom-v1-cache";
 // closure lookups on the friends array. (codex Phase 6 P1.)
 export type SendInput =
   | { kind: "handwritten"; friendId: string; message: string; friend?: Friend }
-  | { kind: "photo"; friendId: string; photoUri: string; message: string; friend?: Friend }
-  | { kind: "place"; friendId: string; photoUri: string; placeName: string; message: string; friend?: Friend }
+  | { kind: "photo"; friendId: string; photoUri: string; preUploadedPath?: string; message: string; friend?: Friend }
+  | { kind: "place"; friendId: string; photoUri: string; preUploadedPath?: string; placeName: string; message: string; friend?: Friend }
   | { kind: "custom"; friendId: string; description: string; tone?: CustomTone; referencePhotoUris: string[]; friend?: Friend };
 
 export type VoidReply = {
@@ -107,9 +107,10 @@ type MailClubState = {
     category: CardCategory;
     message: string;
     photoUri?: string;
+    preUploadedPath?: string;
     placeName?: string;
   }) => Promise<SendViaLinkResult>;
-  sendIntoVoid: (message: string, photoUri?: string) => Promise<{ ok: boolean }>;
+  sendIntoVoid: (message: string, photoUri?: string, preUploadedPath?: string) => Promise<{ ok: boolean }>;
   purchaseCredits: (packId: string) => Promise<CreditsPurchaseResult>;
   refreshProfile: () => Promise<void>;
   markFreeCreditsIntroSeen: () => Promise<void>;
@@ -439,18 +440,28 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     setFreeCreditsRemaining((b) => Math.max(0, b - cost));
 
     try {
-      // Upload photo first if present. v0.7.0.30: if the caller has
-      // pre-uploaded (input.photoUri doesn't start with file://, so
-      // it's already a Storage path), skip the upload and pass the
-      // path through directly. This is the send-speed optimisation:
-      // pre-uploading on photo-pick means the user doesn't wait for
-      // the upload again when they tap Send.
+      // Upload photo first if present.
+      //
+      // v0.7.0.31 PHOTO BUGFIX: input.photoUri MUST be the local file://
+      // URI (so the optimistic-insert journal tile renders the image
+      // immediately). The pre-uploaded Storage path (if send.tsx's
+      // photoUploadCacheRef already finished) comes through
+      // input.preUploadedPath as a SEPARATE field.
+      //
+      // The build-51 bug: send.tsx was passing the Storage path as
+      // input.photoUri, which broke the line-480 localPhotoUri
+      // substitution. <Image source={{ uri: "<userid>/<ts>.jpg" }}>
+      // can't load a relative Storage path → blank tile.
       let photoUri: string | undefined;
       let refUris: string[] = [];
       if (input.kind === "photo" || input.kind === "place") {
-        if (input.photoUri && !input.photoUri.startsWith("file://")) {
-          // Pre-uploaded path passed through (e.g. send.tsx's
-          // photoUploadCacheRef). Skip the upload step entirely.
+        if (input.preUploadedPath) {
+          // Pre-uploaded path from send.tsx photoUploadCacheRef. Skip
+          // the upload step entirely — saves ~1-3s on Send.
+          photoUri = input.preUploadedPath;
+        } else if (input.photoUri && !input.photoUri.startsWith("file://")) {
+          // Defensive: caller passed an already-uploaded path as
+          // photoUri (legacy callers / tests). Keep working.
           photoUri = input.photoUri;
         } else {
           const path = await api.uploadPostcardPhoto(input.photoUri, `${input.kind}.jpg`);
@@ -547,6 +558,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     category: CardCategory;
     message: string;
     photoUri?: string;
+    preUploadedPath?: string;
     placeName?: string;
   }): Promise<SendViaLinkResult> => {
     const cost = costForCategory(input.category);
@@ -567,7 +579,13 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       // was pre-uploaded by the caller — skip the upload.
       let photoPath: string | undefined;
       if ((input.category === "photo" || input.category === "place") && input.photoUri) {
-        if (!input.photoUri.startsWith("file://")) {
+        // v0.7.0.31 PHOTO BUGFIX: same as sendPostcardAction. Use
+        // preUploadedPath for the upload skip; keep input.photoUri as
+        // the local file:// URI so the optimistic insert at line ~640
+        // (`input.photoUri || photoPath`) renders the photo natively.
+        if (input.preUploadedPath) {
+          photoPath = input.preUploadedPath;
+        } else if (!input.photoUri.startsWith("file://")) {
           photoPath = input.photoUri;
         } else {
           const path = await api.uploadPostcardPhoto(input.photoUri, `${input.category}.jpg`);
@@ -685,7 +703,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
   }, [authedUserId, credits, hasSentFirstCard]);
 
-  const sendIntoVoidAction = useCallback(async (message: string, photoUri?: string) => {
+  const sendIntoVoidAction = useCallback(async (message: string, photoUri?: string, preUploadedPath?: string) => {
     if (credits < 1) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       Alert.alert("Not enough credits", "Sending into the void costs 1 credit.");
@@ -718,10 +736,14 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     setCredits((c) => c - 1);
     setFreeCreditsRemaining((b) => Math.max(0, b - 1));
     try {
-      const postcard = await api.sendIntoVoid(message, photoUri);
-      // v0.7.0.27 PHOTO BUGFIX: substitute local file:// URI so the
-      // journal tile renders immediately. See sendPostcardAction +
-      // sendPostcardViaLinkAction for full rationale.
+      // v0.7.0.31 PHOTO BUGFIX: pass both the local URI (for upload
+      // fallback if pre-upload missed) AND the pre-uploaded Storage
+      // path (for skip-upload optimization). The api call uses
+      // preUploadedPath if present, else uploads photoUri.
+      const postcard = await api.sendIntoVoid(message, photoUri, preUploadedPath);
+      // Substitute local file:// URI so the journal tile renders
+      // immediately. See sendPostcardAction + sendPostcardViaLinkAction
+      // for full rationale.
       const postcardWithLocalPhoto: Postcard = photoUri
         ? { ...postcard, photoUri }
         : postcard;

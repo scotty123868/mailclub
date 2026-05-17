@@ -503,8 +503,16 @@ export default function SendScreen() {
       // step ever runs. sendIntoVoid handles recipient selection server-
       // side via the void claim queue.
       if (recipientKind === "penpal") {
-        // v0.7.0.30: pass the pre-uploaded path (no re-upload).
-        const result = await sendIntoVoid(message.trim(), resolvedPhotoPath ?? undefined);
+        // v0.7.0.31 PHOTO BUGFIX: pass the LOCAL URI as photoUri (so the
+        // optimistic insert in MailClubContext renders the photo
+        // immediately, before fetchPostcards signs a working URL). Pass
+        // the resolved Storage path as preUploadedPath so the api call
+        // skips re-uploading.
+        const result = await sendIntoVoid(
+          message.trim(),
+          photoUri ?? undefined,
+          resolvedPhotoPath ?? undefined,
+        );
         if (!result.ok) {
           Alert.alert("Couldn't send to pen pal", "Try again in a moment.");
           return;
@@ -554,9 +562,12 @@ export default function SendScreen() {
         const result = await sendPostcard({
           kind: "photo",
           friendId: selfRes.friend.id,
-          // v0.7.0.30: pre-uploaded path passes through; the action
-          // detects the non-file:// prefix and skips the upload step.
-          photoUri: resolvedPhotoPath ?? photoUri ?? "",
+          // v0.7.0.31 PHOTO BUGFIX: photoUri = LOCAL URI (for the
+          // optimistic-insert journal tile), preUploadedPath = Storage
+          // path (skip upload). See MailClubContext.tsx:443 for full
+          // rationale.
+          photoUri: photoUri ?? "",
+          preUploadedPath: resolvedPhotoPath ?? undefined,
           message: message.trim(),
           friend: selfRes.friend,
         });
@@ -574,8 +585,10 @@ export default function SendScreen() {
         const result = await sendPostcardViaLink({
           category: "photo",
           message,
-          // v0.7.0.30: pre-uploaded path passes through (no re-upload).
-          photoUri: resolvedPhotoPath ?? photoUri ?? undefined,
+          // v0.7.0.31 PHOTO BUGFIX: LOCAL URI for optimistic render,
+          // Storage path via preUploadedPath for the upload-skip.
+          photoUri: photoUri ?? undefined,
+          preUploadedPath: resolvedPhotoPath ?? undefined,
         });
         if (!result.ok || !result.claimUrl) {
           Alert.alert("Couldn't generate link", result.error ?? "Try again in a moment.");
@@ -676,8 +689,10 @@ export default function SendScreen() {
       const result = await sendPostcard({
         kind: "photo",
         friendId: targetFriendId,
-        // v0.7.0.30: pre-uploaded path passes through (no re-upload).
-        photoUri: resolvedPhotoPath ?? photoUri ?? "",
+        // v0.7.0.31 PHOTO BUGFIX: LOCAL URI for optimistic render,
+        // Storage path via preUploadedPath for the upload-skip.
+        photoUri: photoUri ?? "",
+        preUploadedPath: resolvedPhotoPath ?? undefined,
         message,
         friend: targetFriend ?? undefined,
       });

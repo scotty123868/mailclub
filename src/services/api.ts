@@ -675,7 +675,7 @@ export async function fetchReceivedPostcards(): Promise<ReceivedPostcard[]> {
   }));
 }
 
-export async function sendIntoVoid(message: string, photoUri?: string): Promise<Postcard> {
+export async function sendIntoVoid(message: string, photoUri?: string, preUploadedPath?: string): Promise<Postcard> {
   // v0.7.0.28: switched to send_into_void_with_matching RPC which does
   // Postcrossing-style stranger matching:
   //   - Pops the oldest queue entry (user ≠ sender) as recipient
@@ -707,14 +707,19 @@ export async function sendIntoVoid(message: string, photoUri?: string): Promise<
   // card (no photo) rather than blocking — the postcard gets through to
   // the recipient as a handwritten-only card and the user keeps their
   // credit's worth of value.
-  // v0.7.0.30: pre-upload optimisation. If photoUri is already a
-  // Storage path (not a file://), skip the upload and use it directly.
-  // send.tsx pre-uploads on photo-pick so the user doesn't wait
-  // again at Send time.
+  // v0.7.0.31 PHOTO BUGFIX: photoUri is the LOCAL file:// URI (for
+  // the caller's optimistic insert). preUploadedPath is the Storage
+  // path from send.tsx's photoUploadCacheRef. Prefer the pre-uploaded
+  // path so we skip the (1-3s) upload; fall back to uploading
+  // photoUri if pre-upload didn't fire.
   let photoPath: string | null = null;
   let category: CardCategory = "handwritten";
-  if (photoUri && photoUri.length > 0) {
+  if (preUploadedPath) {
+    photoPath = preUploadedPath;
+    category = "photo";
+  } else if (photoUri && photoUri.length > 0) {
     if (!photoUri.startsWith("file://")) {
+      // Defensive: caller passed an already-uploaded path as photoUri.
       photoPath = photoUri;
       category = "photo";
     } else {
