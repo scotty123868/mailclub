@@ -679,7 +679,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
           // id AND the server row's photoUri isn't a working URL,
           // keep the local file:// URI we have. Otherwise trust the
           // server row.
-          return fresh.map((freshRow) => {
+          const mapped = fresh.map((freshRow) => {
             if (freshRow.id !== optimistic.id) return freshRow;
             const serverHasRenderableUri =
               freshRow.photoUri &&
@@ -687,6 +687,14 @@ export function MailClubProvider({ children }: PropsWithChildren) {
             if (serverHasRenderableUri) return freshRow;
             return { ...freshRow, photoUri: optimistic.photoUri };
           });
+          // v0.7.0.32 Codex P2: if fetchPostcards returned a non-empty
+          // but STALE list (RLS replication lag against the row we just
+          // inserted), the optimistic row would vanish from the journal
+          // until the next refresh. Keep it at the head if absent.
+          if (!mapped.some((p) => p.id === optimistic.id)) {
+            return [optimistic, ...mapped];
+          }
+          return mapped;
         });
       } catch { /* non-fatal */ }
       // v0.7: send-via-link COUNTS as the first send. The card queues
