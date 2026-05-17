@@ -29,10 +29,30 @@ struct ContentView: View {
     @State private var errorMessage: String?
 
     private var claimToken: String? {
+        // v0.7.0.32 — accept BOTH URL shapes the App Clip can be invoked
+        // with:
+        //   1. /claim?t=TOKEN          (sender-shared link via iMessage)
+        //   2. /welcome-mail/TOKEN     (recipient-scanned QR from printed
+        //                              postcard back, path-based, no query)
+        //
+        // Build 55 only parsed the query string, so a QR-launched clip
+        // would show "No claim link found" even though the token was
+        // in the path. (Codex P1.2.)
         guard let url = invocationURL,
-              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let q = comps.queryItems else { return nil }
-        return q.first(where: { $0.name == "t" })?.value
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return nil }
+        // Try query string first (?t=TOKEN). Works for /claim flow.
+        if let q = comps.queryItems,
+           let token = q.first(where: { $0.name == "t" })?.value,
+           !token.isEmpty {
+            return token
+        }
+        // Fall back to the last non-empty path segment (e.g. /welcome-mail/TOKEN).
+        let segments = comps.path.split(separator: "/").map { String($0) }
+        if let last = segments.last, !last.isEmpty {
+            return last
+        }
+        return nil
     }
 
     private var canSubmit: Bool {

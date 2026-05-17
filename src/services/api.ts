@@ -167,9 +167,12 @@ export async function completeSignup(input: {
   });
   if (error) {
     // v0.7.0.11: surface the device-cap rejection as a user-friendly
-    // string. The RPC raises `DEVICE_LIMIT_REACHED` when the same iOS
-    // vendor id is already linked to N profiles.
-    if (typeof error.message === "string" && error.message.includes("DEVICE_LIMIT_REACHED")) {
+    // string. Migration 2026051214 raised `DEVICE_LIMIT_REACHED`; the
+    // newer 2026051600 migration raises `DEVICE_CAP_REACHED`. Match both
+    // so we don't show a raw Postgres exception when the active migration
+    // changes (codex P1.3).
+    if (typeof error.message === "string"
+        && (error.message.includes("DEVICE_LIMIT_REACHED") || error.message.includes("DEVICE_CAP_REACHED"))) {
       throw new Error("This device already has Mailroom accounts. Sign in with an existing one or use a different phone.");
     }
     throw error;
@@ -365,7 +368,12 @@ function postcardFromRow(row: PostcardRow): Postcard {
     ? claimRow[0]?.claim_token
     : claimRow?.claim_token;
   if (claimToken) {
-    claimUrl = `https://mailroomclub.vercel.app/claim?t=${claimToken}`;
+    // v0.7.0.32: switched from mailroomclub.vercel.app → app.themailroom.club
+    // when build 55 migrated to the user's owned domain. Universal Links
+    // entitlement + AASA both target app.themailroom.club; emitting the
+    // legacy domain meant share URLs never triggered the App Clip / app
+    // intercept. Codex P1.1.
+    claimUrl = `https://app.themailroom.club/claim?t=${claimToken}`;
   }
   return {
     id: row.id,
@@ -503,7 +511,8 @@ export async function sendPostcardViaLink(input: SendViaLinkInput): Promise<Send
   return {
     postcardId: row.postcard_id,
     claimToken: row.claim_token,
-    claimUrl: `https://mailroomclub.vercel.app/claim?t=${row.claim_token}`,
+    // v0.7.0.32: see postcardFromRow above for the domain switch rationale.
+    claimUrl: `https://app.themailroom.club/claim?t=${row.claim_token}`,
     creditsRemaining: row.credits_remaining,
   };
 }

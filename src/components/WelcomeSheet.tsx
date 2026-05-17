@@ -40,6 +40,7 @@ import { isAppleSignInAvailable } from "@/src/services/apple-auth";
 import { lookupReciprocation, refundPostcardCredit } from "@/src/services/api";
 import {
   capturePostcardForPrint,
+  humanizeLobError,
   lobRenderDimensions,
   submitToLob,
 } from "@/src/services/lob";
@@ -512,21 +513,8 @@ export function WelcomeSheet({
   // v0.7.0.17: translate raw Lob errors into actionable user messages.
   // Lob's strictness rejections look opaque ("does not meet your minimum
   // deliverability strictness") — we surface a hint about what to do.
-  function humanizeLobError(raw: string | undefined): string {
-    if (!raw) return "Couldn't print your card. Tap Mail it again — we'll retry.";
-    const lower = raw.toLowerCase();
-    if (lower.includes("deliverability strictness") || lower.includes("undeliverable")) {
-      return "USPS couldn't verify that address. Double-check the street number, ZIP, and apt/suite — even one digit off and we can't ship.";
-    }
-    if (lower.includes("address") && (lower.includes("invalid") || lower.includes("not found"))) {
-      return "That address didn't validate. Double-check the street number, city, and ZIP.";
-    }
-    if (lower.includes("network") || lower.includes("fetch")) {
-      return "Couldn't reach our print service. Check your connection and tap Mail it again.";
-    }
-    // Fallback: surface the raw error so we can debug from the user's screen.
-    return `Couldn't print your card: ${raw}`;
-  }
+  // v0.7.0.32: humanizeLobError moved to src/services/lob.ts so both
+  // this flow and the in-app Send path share it. Imported above.
 
   // ----- Final commit ------------------------------------------------------
 

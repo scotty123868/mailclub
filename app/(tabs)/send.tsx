@@ -18,8 +18,8 @@ import {
 import { createReciprocationToken } from "@/src/services/api";
 import { SuccessModal } from "@/src/components/SuccessModal";
 import { CARD_COST_PHOTO } from "@/src/data/credits";
-import { capturePostcardForPrint, lobRenderDimensions, submitToLob } from "@/src/services/lob";
-import { uploadPostcardPhoto } from "@/src/services/api";
+import { capturePostcardForPrint, humanizeLobError, lobRenderDimensions, submitToLob } from "@/src/services/lob";
+import { refundPostcardCredit, uploadPostcardPhoto } from "@/src/services/api";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { getSelfAddress, setSelfAddress } from "@/src/state/selfAddress";
 import { colors } from "@/src/theme/colors";
@@ -133,6 +133,7 @@ export default function SendScreen() {
     sendIntoVoid,
     addFriendByAddress,
     showCelebration,
+    refreshProfile,
   } = useMailClub();
 
   // v0.7.0.30: pre-upload state. When the user picks a photo on the
@@ -725,10 +726,29 @@ export default function SendScreen() {
       });
 
       if (result.postcardId) {
-        submitPostcardToLob(result.postcardId)
-          .catch((err) => {
+        const postcardIdForLob = result.postcardId;
+        submitPostcardToLob(postcardIdForLob)
+          .catch(async (err) => {
+            // v0.7.0.32 codex P1.5: previously this was console.warn only,
+            // leaving orphan postcards (status=queued, no Lob ID) with the
+            // user's credit gone and no feedback. Now refund the credit
+            // via the RPC + alert the user with a humanized error. The
+            // refund RPC also deletes the orphan row, so the user can
+            // retry from scratch.
+            const message = err?.message ?? String(err);
             // eslint-disable-next-line no-console
-            console.warn("Lob submission failed (will retry server-side):", err);
+            console.warn("Lob submission failed:", message);
+            try {
+              await refundPostcardCredit(postcardIdForLob);
+              await refreshProfile();
+            } catch (refundErr) {
+              // eslint-disable-next-line no-console
+              console.warn("Refund failed:", refundErr);
+            }
+            Alert.alert(
+              "Couldn't print your card",
+              humanizeLobError(message) + "\n\nYour credit was returned. Try again when you're ready.",
+            );
           })
           .finally(() => {
             setPrintSnapshot(null);

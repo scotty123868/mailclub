@@ -224,3 +224,27 @@ export async function submitToLob(input: LobSubmitInput): Promise<LobSubmitResul
 export function lobRenderDimensions() {
   return { width: LOB_RENDER_WIDTH, height: Math.round(LOB_RENDER_WIDTH / LOB_ASPECT_W_OVER_H) };
 }
+
+/**
+ * Map a raw Lob/network error message into a user-facing string.
+ *
+ * v0.7.0.32 codex P1.5: extracted from WelcomeSheet.tsx so both the
+ * welcome-flow path AND the in-app Send path use the same translation.
+ * Previously the in-app Send caught Lob failures with console.warn only,
+ * leaving the user with a missing credit and a card that never printed.
+ */
+export function humanizeLobError(raw: string | undefined): string {
+  if (!raw) return "Couldn't print your card. Tap Mail it again — we'll retry.";
+  const lower = raw.toLowerCase();
+  if (lower.includes("deliverability strictness") || lower.includes("undeliverable")) {
+    return "USPS couldn't verify that address. Double-check the street number, ZIP, and apt/suite — even one digit off and we can't ship.";
+  }
+  if (lower.includes("address") && (lower.includes("invalid") || lower.includes("not found"))) {
+    return "That address didn't validate. Double-check the street number, city, and ZIP.";
+  }
+  if (lower.includes("network") || lower.includes("fetch")) {
+    return "Couldn't reach our print service. Check your connection and tap Mail it again.";
+  }
+  // Fallback: surface the raw error so we can debug from the user's screen.
+  return `Couldn't print your card: ${raw}`;
+}

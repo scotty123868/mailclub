@@ -467,6 +467,17 @@ export function MailClubProvider({ children }: PropsWithChildren) {
           const path = await api.uploadPostcardPhoto(input.photoUri, `${input.kind}.jpg`);
           photoUri = path ?? undefined;
         }
+        // v0.7.0.32 codex P1.4: if the upload failed (returned null) AND
+        // we have no pre-uploaded fallback, the previous code silently
+        // sent a "photo" RPC with photoUri="" — user picked a photo,
+        // celebration fired, real card printed text-only. Now: abort the
+        // send with a clear alert + restore credits via the catch block.
+        // The Welcome-flow path already does this; mirroring here.
+        if (!photoUri) {
+          throw new Error(
+            "We couldn't upload your photo. Check your connection and try again — no credit was used."
+          );
+        }
       } else if (input.kind === "custom" && input.referencePhotoUris.length > 0) {
         const paths: string[] = [];
         for (const uri of input.referencePhotoUris) {
