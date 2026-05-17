@@ -11,47 +11,25 @@
 		<string>merchant.com.mailrooms.app</string>
 	</array>
 	<!--
-		Universal Links — DRAFTED but DISABLED for build 40.
+		Universal Links — ENABLED for build 52 (App Clip wiring).
+		AASA: https://mailroomclub.vercel.app/.well-known/apple-app-site-association
 
-		AASA file is live at
-		  https://mailroomclub.vercel.app/.well-known/apple-app-site-association
-		(verified 200 + application/json on 2026-05-15). Web fallback at
-		  https://mailroomclub.vercel.app/claim?t=<token>
-		works for every platform regardless of this entitlement state —
-		that's how build 40 ships a usable claim flow without depending
-		on the developer-portal capability flip.
+		REQUIRED before next archive succeeds:
+		  1. developer.apple.com → Identifiers → com.mailrooms.app →
+		     Capabilities → check "Associated Domains" → save.
+		  2. Register new App ID com.mailrooms.app.Clip (App Clip),
+		     enable Associated Domains capability there too.
+		  3. Xcode → Signing & Capabilities on both Mailroom and
+		     MailroomClip targets → let automatic signing refresh
+		     provisioning profiles.
 
-		WHY DISABLED: build 40 archive attempt with this entitlement
-		ENABLED failed with:
-		  "Provisioning profile 'iOS Team Provisioning Profile:
-		   com.mailrooms.app' doesn't include the Associated Domains
-		   capability."
-		Enabling here requires the App ID at
-		https://developer.apple.com/account/Identifiers/com.mailrooms.app
-		to have "Associated Domains" capability checked. Automatic
-		signing CAN'T auto-toggle that capability in some account
-		configurations.
-
-		TO ENABLE (build 41):
-		  1. Sign in at developer.apple.com → Identifiers → tap
-		     com.mailrooms.app → Capabilities tab → check
-		     "Associated Domains" → save.
-		  2. In Xcode, Mailroom target → Signing & Capabilities →
-		     "Try Again" on the provisioning profile error (or just
-		     run xcodebuild archive — automatic signing will fetch the
-		     refreshed profile).
-		  3. Uncomment the array below.
-		  4. Build 41 — Universal Links route claim taps into the
-		     installed app via expo-router's /claim?t=X deep link.
-
-		Same gating applies to the App Clip target (build 41+, after
-		registering com.mailrooms.app.Clip bundle ID).
+		Without those, archive fails with:
+		  "Provisioning profile doesn't include the Associated
+		   Domains capability."
 	-->
-	<!--
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:mailroomclub.vercel.app</string>
 	</array>
-	-->
 </dict>
 </plist>

@@ -1,10 +1,11 @@
 //
 //  ContentView.swift
-//  MailroomClip — single-screen address-collection UI.
+//  MailroomClip
 //
-//  Visual language matches the main Mailroom app: cream paper background,
-//  serif headlines, postal-blue accents, postal-red CTA. SwiftUI native
-//  (no UIKit) so the bundle stays small.
+//  Single-screen address-collection UI for the Mailroom postcard claim
+//  flow. When a recipient receives a Mailroom claim link
+//  (e.g. https://mailroomclub.vercel.app/claim?t=ABC123) and taps it
+//  on iOS 14+, this is the screen that appears (no app install).
 //
 
 import SwiftUI
@@ -27,9 +28,6 @@ struct ContentView: View {
     @State private var didSubmit: Bool = false
     @State private var errorMessage: String?
 
-    /// Computed: extract the token from the invocation URL's `t` query
-    /// param. Returns nil if missing — in that case we show a friendly
-    /// "Open this link from your message" copy instead of the form.
     private var claimToken: String? {
         guard let url = invocationURL,
               let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -37,9 +35,6 @@ struct ContentView: View {
         return q.first(where: { $0.name == "t" })?.value
     }
 
-    /// Form completeness gate — same shape as the main app's
-    /// `isAddressComplete` helper. Name + line1 + city + state (2 letters)
-    /// + 5-digit zip. apt/suite is optional.
     private var canSubmit: Bool {
         let zipOK = zip.range(of: "^\\d{5}(-\\d{4})?$", options: .regularExpression) != nil
         return !recipientName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -51,25 +46,16 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            // Cream paper background — matches the main app
             Color(red: 0.972, green: 0.945, blue: 0.890).ignoresSafeArea()
-
-            if claimToken == nil {
-                noLinkView
-            } else if didSubmit {
-                successView
-            } else {
-                formView
-            }
+            if claimToken == nil { noLinkView }
+            else if didSubmit { successView }
+            else { formView }
         }
     }
-
-    // ----- Form ---------------------------------------------------------
 
     private var formView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                // Header
                 VStack(alignment: .leading, spacing: 8) {
                     Text("YOU HAVE MAIL")
                         .font(.system(size: 11, weight: .semibold))
@@ -87,7 +73,6 @@ struct ContentView: View {
                 }
                 .padding(.top, 24)
 
-                // Fields
                 VStack(alignment: .leading, spacing: 16) {
                     field(label: "YOUR NAME", value: $recipientName, placeholder: "Maya Chen")
                     field(label: "STREET ADDRESS", value: $line1, placeholder: "123 Main St")
@@ -99,7 +84,6 @@ struct ContentView: View {
                     field(label: "ZIP", value: $zip, placeholder: "80218").keyboardType(.numberPad)
                 }
 
-                // Error
                 if let err = errorMessage {
                     Text(err)
                         .font(.system(size: 13, design: .serif))
@@ -107,7 +91,6 @@ struct ContentView: View {
                         .foregroundColor(postalRed)
                 }
 
-                // CTA
                 Button(action: submit) {
                     HStack {
                         if submitting { ProgressView().tint(.white) }
@@ -122,7 +105,6 @@ struct ContentView: View {
                 }
                 .disabled(!canSubmit || submitting)
 
-                // Footer: option to install the full app
                 Text("Want to send your own? Get Mailroom on the App Store after this.")
                     .font(.system(size: 12, design: .serif))
                     .italic()
@@ -134,17 +116,14 @@ struct ContentView: View {
         }
     }
 
-    // ----- States -------------------------------------------------------
-
     private var successView: some View {
         VStack(spacing: 16) {
-            Text("🎉")
-                .font(.system(size: 60))
+            Text("🎉").font(.system(size: 60))
             Text("Done — your postcard is on its way")
                 .font(.system(size: 22, weight: .semibold, design: .serif))
                 .foregroundColor(ink)
                 .multilineTextAlignment(.center)
-            Text("USPS time is 4–7 days. We mailed it from our printer.")
+            Text("USPS time is 4-7 days. We mailed it from our printer.")
                 .font(.system(size: 14, design: .serif))
                 .italic()
                 .foregroundColor(mutedInk)
@@ -167,8 +146,6 @@ struct ContentView: View {
         .padding(.horizontal, 32)
     }
 
-    // ----- Field component ---------------------------------------------
-
     private func field(label: String, value: Binding<String>, placeholder: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
@@ -184,15 +161,11 @@ struct ContentView: View {
         }
     }
 
-    // ----- Submission ---------------------------------------------------
-
     private func submit() {
         guard canSubmit, let token = claimToken else { return }
         submitting = true
         errorMessage = nil
 
-        // Existing Supabase Edge Function — POST /claim with body shape
-        // matching what claim/index.ts handlePost() expects.
         let url = URL(string: "https://nlwnmgwylmmnaemdnzlq.functions.supabase.co/claim")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -225,8 +198,7 @@ struct ContentView: View {
         }.resume()
     }
 
-    // ----- Palette (matches the main Mailroom app) ---------------------
-
+    // Mailroom palette
     private let ink = Color(red: 0.067, green: 0.110, blue: 0.184)
     private let mutedInk = Color(red: 0.412, green: 0.412, blue: 0.412)
     private let postalRed = Color(red: 0.722, green: 0.282, blue: 0.227)

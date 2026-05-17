@@ -2,21 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Universal Links for the claim flow. AASA file lives at
-         https://mailroomclub.vercel.app/.well-known/apple-app-site-association
-         (see vercel-staging/ in this repo for the JSON content). -->
-    <key>com.apple.developer.associated-domains</key>
-    <array>
-        <string>applinks:mailroomclub.vercel.app</string>
-        <string>appclips:mailroomclub.vercel.app</string>
-    </array>
-    <!-- Parent bundle identifier — links this App Clip to the main
-         Mailroom app so installs prompt to upgrade. -->
     <key>com.apple.developer.parent-application-identifiers</key>
     <array>
         <string>$(AppIdentifierPrefix)com.mailrooms.app</string>
     </array>
-    <!-- App Clip is required to be marked as such. -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>appclips:mailroomclub.vercel.app</string>
+    </array>
     <key>com.apple.developer.on-demand-install-capable</key>
     <true/>
 </dict>
