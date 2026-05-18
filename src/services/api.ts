@@ -547,15 +547,28 @@ export async function sendPostcardViaLink(input: SendViaLinkInput): Promise<Send
  *     matches the AASA entries.
  */
 export function reciprocationUrl(token: string): string {
+  // v0.7.0.48 FIX: the previous fallback returned the raw Supabase Edge
+  // Function URL when EXPO_PUBLIC_RECIPROCATION_HOST wasn't set — but that
+  // env var was never set anywhere in the project, so EVERY real
+  // friend-mode send shipped a QR pointing at functions.supabase.co.
+  // That URL doesn't match AASA, so Universal Links never fired and
+  // recipients scanning landed on a useless Supabase endpoint instead
+  // of opening the app.
+  //
+  // CRITICAL: the QR URL must encode /welcome-mail/{token}, NOT /r/{token}.
+  // /r/* is a Vercel server-side REWRITE to /welcome-mail/* — the browser
+  // still sees /r/ in the URL, so iOS Universal Links (which check the
+  // ORIGINAL URL against AASA's `/welcome-mail/*` pattern BEFORE any
+  // network request) won't fire. /welcome-mail/ matches AASA directly →
+  // app opens on scan. The printed card's display label stays
+  // `themailroom.club/r/{token}` (shorter, more typeable) — buildBackHtml
+  // extracts the token from either form when generating the display text.
   const host = (typeof process !== "undefined" &&
     (process.env as any)?.EXPO_PUBLIC_RECIPROCATION_HOST) as string | undefined;
-  if (host && host.startsWith("http")) {
-    return `${host.replace(/\/$/, "")}/r/${encodeURIComponent(token)}`;
-  }
-  const supabaseUrl = (typeof process !== "undefined" && (process.env as any)?.EXPO_PUBLIC_SUPABASE_URL)
-    || "https://nlwnmgwylmmnaemdnzlq.supabase.co";
-  const functionsBase = supabaseUrl.replace(".supabase.co", ".functions.supabase.co");
-  return `${functionsBase}/welcome-mail?t=${encodeURIComponent(token)}`;
+  const base = (host && host.startsWith("http"))
+    ? host.replace(/\/$/, "")
+    : "https://app.themailroom.club";
+  return `${base}/welcome-mail/${encodeURIComponent(token)}`;
 }
 
 /**
