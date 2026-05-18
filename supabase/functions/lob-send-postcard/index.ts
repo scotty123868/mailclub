@@ -158,21 +158,31 @@ function buildBackHtml(opts: {
   // stamp will render with a missing-image icon.
   const balloonImgUrl = "https://raw.githubusercontent.com/scotty123868/mailclub/mvp-v0.3-credits-and-categories/assets/onboarding/hero-envelope-balloon.jpg";
 
+  // v0.7.0.35 — same C2-print VISUAL design as v0.7.0.34 but with
+  // INCH-based positions instead of pixel. The mockup was sized in
+  // 1875×1275 pixels for a Chromium --window-size screenshot; Lob's
+  // HTML renderer interprets those pixels at CSS's 96dpi instead of
+  // print 300dpi, so the body overflowed the 6.25×4.25 page and Lob
+  // clipped it (no stamp, message at wrong y, etc.).
+  //
+  // Coordinates converted px → inches by ÷ 300 (the original mockup
+  // was designed at 300dpi). Visual details (perforated mask, oval
+  // postmark ring, paper grain, balloon JPG, Google Fonts) preserved.
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  /* C2 vintage-purist v2 — sized for Lob 4×6 (1875×1275 px at 300dpi).
-     Lifted verbatim from design-mockups/postcard-back/C2-print.html. */
+  @page { margin: 0; size: 6.25in 4.25in; }
   html, body { margin: 0; padding: 0; }
   body {
-    width: 1875px; height: 1275px;
+    width: 6.25in; height: 4.25in;
     background: #FBF4DE;
     position: relative; overflow: hidden;
     color: #17223B;
     font-family: Inter, sans-serif;
   }
-  /* Paper-grain noise overlay across the whole back. */
+  /* Paper-grain noise overlay. */
   body::before {
     content: ''; position: absolute; inset: 0; pointer-events: none;
     z-index: 1; opacity: 0.4; mix-blend-mode: multiply;
@@ -180,82 +190,84 @@ function buildBackHtml(opts: {
   }
   body > * { position: absolute; z-index: 2; }
 
-  /* TOP-LEFT QR cluster */
-  .qr-wrap { top: 56px; left: 75px; display: flex; gap: 25px; align-items: center; }
+  /* TOP-LEFT QR cluster (was 56px,75px → 0.187in,0.25in at 300dpi) */
+  .qr-wrap { top: 0.187in; left: 0.25in;
+             display: flex; gap: 0.083in; align-items: center; }
   .qr {
-    width: 206px; height: 206px;
+    width: 0.687in; height: 0.687in;
     background: #FBF4DE;
-    border: 2px solid #17223B; padding: 9px; box-sizing: border-box;
+    border: 0.007in solid #17223B;
+    padding: 0.03in; box-sizing: border-box;
     display: block;
   }
   .qr img { width: 100%; height: 100%; display: block; }
-  .qr-meta { padding-top: 19px; max-width: 344px; }
+  .qr-meta { padding-top: 0.063in; max-width: 1.15in; }
   .qr-meta .copy { font-family: 'Cormorant Garamond', serif; font-style: italic;
-                   font-size: 30px; color: #17223B; line-height: 1.3;
-                   font-weight: 500; }
-  .qr-meta .url { font-family: 'JetBrains Mono', monospace; font-size: 17px;
+                   font-size: 7.2pt; color: #17223B; line-height: 1.3;
+                   font-weight: 500; margin: 0; }
+  .qr-meta .url { font-family: 'JetBrains Mono', monospace; font-size: 4pt;
                   color: rgba(23, 34, 59, 0.55); letter-spacing: 0.05em;
-                  margin-top: 16px; font-weight: 500; }
+                  margin-top: 0.053in; font-weight: 500; }
 
-  /* TOP-RIGHT vintage stamp */
-  .stamp-wrap { top: 38px; right: 56px; transform: rotate(3deg); }
+  /* TOP-RIGHT vintage stamp (was 38px,56px → 0.127in,0.187in) */
+  .stamp-wrap { top: 0.127in; right: 0.187in; transform: rotate(3deg); }
   .stamp {
-    position: relative; width: 312px; height: 375px; padding: 22px;
+    position: relative; width: 1.04in; height: 1.25in; padding: 0.073in;
     background: #fdf6e5;
     -webkit-mask:
-      radial-gradient(circle at 0% 50%, transparent 9px, #000 10px) 0 0/100% 25px,
-      radial-gradient(circle at 50% 0%, transparent 9px, #000 10px) 0 0/25px 100%;
+      radial-gradient(circle at 0% 50%, transparent 0.030in, #000 0.033in) 0 0/100% 0.083in,
+      radial-gradient(circle at 50% 0%, transparent 0.030in, #000 0.033in) 0 0/0.083in 100%;
     -webkit-mask-composite: source-in;
-    border: 6px solid #B8483A;
+    border: 0.02in solid #B8483A;
     display: flex; flex-direction: column; align-items: center; justify-content: space-between;
     box-sizing: border-box;
   }
-  .stamp-inner-border { position: absolute; inset: 11px;
-                        border: 1.5px solid rgba(184, 72, 58, 0.55);
+  .stamp-inner-border { position: absolute; inset: 0.037in;
+                        border: 0.005in solid rgba(184, 72, 58, 0.55);
                         pointer-events: none; }
-  .stamp-art { width: 200px; height: 175px; margin-top: 22px;
+  .stamp-art { width: 0.667in; height: 0.583in; margin-top: 0.073in;
                background: url("${balloonImgUrl}") center/cover;
-               border-radius: 3px; }
+               border-radius: 0.01in; }
   .stamp-title { font-family: 'Playfair Display', serif; font-weight: 800;
-                 font-size: 34px; color: #B8483A; letter-spacing: 2.3px;
-                 margin-top: 6px; }
+                 font-size: 8.2pt; color: #B8483A; letter-spacing: 0.55pt;
+                 margin-top: 0.02in; }
   .stamp-class { font-family: 'JetBrains Mono', monospace; font-weight: 500;
-                 font-size: 14px; color: rgba(184, 72, 58, 0.75);
-                 letter-spacing: 0.4em; margin-top: 2px; }
+                 font-size: 3.4pt; color: rgba(184, 72, 58, 0.75);
+                 letter-spacing: 0.4em; margin-top: 0.007in; }
   .stamp-cost { font-family: 'Cormorant Garamond', serif; font-weight: 600;
-                font-size: 50px; color: #B8483A; line-height: 1;
-                margin-bottom: 6px; }
-  .stamp-cost .small { font-size: 28px; font-weight: 500; }
-  .stamp-year { font-family: 'JetBrains Mono', monospace; font-size: 19px;
+                font-size: 12pt; color: #B8483A; line-height: 1;
+                margin-bottom: 0.02in; }
+  .stamp-cost .small { font-size: 6.7pt; font-weight: 500; }
+  .stamp-year { font-family: 'JetBrains Mono', monospace; font-size: 4.6pt;
                 color: rgba(184, 72, 58, 0.65); letter-spacing: 0.45em; }
 
-  /* Center divider at x=808px (≈2.69in), keeps clear of Lob's IMb zone. */
-  .divider { left: 808px; top: 88px; bottom: 225px;
-             width: 1.5px; background: rgba(194, 165, 109, 0.45); }
+  /* Center divider (was 808px → 2.693in). Stops short of Lob's IMb zone. */
+  .divider { left: 2.693in; top: 0.293in; bottom: 0.75in;
+             width: 0.005in; background: rgba(194, 165, 109, 0.45); }
 
-  /* Message — strictly bounded to left safe column */
-  .msg { top: 313px; left: 75px; width: 691px; height: 719px;
-         font-family: 'Caveat', cursive; font-size: 50px; line-height: 1.4;
+  /* Message (was top:313 left:75 w:691 h:719 → in inches at 300dpi) */
+  .msg { top: 1.043in; left: 0.25in; width: 2.303in; height: 2.397in;
+         font-family: 'Caveat', cursive; font-size: 12pt; line-height: 1.4;
          color: #17223B; overflow: hidden;
          white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; }
 
   /* Postmark bottom-left: oval ring + wavy cancellation */
-  .postmark { left: 75px; bottom: 200px;
-              display: flex; align-items: center; gap: 16px; }
+  .postmark { left: 0.25in; bottom: 0.667in;
+              display: flex; align-items: center; gap: 0.053in; }
   .postmark-ring {
-    border: 1.5px solid rgba(23, 34, 59, 0.45);
-    border-radius: 156px; padding: 9px 22px;
+    border: 0.005in solid rgba(23, 34, 59, 0.45);
+    border-radius: 0.52in; padding: 0.03in 0.073in;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 17px; color: rgba(23, 34, 59, 0.65);
+    font-size: 4pt; color: rgba(23, 34, 59, 0.65);
     letter-spacing: 0.18em; text-transform: uppercase;
     white-space: nowrap;
   }
   .postmark-waves {
-    width: 281px; height: 22px;
+    width: 0.937in; height: 0.073in;
     background: repeating-linear-gradient(
       90deg,
-      rgba(23, 34, 59, 0.35) 0 3px,
-      transparent 3px 12px
+      rgba(23, 34, 59, 0.35) 0 0.01in,
+      transparent 0.01in 0.04in
     );
     opacity: 0.55;
   }
