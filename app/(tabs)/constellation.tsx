@@ -425,14 +425,10 @@ export default function ConstellationScreen() {
         </View>
       ) : null}
 
-      {/* Hint chip — pan + pinch instructions */}
-      {nodes.length > 1 ? (
-        <View style={styles.hintChip} pointerEvents="none">
-          <Text style={styles.hintText}>
-            two-finger drag · pinch to zoom · double-tap to reset
-          </Text>
-        </View>
-      ) : null}
+      {/* v0.7.0.48: removed two-finger / pinch / double-tap hint chip.
+          User feedback: the instruction text felt clinical at the bottom
+          of an otherwise atmospheric dark constellation map. Pan + pinch
+          are conventions iPhone users already know; the hint was noise. */}
 
       <FriendDetailSheet
         friend={activeFriend}

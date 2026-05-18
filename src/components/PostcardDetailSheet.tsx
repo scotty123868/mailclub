@@ -11,6 +11,7 @@ import {
 } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { retryOrphanShipping } from "@/src/services/api";
+import { humanizeLobError } from "@/src/services/lob";
 import { useMailClub } from "@/src/state/MailClubContext";
 import type { Postcard } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
@@ -195,7 +196,16 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
         );
         sheetRef.current?.close();
       } else {
-        Alert.alert("Couldn't retry", result.error ?? "Try again in a minute.");
+        // v0.7.0.48 FIX (Codex bug 4): humanize the error. The retry-orphan
+        // function now returns 200 with the real Lob error in the body
+        // instead of non-2xx (which supabase-js wrapped as "Edge Function
+        // returned a non-2xx status code" — the unreadable mess users saw).
+        // Most common: failed_deliverability_strictness → USPS-can't-verify
+        // message via humanizeLobError.
+        Alert.alert(
+          "Couldn't retry",
+          humanizeLobError(result.error ?? "Try again in a minute."),
+        );
       }
     }
 
@@ -247,6 +257,14 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
           </View>
 
           {/* Photo + message — the postcard itself */}
+          {/* v0.7.0.48 FIX: previously an empty cream box rendered above
+              the message whenever photoUri was missing. For handwritten
+              cards (no photo expected) it looked like a broken/missing
+              image; for photo cards it looked the same as a failed load.
+              Now: handwritten cards skip the photo frame entirely (message
+              gets the full card surface), and photo-category cards with
+              a missing URI show an explicit "Photo unavailable" hint so
+              the sender can tell the difference between intent and bug. */}
           <View style={styles.cardFrame}>
             {postcard.photoUri ? (
               <Image
@@ -254,9 +272,11 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
                 style={styles.cardPhoto}
                 resizeMode="cover"
               />
-            ) : (
-              <View style={[styles.cardPhoto, styles.cardPhotoPlaceholder]} />
-            )}
+            ) : postcard.category !== "handwritten" ? (
+              <View style={[styles.cardPhoto, styles.cardPhotoPlaceholder]}>
+                <Text style={styles.cardPhotoHint}>Photo unavailable</Text>
+              </View>
+            ) : null}
             <View style={styles.cardMessageBox}>
               <Text style={styles.cardMessage} numberOfLines={6}>
                 {postcard.message ? `"${postcard.message}"` : "(no message)"}
@@ -435,6 +455,14 @@ const styles = StyleSheet.create({
   },
   cardPhotoPlaceholder: {
     backgroundColor: colors.paperDark,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardPhotoHint: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 13,
+    opacity: 0.7,
   },
   cardMessageBox: {
     padding: 16,

@@ -31,20 +31,26 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function json(body: unknown, status = 200) {
+// v0.7.0.48 FIX (Codex bug 4): always return HTTP 200 with the outcome
+// in the body's `ok` field. supabase-js's functions.invoke() wraps any
+// non-2xx response in a generic "Edge Function returned a non-2xx status
+// code" error and does NOT parse the body — so the actual reason was
+// hidden from the user every time. Mirrors the same pattern that
+// lob-send-postcard already uses (see v0.7.0.20 in that file).
+function json(body: unknown) {
   return new Response(JSON.stringify(body), {
-    status,
+    status: 200,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" });
 
   // 1) Authenticate caller via JWT
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
+  if (!authHeader) return json({ ok: false, error: "Missing Authorization header" });
   const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
@@ -52,16 +58,16 @@ serve(async (req) => {
     data: { user },
     error: userErr,
   } = await userClient.auth.getUser();
-  if (userErr || !user) return json({ error: "Not authenticated" }, 401);
+  if (userErr || !user) return json({ ok: false, error: "Not authenticated" });
 
   // 2) Parse body
   let body: { postcard_id?: string };
   try {
     body = await req.json();
   } catch {
-    return json({ error: "Bad JSON" }, 400);
+    return json({ ok: false, error: "Bad JSON" });
   }
-  if (!body.postcard_id) return json({ error: "postcard_id required" }, 400);
+  if (!body.postcard_id) return json({ ok: false, error: "postcard_id required" });
 
   // 3) Verify ownership + orphan state
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -70,16 +76,16 @@ serve(async (req) => {
     .select("id, sender_id, to_kind, lob_id, status")
     .eq("id", body.postcard_id)
     .maybeSingle();
-  if (pcErr) return json({ error: pcErr.message }, 500);
-  if (!pc) return json({ error: "Postcard not found" }, 404);
-  if (pc.sender_id !== user.id) return json({ error: "Not your postcard" }, 403);
-  if (pc.lob_id) return json({ error: "Already shipped", lob_id: pc.lob_id }, 409);
+  if (pcErr) return json({ ok: false, error: pcErr.message });
+  if (!pc) return json({ ok: false, error: "Postcard not found" });
+  if (pc.sender_id !== user.id) return json({ ok: false, error: "Not your postcard" });
+  if (pc.lob_id) return json({ ok: false, error: "Already shipped", lob_id: pc.lob_id });
 
   // 4) Forward to lob-send-postcard with html render mode. Works for
   //    both friend-mode and claim-mode orphans because the function
   //    looks up the address from whichever side has it.
   if (!MAILROOM_INTERNAL_SECRET) {
-    return json({ error: "Internal secret not configured" }, 500);
+    return json({ ok: false, error: "Internal secret not configured" });
   }
   const lobFnUrl = `${SUPABASE_URL}/functions/v1/lob-send-postcard`;
   const lobRes = await fetch(lobFnUrl, {
@@ -97,11 +103,15 @@ serve(async (req) => {
     }),
   });
   const lobJson = await lobRes.json().catch(() => ({}));
-  if (!lobRes.ok || !lobJson.ok) {
-    return json(
-      { error: lobJson.error ?? `Lob retry failed (${lobRes.status})` },
-      502,
-    );
+  if (!lobJson.ok) {
+    // Surface Lob's real error to the client. The most common cause is
+    // "failed_deliverability_strictness" when USPS won't verify the
+    // recipient address — lob-send-postcard already humanizes that
+    // before returning, so we pass it through verbatim.
+    return json({
+      ok: false,
+      error: lobJson.error ?? `Lob retry failed (HTTP ${lobRes.status})`,
+    });
   }
   return json({
     ok: true,

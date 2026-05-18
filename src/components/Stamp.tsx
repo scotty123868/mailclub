@@ -154,11 +154,11 @@ export function Stamp({
             x={dims.w / 2}
             y={dims.h - 9}
             textAnchor="middle"
-            fontSize={size === "sm" ? 8 : 9}
+            fontSize={size === "sm" ? 6.5 : 9}
             fill={palette.ink}
             fontWeight="700"
             fontFamily="Inter_700Bold"
-            letterSpacing={0.4}
+            letterSpacing={size === "sm" ? 0.15 : 0.4}
           >
             MAILROOM
           </SvgText>
