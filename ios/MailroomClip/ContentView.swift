@@ -186,18 +186,31 @@ struct ContentView: View {
         submitting = true
         errorMessage = nil
 
+        // v0.7.0.48 FIX (Codex P2.2): canSubmit validates trimmed values,
+        // but the POST was sending the raw bindings. A user typing
+        // "Brooklyn " with a trailing space passed validation and shipped
+        // " Brooklyn " to Lob, where USPS validation can reject it. The
+        // web /claim fallback already trims; now the App Clip path
+        // matches. ZIP intentionally trims off any user-typed spaces too.
+        let trimmedName = recipientName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedLine1 = line1.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedLine2 = line2.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCity = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedState = state.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let trimmedZip = zip.trimmingCharacters(in: .whitespacesAndNewlines)
+
         let url = URL(string: "https://nlwnmgwylmmnaemdnzlq.functions.supabase.co/claim")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let payload: [String: Any] = [
             "token": token,
-            "name": recipientName,
-            "line1": line1,
-            "line2": line2,
-            "city": city,
-            "state": state.uppercased(),
-            "zip": zip,
+            "name": trimmedName,
+            "line1": trimmedLine1,
+            "line2": trimmedLine2,
+            "city": trimmedCity,
+            "state": trimmedState,
+            "zip": trimmedZip,
         ]
         req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 

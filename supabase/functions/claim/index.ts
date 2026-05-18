@@ -106,36 +106,59 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
   // would tell the sender "I claimed your card!" and then nothing
   // would ever arrive in the mail.
   //
-  // We fire-and-forget the Lob call so the recipient's claim page
-  // doesn't have to wait for Lob's render. The claim function returns
-  // success immediately. If Lob fails, the lob-send-postcard function
-  // writes the error to postcards.lob_error and we surface it elsewhere
-  // (the sender can retry from the Journal via the orphan retry UI).
+  // v0.7.0.48 FIX (Codex P1.4a): use EdgeRuntime.waitUntil so the Lob
+  // fetch is durably registered as background work that must complete
+  // before the function instance is torn down. Previously this was a
+  // bare fire-and-forget fetch() — Supabase's Edge runtime can reap the
+  // instance the moment the response is sent, dropping any in-flight
+  // detached promises. Result: silent Lob handoff failures. See:
+  // https://supabase.com/docs/guides/functions/background-tasks
+  //
+  // We also report a non-success ok:false now when secrets are missing,
+  // so the caller (claim page or App Clip) doesn't get a false success
+  // for a claim that never had the chance to ship. Previously this just
+  // logged + returned ok:true, hiding a misconfiguration in production.
   const internalSecret = Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "";
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  if (internalSecret && anonKey) {
-    const lobFnUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/lob-send-postcard`;
-    fetch(lobFnUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-mailroom-internal": internalSecret,
-        // Supabase platform JWT gate requires a bearer even though our
-        // function code prefers the internal-secret path. Anon key
-        // satisfies the gate without granting any extra privileges.
-        Authorization: `Bearer ${anonKey}`,
-      },
-      body: JSON.stringify({
-        postcard_id: data.postcard_id,
-        render_mode: "html",
-      }),
-    }).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.warn("[claim] lob-send-postcard call failed:", err?.message ?? err);
-    });
-  } else {
+  if (!internalSecret || !anonKey) {
     // eslint-disable-next-line no-console
-    console.warn("[claim] MAILROOM_INTERNAL_SECRET or SUPABASE_ANON_KEY not set — skipping Lob handoff");
+    console.error("[claim] MAILROOM_INTERNAL_SECRET or SUPABASE_ANON_KEY not set — cannot hand off to Lob");
+    return jsonResponse({
+      ok: false,
+      error: "Server misconfigured — please contact support. Your address was saved.",
+      postcard_id: data.postcard_id,
+    }, 500);
+  }
+  const lobFnUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/lob-send-postcard`;
+  const lobHandoff = fetch(lobFnUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-mailroom-internal": internalSecret,
+      // Supabase platform JWT gate requires a bearer even though our
+      // function code prefers the internal-secret path. Anon key
+      // satisfies the gate without granting any extra privileges.
+      Authorization: `Bearer ${anonKey}`,
+    },
+    body: JSON.stringify({
+      postcard_id: data.postcard_id,
+      render_mode: "html",
+    }),
+  }).then(async (resp) => {
+    if (!resp.ok) {
+      // eslint-disable-next-line no-console
+      console.warn("[claim] lob-send-postcard returned non-ok:", resp.status, await resp.text().catch(() => ""));
+    }
+  }).catch((err) => {
+    // eslint-disable-next-line no-console
+    console.warn("[claim] lob-send-postcard call failed:", err?.message ?? err);
+  });
+  // EdgeRuntime is provided by Supabase's Deno runtime. Guard against
+  // local test environments that don't expose it.
+  // deno-lint-ignore no-explicit-any
+  const ER = (globalThis as any).EdgeRuntime;
+  if (ER && typeof ER.waitUntil === "function") {
+    ER.waitUntil(lobHandoff);
   }
 
   return jsonResponse({

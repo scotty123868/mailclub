@@ -126,8 +126,28 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
     // server-side retry function generates HTML for the front + back
     // and submits to Lob, so it works for both friend-mode and
     // claim-mode orphans.
+    //
+    // v0.7.0.48 FIX (Codex P1.4b): the previous check required
+    // `toFriendId !== ""`, which excluded ALL claim-mode cards (their
+    // postcards.to_friend_id is never populated — the recipient address
+    // lives on postcard_claims.claimed_*). Now we also surface retry for
+    // claim cards once their status moves past "awaiting_address" (i.e.
+    // the recipient redeemed and we tried to ship). Unclaimed cards
+    // stay non-retryable — there's nothing to retry yet.
     const [retrying, setRetrying] = useState(false);
-    const isOrphan = !!postcard && !postcard.lobId && postcard.toFriendId !== "" && postcard.toFriendId !== "void" && postcard.status === "sent";
+    const isClaimCardRedeemedAndOrphan =
+      !!postcard
+      && postcard.toFriendId === ""
+      && !!postcard.claimUrl
+      && postcard.status === "sent"
+      && !postcard.lobId;
+    const isFriendCardOrphan =
+      !!postcard
+      && postcard.toFriendId !== ""
+      && postcard.toFriendId !== "void"
+      && postcard.status === "sent"
+      && !postcard.lobId;
+    const isOrphan = isFriendCardOrphan || isClaimCardRedeemedAndOrphan;
 
     async function onShareAgain() {
       if (!postcard?.claimUrl) return;

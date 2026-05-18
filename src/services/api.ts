@@ -337,9 +337,18 @@ type PostcardRow = {
 };
 
 function postcardFromRow(row: PostcardRow): Postcard {
-  // status type used by the rest of the app is narrower; coerce.
-  const narrowStatus: "draft" | "sent" | "delivered" =
-    row.status === "delivered" ? "delivered" : row.status === "draft" ? "draft" : "sent";
+  // Status narrowing — preserves the four states the UI cares about.
+  // v0.7.0.48 FIX (Codex P1.4b): preserve "awaiting_address" instead of
+  // collapsing it into "sent". Without this, PostcardDetailSheet can't
+  // tell unclaimed claim cards (nothing to retry — recipient hasn't
+  // filled in the address yet) from claimed-but-Lob-failed orphans
+  // (sender SHOULD see a retry button). Both showed up as "sent" before,
+  // and the orphan-retry UI was hidden for all claim cards.
+  const narrowStatus: "draft" | "sent" | "delivered" | "awaiting_address" =
+    row.status === "delivered" ? "delivered"
+    : row.status === "draft" ? "draft"
+    : row.status === "awaiting_address" ? "awaiting_address"
+    : "sent";
   // v0.7.0.7: build the claim URL from the embedded postcard_claims row,
   // if any. fetchPostcards LEFT JOINs postcard_claims so send-link cards
   // (to_kind === "claim") expose their share URL on the Postcard type.

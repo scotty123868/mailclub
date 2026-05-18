@@ -602,6 +602,20 @@ export function MailClubProvider({ children }: PropsWithChildren) {
           const path = await api.uploadPostcardPhoto(input.photoUri, `${input.category}.jpg`);
           photoPath = path ?? undefined;
         }
+        // v0.7.0.48 FIX (Codex P2.3): mirror the abort-on-upload-failure
+        // guard from sendPostcardAction. Without this, link-mode sends
+        // could create a postcard row with no photo_path while the
+        // optimistic UI showed the sender's local file:// photo — so the
+        // sender thinks the card is going out with their photo, but
+        // Lob renders the (no-photo) server view. By the time the
+        // recipient gets the card, the divergence is permanent.
+        if (!photoPath) {
+          return {
+            ok: false,
+            error:
+              "We couldn't upload your photo. Check your connection and try again — no credit was used.",
+          };
+        }
       }
       const result = await api.sendPostcardViaLink({
         category: input.category,

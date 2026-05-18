@@ -576,7 +576,68 @@ export default function SendScreen() {
           Alert.alert("Couldn't send", "Try again in a moment.");
           return;
         }
+        // v0.7.0.48 FIX (Codex P1.3): self-sends were celebrating + reset-
+        // ing without ever calling submitPostcardToLob. The DB trigger
+        // also can't recover here because it fires lob-send-postcard with
+        // empty front_url/back_url (see migration 2026051206). Result:
+        // the user's credit was burned, the journal row existed, but no
+        // postcard ever actually shipped. Now we mirror the friend-send
+        // path: mint a reciprocation token, snapshot the print views,
+        // and hand off to Lob with full refund-on-failure semantics.
+        let selfReciprocationUrl: string | undefined;
+        if (result.postcardId) {
+          try {
+            const tk = await createReciprocationToken(result.postcardId);
+            selfReciprocationUrl = tk.url;
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn("Couldn't mint reciprocation token for self-send (printing without QR):", err);
+          }
+        }
         showCelebration({ kind: "self", recipientName: currentUser.name?.split(" ")[0] });
+        setPrintSnapshot({
+          photoUri: photoUri ?? "",
+          message,
+          recipient: {
+            name: selfRes.friend.name,
+            city: a.city,
+            state: a.state,
+            addressLine1: a.line1,
+            addressLine2: a.line2 || undefined,
+            zip: a.zip,
+          },
+          sender: {
+            name: currentUser.name || "You",
+            city: currentUser.city || "",
+            state: currentUser.state || "",
+          },
+          reciprocationUrl: selfReciprocationUrl,
+        });
+        if (result.postcardId) {
+          const selfPostcardId = result.postcardId;
+          submitPostcardToLob(selfPostcardId)
+            .catch(async (err) => {
+              // Same refund + alert pattern as the friend-send branch
+              // (v0.7.0.32 Codex P1.5). Don't leave orphan rows behind.
+              const errMessage = err?.message ?? String(err);
+              // eslint-disable-next-line no-console
+              console.warn("Self-send Lob submission failed:", errMessage);
+              try {
+                await refundPostcardCredit(selfPostcardId);
+                await refreshProfile();
+              } catch (refundErr) {
+                // eslint-disable-next-line no-console
+                console.warn("Refund failed:", refundErr);
+              }
+              Alert.alert(
+                "Couldn't print your card",
+                humanizeLobError(errMessage) + "\n\nYour credit was returned. Try again when you're ready.",
+              );
+            })
+            .finally(() => {
+              setPrintSnapshot(null);
+            });
+        }
         resetCompose();
         return;
       }
