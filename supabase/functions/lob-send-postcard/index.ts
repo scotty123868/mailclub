@@ -98,250 +98,199 @@ function buildBackHtml(opts: {
   senderState?: string;
   reciprocationUrl?: string;
 }): string {
-  // v0.7.0.33 — RESTORE the original design (per user PDF reference).
+  // v0.7.0.34 — EXACT C2 vintage-purist v2 (print-ready) layout, lifted
+  // verbatim from design-mockups/postcard-back/C2-print.html. Earlier
+  // versions either (a) drifted into a simplification that lost the
+  // brand voice [build 14] or (b) re-invented a near-miss approximation
+  // [v0.7.0.33]. This commit pins to the saved mockup as the source of
+  // truth.
   //
-  // Layout (matches the early-2026 mockup):
-  //   TOP-LEFT  (0.30in, 0.25in, ~3.0in × 1.05in):
-  //     - QR code (~0.85in square) on the left
-  //     - To its right: italic "Respond to {sender} with a postcard for free."
-  //     - Below that: tiny URL "themailroom.club/r/{token}"
-  //   TOP-RIGHT (~5.0in, 0.20in, 1.0in × 1.2in):
-  //     - Stylized "stamp" graphic with a balloon-mail illustration,
-  //       "MAILROOM / FIRST CLASS / 70¢ / 2026" text + perforated edge.
-  //   MIDDLE-LEFT (0.30in, 1.50in, 2.55in × 2.10in):
-  //     - Handwritten message in Caveat-style cursive, smaller font
-  //       than v0.7.0.14 so the longer messages don't crowd the QR.
-  //   BOTTOM-LEFT (0.30in, 3.85in, 2.5in × 0.18in):
-  //     - Postmark text: "{CITY ST} · {MMM D} · {YYYY}"
-  //   MIDDLE-RIGHT (~3.0in onward): LOB INK-FREE — Lob auto-renders
-  //     the return address, postage indicia, IMb barcode, recipient
-  //     address into this 3.2835" × 2.375" zone.
+  // Source: design-mockups/postcard-back/C2-print.html (1875×1275 px,
+  // 300dpi for Lob's 4×6). Templates only the dynamic data
+  // (senderFirstName, sender city/state, message, QR/URL, year).
   //
-  // Why we re-render the stamp ourselves instead of letting Lob do it:
-  // Lob's "POSTAGE INDICIA" rectangle is plain — looks like a permit
-  // imprint, not a stamp. A custom stamp graphic above Lob's zone makes
-  // the postcard feel like real mail. Lob's POSTAGE INDICIA still shows
-  // in its zone alongside ours (it's information-only), but the visual
-  // anchor in the top-right is the Mailroom brand stamp.
+  // Assets:
+  //   - Hot-air balloon JPG: served from the public GitHub raw URL of
+  //     the assets/onboarding/hero-envelope-balloon.jpg in this repo.
+  //     Lob's renderer fetches it at render time. Cached by GitHub for
+  //     5 min on raw.githubusercontent.com.
+  //   - Fonts: loaded via Google Fonts CDN @import. Caveat (message),
+  //     Cormorant Garamond (italic copy), Playfair Display (display
+  //     numerals + MAILROOM wordmark), JetBrains Mono (URL + postmark
+  //     + stamp-class).
+  //   - QR: rendered server-side by api.qrserver.com with the actual
+  //     reciprocation URL. Replaces the CSS-gradient placeholder used
+  //     in the static mockup.
   //
-  // Build 14's layout (QR top-right, message full-width-left) was a
-  // simplification that lost the brand voice. Restoring the original.
+  // Lob zones honored: address ink-free zone is right-half y=1.625"
+  // and below (which here in 1875×1275 pixels = 488 px). Our designer
+  // chrome (QR, stamp, message, postmark) all fit in the left + top
+  // 1875×488 region with the divider at x=808px (=2.69in).
 
   const senderFirstName = (opts.senderName ?? "the sender").trim().split(" ")[0] || "the sender";
   const qrUrl = opts.reciprocationUrl ?? "";
   const qrSrc = qrUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=M&margin=0&data=${encodeURIComponent(qrUrl)}`
     : "";
-  // Display URL: strip protocol + "welcome-mail" path for the human-
-  // readable short URL under the QR. The /r/:token Vercel redirect
-  // resolves to /welcome-mail/:token, so this short link works too.
+  // Display URL under the QR: short form using the /r/:token Vercel
+  // rewrite which resolves to /welcome-mail/:token.
   const displayUrl = (() => {
     if (!qrUrl) return "";
     const m = qrUrl.match(/\/(?:welcome-mail|r)\/([^/?#]+)/);
     const token = m ? m[1] : "";
     return token ? `themailroom.club/r/${token}` : qrUrl.replace(/^https?:\/\//, "");
   })();
-  const senderCityState = [opts.senderCity, opts.senderState]
-    .filter((s) => s && s.trim().length > 0)
-    .join(" ")
-    .toUpperCase();
-  const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const now = new Date();
   const datePart = `${monthNames[now.getUTCMonth()]} ${now.getUTCDate()}`;
   const yearPart = now.getUTCFullYear();
-  const postmark = senderCityState
-    ? `${senderCityState} · ${datePart} · ${yearPart}`
-    : `MAILROOM · ${datePart} · ${yearPart}`;
+  // Postmark — "City ST · Month D · YYYY". Falls back to "Mailroom"
+  // when sender city/state is missing (e.g. void/penpal sends).
+  const cityCap = (opts.senderCity ?? "").trim();
+  const stateCap = (opts.senderState ?? "").trim().toUpperCase();
+  const postmarkLine = (cityCap && stateCap)
+    ? `${cityCap} ${stateCap} · ${datePart} · ${yearPart}`
+    : `Mailroom · ${datePart} · ${yearPart}`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@page { margin: 0; size: 6.25in 4.25in; }
-html, body {
-  margin: 0; padding: 0;
-  width: 6.25in; height: 4.25in;
-  background: #F8F1E3;
-  color: #17223B;
-  font-family: Georgia, 'Times New Roman', serif;
-}
-.card { position: relative; width: 100%; height: 100%; }
+  // Hot-air balloon JPG served from this repo's GitHub raw URL. The
+  // branch is hardcoded for now — fine because the image is identical
+  // across branches. If you ever delete the file from the branch, the
+  // stamp will render with a missing-image icon.
+  const balloonImgUrl = "https://raw.githubusercontent.com/scotty123868/mailclub/mvp-v0.3-credits-and-categories/assets/onboarding/hero-envelope-balloon.jpg";
 
-/* TOP-LEFT — QR + caption + URL. Inside the top 1.45in free zone. */
-.qr-block {
-  position: absolute;
-  top: 0.25in;
-  left: 0.30in;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.16in;
-}
-.qr {
-  width: 0.85in; height: 0.85in;
-  background: #FFFFFF;
-  border: 0.4pt solid #17223B;
-  display: block;
-  flex-shrink: 0;
-}
-.qr-side {
-  padding-top: 0.04in;
-  max-width: 1.85in;
-}
-.qr-caption {
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-style: italic;
-  font-size: 9pt;
-  line-height: 1.25;
-  color: #17223B;
-  margin: 0;
-}
-.qr-url {
-  font-family: ui-monospace, 'JetBrains Mono', 'Courier New', monospace;
-  font-size: 6pt;
-  color: #5E6472;
-  margin-top: 0.06in;
-  letter-spacing: 0.2pt;
-}
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* C2 vintage-purist v2 — sized for Lob 4×6 (1875×1275 px at 300dpi).
+     Lifted verbatim from design-mockups/postcard-back/C2-print.html. */
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1875px; height: 1275px;
+    background: #FBF4DE;
+    position: relative; overflow: hidden;
+    color: #17223B;
+    font-family: Inter, sans-serif;
+  }
+  /* Paper-grain noise overlay across the whole back. */
+  body::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    z-index: 1; opacity: 0.4; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.08 0 0 0 0 0.05 0 0 0 0.12 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  body > * { position: absolute; z-index: 2; }
 
-/* TOP-RIGHT — Mailroom stamp. Sits in the top-right free zone above
-   Lob's ink-free area (which starts at y=1.625in). */
-.stamp {
-  position: absolute;
-  top: 0.22in;
-  right: 0.30in;
-  width: 1.05in;
-  height: 1.20in;
-  background: #F8F1E3;
-  /* Perforated edge: gradient + radial mask gives the stamp-tooth look. */
-  border: 0.6pt dashed #b8483a;
-  padding: 0.06in;
-  box-sizing: border-box;
-  text-align: center;
-  color: #b8483a;
-}
-.stamp-art {
-  width: 100%;
-  height: 0.55in;
-  display: block;
-}
-.stamp-art svg { width: 100%; height: 100%; }
-.stamp-title {
-  font-family: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
-  font-weight: 700;
-  font-size: 7.5pt;
-  letter-spacing: 0.6pt;
-  margin-top: 0.04in;
-  color: #b8483a;
-}
-.stamp-sub {
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-style: italic;
-  font-size: 5.5pt;
-  letter-spacing: 0.8pt;
-  color: #5E6472;
-  margin-top: 0.01in;
-}
-.stamp-value {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-weight: 700;
-  font-size: 9pt;
-  color: #b8483a;
-  margin-top: 0.02in;
-}
-.stamp-year {
-  font-family: ui-monospace, 'JetBrains Mono', 'Courier New', monospace;
-  font-size: 5pt;
-  color: #5E6472;
-  letter-spacing: 0.5pt;
-}
+  /* TOP-LEFT QR cluster */
+  .qr-wrap { top: 56px; left: 75px; display: flex; gap: 25px; align-items: center; }
+  .qr {
+    width: 206px; height: 206px;
+    background: #FBF4DE;
+    border: 2px solid #17223B; padding: 9px; box-sizing: border-box;
+    display: block;
+  }
+  .qr img { width: 100%; height: 100%; display: block; }
+  .qr-meta { padding-top: 19px; max-width: 344px; }
+  .qr-meta .copy { font-family: 'Cormorant Garamond', serif; font-style: italic;
+                   font-size: 30px; color: #17223B; line-height: 1.3;
+                   font-weight: 500; }
+  .qr-meta .url { font-family: 'JetBrains Mono', monospace; font-size: 17px;
+                  color: rgba(23, 34, 59, 0.55); letter-spacing: 0.05em;
+                  margin-top: 16px; font-weight: 500; }
 
-/* MIDDLE-LEFT — handwritten message. Sits below the QR block, hard-
-   bounded so it can't spill into the central divider or Lob's address
-   zone on the right. */
-.message {
-  position: absolute;
-  top: 1.50in;
-  left: 0.30in;
-  width: 2.55in;
-  max-width: 2.55in;
-  height: 2.10in;
-  max-height: 2.10in;
-  font-family: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
-  font-size: 14pt;
-  line-height: 1.35;
-  letter-spacing: 0.1pt;
-  color: #17223B;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  word-break: break-word;
-  overflow: hidden;
-  box-sizing: border-box;
-}
+  /* TOP-RIGHT vintage stamp */
+  .stamp-wrap { top: 38px; right: 56px; transform: rotate(3deg); }
+  .stamp {
+    position: relative; width: 312px; height: 375px; padding: 22px;
+    background: #fdf6e5;
+    -webkit-mask:
+      radial-gradient(circle at 0% 50%, transparent 9px, #000 10px) 0 0/100% 25px,
+      radial-gradient(circle at 50% 0%, transparent 9px, #000 10px) 0 0/25px 100%;
+    -webkit-mask-composite: source-in;
+    border: 6px solid #B8483A;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    box-sizing: border-box;
+  }
+  .stamp-inner-border { position: absolute; inset: 11px;
+                        border: 1.5px solid rgba(184, 72, 58, 0.55);
+                        pointer-events: none; }
+  .stamp-art { width: 200px; height: 175px; margin-top: 22px;
+               background: url("${balloonImgUrl}") center/cover;
+               border-radius: 3px; }
+  .stamp-title { font-family: 'Playfair Display', serif; font-weight: 800;
+                 font-size: 34px; color: #B8483A; letter-spacing: 2.3px;
+                 margin-top: 6px; }
+  .stamp-class { font-family: 'JetBrains Mono', monospace; font-weight: 500;
+                 font-size: 14px; color: rgba(184, 72, 58, 0.75);
+                 letter-spacing: 0.4em; margin-top: 2px; }
+  .stamp-cost { font-family: 'Cormorant Garamond', serif; font-weight: 600;
+                font-size: 50px; color: #B8483A; line-height: 1;
+                margin-bottom: 6px; }
+  .stamp-cost .small { font-size: 28px; font-weight: 500; }
+  .stamp-year { font-family: 'JetBrains Mono', monospace; font-size: 19px;
+                color: rgba(184, 72, 58, 0.65); letter-spacing: 0.45em; }
 
-/* BOTTOM-LEFT — postmark. Tiny monospace caption, below the message
-   and above Lob's bottom IMb zone (which starts at y=3.625in). */
-.postmark {
-  position: absolute;
-  bottom: 0.30in;
-  left: 0.30in;
-  font-family: ui-monospace, 'JetBrains Mono', 'Courier New', monospace;
-  font-size: 6.5pt;
-  color: #5E6472;
-  letter-spacing: 0.8pt;
-}
+  /* Center divider at x=808px (≈2.69in), keeps clear of Lob's IMb zone. */
+  .divider { left: 808px; top: 88px; bottom: 225px;
+             width: 1.5px; background: rgba(194, 165, 109, 0.45); }
 
-/* Hairline divider — visual cue that the right half is the address
-   side. Stops just above Lob's IMb zone. */
-.divider {
-  position: absolute;
-  left: 3.05in;
-  top: 0.35in;
-  bottom: 0.85in;
-  width: 0.4pt;
-  background: rgba(194, 165, 109, 0.45);
-}
-</style></head><body>
-<div class="card">
-  <div class="divider"></div>
+  /* Message — strictly bounded to left safe column */
+  .msg { top: 313px; left: 75px; width: 691px; height: 719px;
+         font-family: 'Caveat', cursive; font-size: 50px; line-height: 1.4;
+         color: #17223B; overflow: hidden;
+         white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; }
 
-  ${qrSrc ? `<div class="qr-block">
-    <img class="qr" src="${qrSrc}" alt="QR" />
-    <div class="qr-side">
-      <p class="qr-caption">Respond to ${escapeHtml(senderFirstName)} with a postcard for free.</p>
-      <div class="qr-url">${escapeHtml(displayUrl)}</div>
-    </div>
-  </div>` : ""}
+  /* Postmark bottom-left: oval ring + wavy cancellation */
+  .postmark { left: 75px; bottom: 200px;
+              display: flex; align-items: center; gap: 16px; }
+  .postmark-ring {
+    border: 1.5px solid rgba(23, 34, 59, 0.45);
+    border-radius: 156px; padding: 9px 22px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 17px; color: rgba(23, 34, 59, 0.65);
+    letter-spacing: 0.18em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .postmark-waves {
+    width: 281px; height: 22px;
+    background: repeating-linear-gradient(
+      90deg,
+      rgba(23, 34, 59, 0.35) 0 3px,
+      transparent 3px 12px
+    );
+    opacity: 0.55;
+  }
+</style>
+</head>
+<body>
 
-  <div class="stamp">
-    <div class="stamp-art">
-      <svg viewBox="0 0 100 56" xmlns="http://www.w3.org/2000/svg">
-        <!-- sky -->
-        <rect width="100" height="56" fill="#F8F1E3"/>
-        <!-- hills -->
-        <path d="M 0 42 Q 25 32 50 38 T 100 36 V 56 H 0 Z" fill="#7a9b73"/>
-        <path d="M 0 48 Q 30 40 60 46 T 100 44 V 56 H 0 Z" fill="#5e8055" opacity="0.85"/>
-        <!-- sun -->
-        <circle cx="78" cy="32" r="5" fill="#e8a87c"/>
-        <!-- balloon envelope -->
-        <ellipse cx="32" cy="20" rx="13" ry="14" fill="#FBF4DE" stroke="#b8483a" stroke-width="0.7"/>
-        <line x1="32" y1="6" x2="32" y2="34" stroke="#b8483a" stroke-width="0.5"/>
-        <path d="M 32 6 Q 22 20 32 34" fill="none" stroke="#b8483a" stroke-width="0.5"/>
-        <path d="M 32 6 Q 42 20 32 34" fill="none" stroke="#b8483a" stroke-width="0.5"/>
-        <!-- strings -->
-        <line x1="24" y1="34" x2="28" y2="42" stroke="#b8483a" stroke-width="0.4"/>
-        <line x1="40" y1="34" x2="36" y2="42" stroke="#b8483a" stroke-width="0.4"/>
-        <!-- basket -->
-        <rect x="26" y="41" width="12" height="4" fill="#c2a56d" stroke="#17223B" stroke-width="0.3"/>
-      </svg>
-    </div>
-    <div class="stamp-title">MAILROOM</div>
-    <div class="stamp-sub">FIRST CLASS</div>
-    <div class="stamp-value">70¢</div>
-    <div class="stamp-year">${yearPart}</div>
+${qrSrc ? `<div class="qr-wrap">
+  <div class="qr"><img src="${qrSrc}" alt="QR" /></div>
+  <div class="qr-meta">
+    <div class="copy">Respond to ${escapeHtml(senderFirstName)} with a postcard for free.</div>
+    <div class="url">${escapeHtml(displayUrl)}</div>
   </div>
+</div>` : ""}
 
-  <div class="message">${escapeHtml(opts.message)}</div>
-
-  <div class="postmark">${escapeHtml(postmark)}</div>
+<div class="stamp-wrap">
+  <div class="stamp">
+    <div class="stamp-inner-border"></div>
+    <div class="stamp-art"></div>
+    <div class="stamp-title">MAILROOM</div>
+    <div class="stamp-class">FIRST CLASS</div>
+    <div class="stamp-cost">70<span class="small">¢</span></div>
+    <div class="stamp-year">· ${yearPart} ·</div>
+  </div>
 </div>
+
+<div class="divider"></div>
+
+<div class="msg">${escapeHtml(opts.message)}</div>
+
+<div class="postmark">
+  <div class="postmark-ring">${escapeHtml(postmarkLine)}</div>
+  <div class="postmark-waves"></div>
+</div>
+
 </body></html>`;
 }
 
