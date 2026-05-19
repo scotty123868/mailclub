@@ -2,20 +2,30 @@
 //  ContentView.swift
 //  MailroomClip
 //
-//  Single-screen address-collection UI for the Mailroom postcard claim
-//  flow. When a recipient receives a Mailroom claim link
-//  (e.g. https://mailroomclub.vercel.app/claim?t=ABC123) and taps it
-//  on iOS 14+, this is the screen that appears (no app install).
+//  The App Clip handles two URL families:
+//
+//    1. CLAIM    /claim?t=TOKEN       or  /welcome-mail/TOKEN
+//       Address-collection form for a recipient who just received a
+//       postcard via the share-a-link flow. Submits to the Supabase
+//       claim Edge Function and ships the card.
+//
+//    2. ADD FRIEND   /u/USER_ID?n=Name&c=City&s=State
+//       Preview card of a Mailroom user who shared their QR. The clip
+//       shows their name + city + emoji avatar. The actual add happens
+//       in the full app (auth required) — clip's job is to make the
+//       value proposition tangible and get the user to install.
+//
+//  Build 65: added the ADD FRIEND branch.
 //
 
 import SwiftUI
 
 struct ContentView: View {
-    /// The Universal Link the user tapped. We extract `?t=TOKEN` from
-    /// here to redeem the claim against the Supabase Edge Function.
+    /// The Universal Link the user tapped. Extract token or user-id
+    /// + display info depending on path shape.
     var invocationURL: URL?
 
-    // Form state
+    // Claim form state
     @State private var recipientName: String = ""
     @State private var line1: String = ""
     @State private var line2: String = ""
@@ -23,10 +33,78 @@ struct ContentView: View {
     @State private var state: String = ""
     @State private var zip: String = ""
 
-    // Submission state
+    // Submission state (claim flow)
     @State private var submitting: Bool = false
     @State private var didSubmit: Bool = false
     @State private var errorMessage: String?
+
+    /// Build-65 ADD FRIEND route detection. Returns true when the
+    /// invocation URL path starts with `/u/`. The token getter below
+    /// returns the userId in that case; the body branches to the
+    /// add-friend view.
+    private var isAddFriendRoute: Bool {
+        guard let url = invocationURL,
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return false }
+        return comps.path.hasPrefix("/u/")
+    }
+
+    private var addFriendUserId: String? {
+        guard isAddFriendRoute, let url = invocationURL,
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return nil }
+        let segments = comps.path.split(separator: "/").map { String($0) }
+        // segments[0] == "u", segments[1] == userId
+        guard segments.count >= 2 else { return nil }
+        let id = segments[1].trimmingCharacters(in: .whitespaces)
+        return id.isEmpty ? nil : id
+    }
+
+    private var addFriendName: String? {
+        guard let url = invocationURL,
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let q = comps.queryItems
+        else { return nil }
+        let raw = q.first(where: { $0.name == "n" })?.value ?? ""
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var addFriendCity: String? {
+        guard let url = invocationURL,
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let q = comps.queryItems
+        else { return nil }
+        let c = (q.first(where: { $0.name == "c" })?.value ?? "").trimmingCharacters(in: .whitespaces)
+        let s = (q.first(where: { $0.name == "s" })?.value ?? "").trimmingCharacters(in: .whitespaces)
+        if c.isEmpty && s.isEmpty { return nil }
+        if !c.isEmpty && !s.isEmpty { return "\(c), \(s)" }
+        return c.isEmpty ? s : c
+    }
+
+    /// Deterministic emoji for the user id — mirrors the in-app
+    /// friendEmoji.ts pool so the App Clip card matches what the
+    /// scanner will see once they install + open the app.
+    private var addFriendEmoji: String {
+        guard let id = addFriendUserId else { return "📮" }
+        let pool: [String] = [
+            "🐶","🐱","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮",
+            "🐷","🐵","🐺","🐴","🦄","🐗","🐹","🐭","🦝","🦡",
+            "🦨","🦦","🦥","🦘","🦒","🐘","🦏","🦛","🐪","🦔",
+            "🐔","🐧","🦆","🦉","🦚","🦜","🐦","🦢","🐢","🦎",
+            "🐠","🐬","🐳","🦈","🐙","🦀","🐌","🦋","🐝","🐞",
+            "🌹","🌻","🌷","🌸","🌼","🌺","🪻","🌵","🌴","🌳",
+            "🌲","🍀","🌾","🌱","🍄","🌊","🌅","🌈","⭐","✨",
+            "🍎","🍊","🍋","🍓","🍇","🍑","🥑","🌶️","🫐","🍉",
+            "✉️","📮","🎈","🎁","🖋️","📚","🪁","🎨","⛵","🚲",
+            "🗝️","🕯️","🎻","🌍"
+        ]
+        var h: UInt32 = 5381
+        for ch in id.unicodeScalars {
+            h = h &* 33 &+ ch.value
+        }
+        return pool[Int(h % UInt32(pool.count))]
+    }
 
     private var claimToken: String? {
         // v0.7.0.32 — accept BOTH URL shapes the App Clip can be invoked
@@ -67,10 +145,122 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             Color(red: 0.972, green: 0.945, blue: 0.890).ignoresSafeArea()
-            if claimToken == nil { noLinkView }
-            else if didSubmit { successView }
-            else { formView }
+            if isAddFriendRoute {
+                // Build-65 ADD FRIEND branch.
+                if addFriendUserId == nil { noLinkView }
+                else { addFriendView }
+            } else {
+                // Existing CLAIM branch.
+                if claimToken == nil { noLinkView }
+                else if didSubmit { successView }
+                else { formView }
+            }
         }
+    }
+
+    /// Build-65: card shown when scanner opens a /u/{userId} URL in
+    /// the App Clip. Shows the shared user's emoji + name + city, then
+    /// invites the scanner to get the full app. (The actual add-friend
+    /// happens in the full app after install + sign-in.)
+    private var addFriendView: some View {
+        ScrollView {
+            VStack(alignment: .center, spacing: 24) {
+                VStack(spacing: 6) {
+                    Text("SHARED MAIL CARD")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(1.6)
+                        .foregroundColor(postalRed)
+                    Text("A friend wants to swap mail.")
+                        .font(.system(size: 26, weight: .semibold, design: .serif))
+                        .foregroundColor(ink)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 28)
+
+                // Emoji avatar on a paper disc (matches the in-app
+                // friend-emoji avatars).
+                ZStack {
+                    Circle()
+                        .fill(Color(red: 0.984, green: 0.957, blue: 0.855))
+                        .frame(width: 110, height: 110)
+                    Circle()
+                        .stroke(ink, lineWidth: 2)
+                        .frame(width: 110, height: 110)
+                    Text(addFriendEmoji)
+                        .font(.system(size: 56))
+                }
+                .shadow(color: Color.black.opacity(0.15), radius: 4, y: 2)
+
+                VStack(spacing: 6) {
+                    Text(addFriendName ?? "Mailroom member")
+                        .font(.system(size: 28, weight: .semibold, design: .serif))
+                        .foregroundColor(ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if let location = addFriendCity {
+                        Text(location)
+                            .font(.system(size: 15, design: .serif))
+                            .italic()
+                            .foregroundColor(postalBlue)
+                    }
+                }
+
+                Text("Mailroom turns the people you love into real paper postcards. 70¢ each. Their address stays private.")
+                    .font(.system(size: 14, design: .serif))
+                    .italic()
+                    .foregroundColor(mutedInk)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 8)
+
+                // Primary CTA: Get Mailroom (App Store). Apple's
+                // smart-banner overlay typically supplies the install
+                // affordance automatically, but having an explicit
+                // button removes any doubt.
+                Button(action: openAppStore) {
+                    Text("Get Mailroom")
+                        .font(.system(size: 17, weight: .semibold, design: .serif))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(ink)
+                        .cornerRadius(12)
+                }
+
+                // Secondary: open the URL in Safari so the smart app
+                // banner offers "Open in Mailroom" if installed.
+                Button(action: openInBrowser) {
+                    Text("Open in Mailroom")
+                        .font(.system(size: 15, weight: .medium, design: .serif))
+                        .foregroundColor(ink)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(Color(red: 0.972, green: 0.945, blue: 0.890))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(ink, lineWidth: 1.5))
+                }
+
+                Text("We'll add them to your rolodex automatically once you sign in.")
+                    .font(.system(size: 12, design: .serif))
+                    .italic()
+                    .foregroundColor(mutedInk)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 4)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 40)
+        }
+    }
+
+    private func openAppStore() {
+        // App Store ID for Mailroom (app-id from apple-itunes-app meta).
+        if let url = URL(string: "https://apps.apple.com/app/mailroom/id6747802432") {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    private func openInBrowser() {
+        guard let url = invocationURL else { return }
+        UIApplication.shared.open(url)
     }
 
     private var formView: some View {
@@ -235,9 +425,14 @@ struct ContentView: View {
     private let ink = Color(red: 0.067, green: 0.110, blue: 0.184)
     private let mutedInk = Color(red: 0.412, green: 0.412, blue: 0.412)
     private let postalRed = Color(red: 0.722, green: 0.282, blue: 0.227)
+    private let postalBlue = Color(red: 0.235, green: 0.431, blue: 0.561)
     private let line = Color(red: 0.831, green: 0.788, blue: 0.694)
 }
 
-#Preview {
-    ContentView(invocationURL: URL(string: "https://mailroomclub.vercel.app/claim?t=ABC123"))
+#Preview("Claim flow") {
+    ContentView(invocationURL: URL(string: "https://app.themailroom.club/claim?t=ABC123"))
+}
+
+#Preview("Add friend flow") {
+    ContentView(invocationURL: URL(string: "https://app.themailroom.club/u/abc-def-123?n=Maya%20Chen&c=Brooklyn&s=NY"))
 }
