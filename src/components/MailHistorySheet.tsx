@@ -1,7 +1,8 @@
-import { Inbox, Mail, Send as SendIcon, Sparkles, X } from "lucide-react-native";
+import { Inbox, Mail, Send as SendIcon, Sparkles } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CATEGORY_LABELS } from "@/src/data/credits";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { Postcard } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
@@ -57,21 +58,13 @@ export function MailHistorySheet({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.root}>
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Your mail</Text>
-            <Text style={styles.subtitle}>Every card you've sent, and every reply from the void.</Text>
-          </View>
-          <Pressable
-            onPress={onClose}
-            style={styles.closeBtn}
-            testID="mail-history-close"
-            accessibilityRole="button"
-            accessibilityLabel="Close mail history"
-          >
-            <X color={colors.ink} size={22} strokeWidth={1.5} />
-          </Pressable>
-        </View>
+        <SheetHeader
+          title="Your mail"
+          subtitle="Every card you've sent, and every reply from the void."
+          onClose={onClose}
+          closeAccessibilityLabel="Close mail history"
+          closeTestID="mail-history-close"
+        />
 
         <View style={styles.tabs}>
           <Pressable
@@ -206,10 +199,7 @@ function ReplyRow({ reply, when }: { reply: { id: string; from: string; message:
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.paper, flex: 1, paddingHorizontal: 20, paddingTop: 18 },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
   tabs: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 0, marginTop: 14, padding: 4 },
   tab: { alignItems: "center", borderRadius: 6, flex: 1, flexDirection: "row", gap: 6, justifyContent: "center", paddingVertical: 8 },
   tabActive: { backgroundColor: colors.ink },

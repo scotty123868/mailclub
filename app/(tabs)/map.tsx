@@ -185,10 +185,20 @@ export default function MapScreen() {
     return out;
   }, [postcards, friends, authedUserId]);
 
+  // v0.7.0.49: subtitle storytelling. Was just "Map"; now shows
+  // "X cities · Y cards" when the user has any postcards. Numbers are
+  // already in memory, no extra queries.
+  const cityCount = pins.filter((p) => !p.pending).length;
+  const cardCount = postcards.length;
+  const subtitle =
+    cardCount > 0
+      ? `${cityCount} ${cityCount === 1 ? "city" : "cities"} · ${cardCount} ${cardCount === 1 ? "card" : "cards"}`
+      : undefined;
+
   return (
     <BottomSheetModalProvider>
       <AppShell>
-        <Header title="Map" />
+        <Header title="Map" subtitle={subtitle} />
 
         {/* Map fills the body below the header */}
         <View style={styles.mapFrame}>

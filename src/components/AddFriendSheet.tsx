@@ -1,8 +1,9 @@
-import { Cake, ChevronDown, ChevronUp, MapPin, UserPlus, X } from "lucide-react-native";
+import { Cake, ChevronDown, ChevronUp, MapPin, UserPlus } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { AddressFields } from "@/src/components/AddressFields";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -138,15 +139,13 @@ export function AddFriendSheet({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.paper }}>
         <View style={styles.root}>
-          <View style={styles.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Add a friend</Text>
-              <Text style={styles.subtitle}>Just the basics is enough. Add a mailing address only if you want to send physical postcards.</Text>
-            </View>
-            <Pressable onPress={close} style={styles.closeBtn} testID="add-friend-close" accessibilityRole="button" accessibilityLabel="Close add friend">
-              <X color={colors.ink} size={22} strokeWidth={1.5} />
-            </Pressable>
-          </View>
+          <SheetHeader
+            title="Add a friend"
+            subtitle="Just the basics is enough. Add a mailing address only if you want to send physical postcards."
+            onClose={close}
+            closeAccessibilityLabel="Close add friend"
+            closeTestID="add-friend-close"
+          />
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
             <View style={styles.field}>
@@ -285,10 +284,7 @@ export function AddFriendSheet({
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 20, paddingTop: 18 },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 17, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
   scroll: { flex: 1, marginTop: 18 },
   scrollContent: { gap: 12, paddingBottom: 30 },
   field: { gap: 6 },

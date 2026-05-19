@@ -5,7 +5,8 @@ export const fonts = {
   serifSemi: "CormorantGaramond_600SemiBold",
   script: "Allura_400Regular",
   hand: "Caveat_500Medium",
-  handBold: "Caveat_700Bold",
+  // v0.7.0.49: handBold dropped — no consumers anywhere in src/ or app/.
+  // Add back if a future surface needs a bolder cursive accent.
   sans: "Inter_500Medium",
   sansBold: "Inter_700Bold",
   sansSemi: "Inter_600SemiBold",

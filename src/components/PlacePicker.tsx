@@ -1,6 +1,7 @@
-import { Check, MapPin, X } from "lucide-react-native";
+import { Check, MapPin } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
@@ -54,15 +55,13 @@ export function PlacePicker({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.modalRoot}>
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>From where?</Text>
-            <Text style={styles.subtitle}>Pick a US state, or type to use a custom place.</Text>
-          </View>
-          <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close place picker" testID="place-picker-close">
-            <X color={colors.ink} size={22} strokeWidth={1.5} />
-          </Pressable>
-        </View>
+        <SheetHeader
+          title="From where?"
+          subtitle="Pick a US state, or type to use a custom place."
+          onClose={onClose}
+          closeAccessibilityLabel="Close place picker"
+          closeTestID="place-picker-close"
+        />
 
         <View style={styles.queryRow}>
           <TextInput
@@ -113,10 +112,7 @@ const styles = StyleSheet.create({
   summaryEmphasis: { fontFamily: fonts.serifSemi },
   summaryEdit: { color: colors.postalRed, fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.6 },
   modalRoot: { backgroundColor: colors.paper, flex: 1, paddingHorizontal: 20, paddingTop: 18 },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 14, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
   queryRow: { gap: 8, marginTop: 14 },
   queryInput: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 8, borderWidth: 1, color: colors.ink, fontFamily: fonts.serif, fontSize: 16, paddingHorizontal: 14, paddingVertical: 10 },
   customBtn: { alignItems: "center", backgroundColor: colors.ink, borderRadius: 8, paddingVertical: 10 },

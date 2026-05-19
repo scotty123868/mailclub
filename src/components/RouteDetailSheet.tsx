@@ -1,9 +1,10 @@
-import { Globe2, MapPin, Users, X } from "lucide-react-native";
+import { Globe2, MapPin, Users } from "lucide-react-native";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { MiniPostcardArt } from "@/src/components/PostalIllustrations";
 import { CircularPostmark } from "@/src/components/PostmarkDecoration";
 import { Stamp } from "@/src/components/Stamp";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { MailRoute } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -24,21 +25,13 @@ export function RouteDetailSheet({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.root}>
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>{route.from} → {route.to}</Text>
-            <Text style={styles.subtitle}>{route.date}</Text>
-          </View>
-          <Pressable
-            onPress={onClose}
-            style={styles.closeBtn}
-            testID="route-detail-close"
-            accessibilityRole="button"
-            accessibilityLabel="Close route details"
-          >
-            <X color={colors.ink} size={22} strokeWidth={1.5} />
-          </Pressable>
-        </View>
+        <SheetHeader
+          title={`${route.from} → ${route.to}`}
+          subtitle={route.date}
+          onClose={onClose}
+          closeAccessibilityLabel="Close route details"
+          closeTestID="route-detail-close"
+        />
 
         <View style={styles.artWrap}>
           <MiniPostcardArt variant="mountain" />
@@ -84,10 +77,7 @@ function Stat({ icon: Icon, value, label }: { icon: any; value: string; label: s
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.paper, flex: 1, gap: 16, paddingHorizontal: 20, paddingTop: 18 },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28, lineHeight: 32 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 14, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
   artWrap: { backgroundColor: colors.white, borderColor: colors.line, borderRadius: 10, borderWidth: 1, height: 168, overflow: "hidden", position: "relative" },
   stamp: { position: "absolute", right: 12, top: 12 },
   postmark: { left: 14, opacity: 0.45, position: "absolute", top: 14 },

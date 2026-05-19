@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import { Sparkles, X } from "lucide-react-native";
+import { Sparkles } from "lucide-react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { CREDIT_PACKS, type CreditPack } from "@/src/data/credits";
 import { isStripeConfigured, loadStripeSdk, purchasePack, stripeLoadError } from "@/src/services/payments";
 import { fetchProfile } from "@/src/services/api";
@@ -127,23 +128,13 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
       {visible ? (
       <StripeShell>
         <View style={styles.root}>
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Buy stamps</Text>
-            <Text style={styles.subtitle}>
-              {credits} {credits === 1 ? "stamp" : "stamps"} in your pocket. Each one mails a real postcard, anywhere in the US.
-            </Text>
-          </View>
-          <Pressable
-            onPress={onClose}
-            style={styles.closeBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Close stamps sheet"
-            testID="credits-sheet-close"
-          >
-            <X color={colors.ink} size={22} strokeWidth={1.5} />
-          </Pressable>
-        </View>
+        <SheetHeader
+          title="Buy stamps"
+          subtitle={`${credits} ${credits === 1 ? "stamp" : "stamps"} in your pocket. Each one mails a real postcard, anywhere in the US.`}
+          onClose={onClose}
+          closeAccessibilityLabel="Close stamps sheet"
+          closeTestID="credits-sheet-close"
+        />
 
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
           {!stripeKeySet ? (
@@ -247,10 +238,7 @@ function formatPrice(pack: CreditPack): string {
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.paper, flex: 1, paddingHorizontal: 20, paddingTop: 18 },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 14, lineHeight: 19, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
   body: { flex: 1, marginTop: 14 },
   bodyContent: { paddingBottom: 30 },
   packs: { gap: 12 },

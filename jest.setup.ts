@@ -176,13 +176,23 @@ jest.mock("react-native-gesture-handler", () => {
     GestureDetector: (props: any) =>
       React.createElement(View, props, props.children),
     Gesture: {
-      Pan: () => ({
-        minPointers: () => ({
-          maxPointers: () => ({
-            onUpdate: () => ({ onEnd: () => ({}) }),
-          }),
-        }),
-      }),
+      // v0.7.0.49: Pan() now uses .activeOffsetX/.activeOffsetY (single-
+      // finger pan with threshold) instead of .minPointers/.maxPointers.
+      // The mock returns a fluent builder that accepts EVERY common
+      // method as a no-op so any future builder method change doesn't
+      // break this mock again.
+      Pan: () => {
+        const noop = (): any => builder;
+        const builder: any = new Proxy(
+          {},
+          {
+            get() {
+              return noop;
+            },
+          },
+        );
+        return builder;
+      },
       Pinch: () => ({ onUpdate: () => ({ onEnd: () => ({}) }) }),
       Tap: () => ({ numberOfTaps: () => ({ onEnd: () => ({}) }) }),
       Simultaneous: (...args: any[]) => args,

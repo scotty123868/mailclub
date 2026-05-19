@@ -1,7 +1,8 @@
-import { Mail, Trash2, X } from "lucide-react-native";
+import { Mail, Trash2 } from "lucide-react-native";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { IllustratedAvatar, AvatarLook } from "@/src/components/Avatar";
 import { PrimaryButton } from "@/src/components/Buttons";
+import { SheetCloseButton } from "@/src/components/system/SheetCloseButton";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { Friend, Postcard } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
@@ -45,9 +46,11 @@ export function FriendDetailSheet({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.root}>
         <View style={styles.header}>
-          <Pressable onPress={onClose} style={styles.closeBtn} testID="friend-detail-close" accessibilityRole="button" accessibilityLabel={`Close ${friend.name} details`}>
-            <X color={colors.ink} size={22} strokeWidth={1.5} />
-          </Pressable>
+          <SheetCloseButton
+            onPress={onClose}
+            accessibilityLabel={`Close ${friend.name} details`}
+            testID="friend-detail-close"
+          />
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -114,8 +117,8 @@ function PostcardRow({ card }: { card: Postcard }) {
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.paper, flex: 1 },
+  // v0.7.0.49: closeBtn extracted to SheetCloseButton. Header is just the close-button row.
   header: { alignItems: "flex-end", paddingHorizontal: 16, paddingTop: 12 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
   scroll: { flex: 1 },
   scrollContent: { gap: 18, paddingBottom: 40, paddingHorizontal: 20 },
   identity: { alignItems: "center", backgroundColor: colors.white, borderColor: colors.line, borderRadius: 10, borderWidth: 1, gap: 6, overflow: "hidden", padding: 24 },

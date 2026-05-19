@@ -1,7 +1,8 @@
-import { Share2, X } from "lucide-react-native";
+import { Share2 } from "lucide-react-native";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Rect } from "react-native-svg";
 import { IdentityAvatar } from "@/src/components/IdentityAvatar";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
@@ -62,15 +63,13 @@ export function QRCodeModal({
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.scrim}>
         <View style={styles.sheet}>
-          <View style={styles.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Your Mail Card</Text>
-              <Text style={styles.subtitle}>Show this to a friend — they scan it to send you a free first card.</Text>
-            </View>
-            <Pressable onPress={onClose} style={styles.closeBtn} testID="qr-modal-close" accessibilityRole="button" accessibilityLabel="Close QR code modal">
-              <X color={colors.ink} size={22} strokeWidth={1.5} />
-            </Pressable>
-          </View>
+          <SheetHeader
+            title="Your Mail Card"
+            subtitle="Show this to a friend — they scan it to send you a free first card."
+            onClose={onClose}
+            closeAccessibilityLabel="Close QR code modal"
+            closeTestID="qr-modal-close"
+          />
 
           <View style={styles.qrBox} testID="qr-svg">
             <Svg width={size * cell} height={size * cell} viewBox={`0 0 ${size * cell} ${size * cell}`}>
@@ -105,10 +104,8 @@ export function QRCodeModal({
 const styles = StyleSheet.create({
   scrim: { alignItems: "center", backgroundColor: "rgba(8,18,40,0.78)", flex: 1, justifyContent: "center", padding: 20 },
   sheet: { backgroundColor: colors.paper, borderRadius: 14, gap: 16, padding: 22, width: "100%" },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 24 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, lineHeight: 17, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
+  // Title was 24pt locally; SheetHeader is 28pt (consistent with all other sheets).
   qrBox: { alignItems: "center", backgroundColor: colors.white, borderColor: colors.line, borderRadius: 10, borderWidth: 1, padding: 16 },
   identity: { alignItems: "center", backgroundColor: "rgba(255,253,247,0.85)", borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 12, padding: 12 },
   identityName: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 22 },

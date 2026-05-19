@@ -1,9 +1,10 @@
 import * as ImagePicker from "expo-image-picker";
-import { Camera, Check, Trash2, X } from "lucide-react-native";
+import { Camera, Check, Trash2 } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { IdentityAvatar } from "@/src/components/IdentityAvatar";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { useMailClub } from "@/src/state/MailClubContext";
 import type { CurrentUser } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
@@ -82,15 +83,13 @@ export function EditAboutMeSheet({ visible, onClose }: { visible: boolean; onClo
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.paper }}>
         <View style={styles.root}>
-          <View style={styles.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>About me</Text>
-              <Text style={styles.subtitle}>What other Mailroom members see on your card.</Text>
-            </View>
-            <Pressable onPress={onClose} style={styles.closeBtn} testID="edit-about-close" accessibilityRole="button" accessibilityLabel="Close edit about me">
-              <X color={colors.ink} size={22} strokeWidth={1.5} />
-            </Pressable>
-          </View>
+          <SheetHeader
+            title="About me"
+            subtitle="What other Mailroom members see on your card."
+            onClose={onClose}
+            closeAccessibilityLabel="Close edit about me"
+            closeTestID="edit-about-close"
+          />
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
             {/* Profile photo block */}
@@ -157,10 +156,7 @@ export function EditAboutMeSheet({ visible, onClose }: { visible: boolean; onClo
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 20, paddingTop: 18 },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
   scroll: { flex: 1, marginTop: 16 },
   scrollContent: { gap: 14, paddingBottom: 24 },
   photoBlock: {

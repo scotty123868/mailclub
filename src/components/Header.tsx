@@ -27,18 +27,30 @@ import { fonts, type } from "@/src/theme/typography";
  */
 export function Header({
   title,
+  subtitle,
   onPressSettings,
   hideCreditsPill = false,
 }: {
   title: string;
+  // v0.7.0.49: optional subtitle for storytelling. Currently used by
+  // Map ("4 cities · 7 cards"); other tabs can opt in with light copy
+  // when there's something worth telling.
+  subtitle?: string;
   onPressSettings?: () => void;
   hideCreditsPill?: boolean;
 }) {
   return (
     <View style={styles.header}>
-      <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-        {title}
-      </Text>
+      <View style={styles.titleCol}>
+        <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
       <View style={styles.rightActions}>
         {hideCreditsPill ? null : <CreditsPill />}
         {onPressSettings ? (
@@ -67,14 +79,24 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 8,
   },
+  titleCol: {
+    flex: 1,
+    paddingRight: 12,
+  },
   title: {
     color: colors.ink,
-    flex: 1,
     fontFamily: fonts.serifSemi,
     fontSize: type.title,
     letterSpacing: -0.2,
     lineHeight: type.title + 2,
-    paddingRight: 12,
+  },
+  // v0.7.0.49: subtitle line under the title — small italic mutedInk so
+  // it reads as a quiet kicker, not a competing heading.
+  subtitle: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 13,
+    marginTop: 2,
   },
   rightActions: {
     alignItems: "center",

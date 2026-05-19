@@ -412,25 +412,42 @@ export default function ConstellationScreen() {
                     : 9 + Math.min(6, node.momentCount * 1.5);
                 const isReciprocated = (node as any).reciprocated === true;
                 return (
-                  <Circle
-                    key={node.id}
-                    cx={node.x}
-                    cy={node.y}
-                    r={radius}
-                    fill={isPending ? "rgba(248,241,227,0.18)" : node.color}
-                    stroke={
-                      node.isSelf
-                        ? "rgba(255,255,255,0.7)"
-                        : isReciprocated
-                          ? "#D9B46E"
-                          : isPending
-                            ? "rgba(255,255,255,0.55)"
-                            : "rgba(255,255,255,0.4)"
-                    }
-                    strokeWidth={node.isSelf ? 2 : isReciprocated ? 2.4 : 1.4}
-                    strokeDasharray={isPending ? "3,3" : undefined}
-                    onPress={() => onTapNode(node)}
-                  />
+                  <React.Fragment key={node.id}>
+                    {/* v0.7.0.49: gold halo behind reciprocated friends.
+                        File comment promised "D.3 magical moment" but the
+                        ring was just a slightly-thicker stroke. Adding a
+                        soft halo gives reciprocated friends real presence
+                        in the constellation — the visual reward for the
+                        loop closing. */}
+                    {isReciprocated ? (
+                      <Circle
+                        cx={node.x}
+                        cy={node.y}
+                        r={radius + 6}
+                        fill="rgba(217,180,110,0.22)"
+                        stroke="rgba(217,180,110,0.40)"
+                        strokeWidth={0.8}
+                      />
+                    ) : null}
+                    <Circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={radius}
+                      fill={isPending ? "rgba(248,241,227,0.18)" : node.color}
+                      stroke={
+                        node.isSelf
+                          ? "rgba(255,255,255,0.7)"
+                          : isReciprocated
+                            ? "#D9B46E"
+                            : isPending
+                              ? "rgba(255,255,255,0.55)"
+                              : "rgba(255,255,255,0.4)"
+                      }
+                      strokeWidth={node.isSelf ? 2 : isReciprocated ? 2.4 : 1.4}
+                      strokeDasharray={isPending ? "3,3" : undefined}
+                      onPress={() => onTapNode(node)}
+                    />
+                  </React.Fragment>
                 );
               })}
             </Svg>

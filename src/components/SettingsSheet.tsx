@@ -1,6 +1,7 @@
-import { Bell, ChevronRight, CreditCard, FileText, Lock, LogOut, Mail, Stamp, Trash2, X } from "lucide-react-native";
+import { Bell, ChevronRight, CreditCard, FileText, Lock, LogOut, Mail, Stamp, Trash2 } from "lucide-react-native";
 import { ComponentType } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -117,15 +118,13 @@ export function SettingsSheet({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.root}>
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Settings</Text>
-            <Text style={styles.subtitle}>Signed in as {currentUser.name}.</Text>
-          </View>
-          <Pressable onPress={onClose} style={styles.closeBtn} testID="settings-close" accessibilityRole="button" accessibilityLabel="Close settings">
-            <X color={colors.ink} size={22} strokeWidth={1.5} />
-          </Pressable>
-        </View>
+        <SheetHeader
+          title="Settings"
+          subtitle={`Signed in as ${currentUser.name}.`}
+          onClose={onClose}
+          closeAccessibilityLabel="Close settings"
+          closeTestID="settings-close"
+        />
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <Section title="Account">
@@ -232,10 +231,7 @@ function Row({
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.paper, flex: 1, paddingHorizontal: 20, paddingTop: 18 },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
   scroll: { flex: 1, marginTop: 14 },
   scrollContent: { gap: 14, paddingBottom: 30 },
   version: { color: colors.mutedInk, fontFamily: fonts.sans, fontSize: 11, marginTop: 12, textAlign: "center" },
