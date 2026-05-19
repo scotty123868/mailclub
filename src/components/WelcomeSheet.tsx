@@ -286,7 +286,12 @@ export function WelcomeSheet({
 
   const canAdvanceEmail =
     email.trim().includes("@") && password.length >= 8 && !saving;
-  const canAdvancePhoto = !!photoUri;
+  // v0.7.0.49 (Codex audit): photo is OPTIONAL. The deny-Alert promises
+  // "Continue without photo" but the Continue button stayed disabled —
+  // dead UX. Now mirrors the Send-tab text-only flow: if the user has
+  // no photo, they advance with the cream Mailroom placeholder on the
+  // front and the handwritten note carrying the card.
+  const canAdvancePhoto = true;
   const canAdvanceNote = message.trim().length > 0;
   // v0.7.0.1: pen pal is unblocked. It wires to `sendIntoVoid` (the
   // existing anonymous "send to a stranger" backend), so users can

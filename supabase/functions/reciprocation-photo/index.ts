@@ -68,18 +68,19 @@ serve(async (req) => {
     return json({ ok: false });
   }
 
-  // v0.7.0.49 (Codex P2 #5): hex format check.
-  // Tokens are 12 uppercase hex chars from gen_random_bytes(6) — see
-  // 2026051803_audit_p0_hardening.sql. Anything else is either a probe
-  // or a buggy client. We accept lowercase hex too because users might
-  // type the URL and the path matcher in lookup is exact — but legacy
-  // tokens generated before 2026051803 used a different alphabet
-  // (upper alpha+digit, with X/Y/Z substitutions). The migration
-  // documents the entropy upgrade; old tokens still validate via the
-  // exact-match DB lookup so we don't pre-reject them. Just reject
-  // anything that's obviously garbage: control chars, very-long
-  // strings, etc.
-  if (body.token.length < 6 || body.token.length > 64 || !/^[A-Za-z0-9]+$/.test(body.token)) {
+  // v0.7.0.49 token format check.
+  //
+  // New tokens (2026051803+) are 12 hex chars from gen_random_bytes(6).
+  // Legacy tokens (pre-2026051803) used the old base64-with-X/Y/Z
+  // substitution scheme — 8 uppercase alphanumerics. Both shapes are
+  // accepted exactly; everything else is a probe.
+  //
+  // This is tighter than the prior 6-64 alphanumeric pass-through,
+  // which let attackers probe with arbitrary garbage and still get a
+  // (collapsed) {ok: false} response — adding DB load for no reason.
+  const isNewHexToken = /^[0-9A-Fa-f]{12}$/.test(body.token);
+  const isLegacyToken = /^[A-Z0-9]{8}$/.test(body.token);
+  if (!isNewHexToken && !isLegacyToken) {
     return json({ ok: false });
   }
 

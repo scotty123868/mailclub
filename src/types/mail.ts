@@ -99,6 +99,14 @@ export type Postcard = {
    * UI uses this to show the "Retry shipping" affordance.
    */
   lobId?: string | null;
+  /**
+   * v0.7.0.49 (Codex audit): persisted reason the last Lob send failed.
+   * Populated by lob-send-postcard on rejection, by claim/index.ts on
+   * missing-secret misconfig, by the lob-submission lease on attempt
+   * failure. PostcardDetailSheet can show this to the sender alongside
+   * the Retry affordance so they know WHY the original send didn't ship.
+   */
+  lobError?: string | null;
 };
 
 export type MailRoute = {

@@ -10,27 +10,28 @@ import { fonts } from "@/src/theme/typography";
  * v0.7.0.49: real QR encoding.
  *
  * Before: hashGrid() rendered a 21x21 pattern that LOOKED like a QR (corner
- * finder patterns + random dots) but encoded nothing. Scanning it with iOS
- * Camera or any QR reader returned nothing. Trust-breaker: a user would
- * "Show my code" to a friend, the friend would scan, and nothing would
- * happen. The friend would think the app was broken or the user was lying.
+ * finder patterns + random dots) but encoded nothing. Trust-breaker.
  *
- * Now: react-native-qrcode-svg encodes a real URL. The URL pattern is
- * `https://app.themailroom.club/u/{userId}` — a profile-share URL.
+ * v1: encoded `https://app.themailroom.club/u/{userId}`. Codex audit caught
+ * that /u/* is not routed on production (returns 404). Scanning landed on a
+ * Not Found page — worse than the homepage fallback we wanted.
  *
- * Today the /u/* path is NOT yet routed (no AASA entry, no Vercel rewrite,
- * no app route handler). Scanning it on iOS opens Safari to
- * app.themailroom.club, which 200s to the marketing homepage. That's an
- * acceptable web fallback while the full deep-link infrastructure
- * follows. The QR is at least REAL — scans resolve to a Mailroom URL,
- * not nothing. TODO follow-up:
- *   1. Add `/u/*` to AASA in mailroom-site/.well-known/apple-app-site-association
- *   2. Add `/u/(.*)` rewrite in mailroom-site/vercel.json → a profile-share
- *      landing page with App Store link + "send {first name} a card" CTA
- *   3. Add `app/u/[userId].tsx` Expo Router route to deep-link into
- *      send-to-this-friend flow
+ * Now: encode `https://app.themailroom.club/?u={userId}` instead. The
+ * marketing homepage at `/` returns 200 and ignores unknown query params,
+ * so any scan resolves to a working Mailroom page. The `u` param is
+ * forward-compatible: when /u/* shipping work lands (AASA entry + Vercel
+ * landing page + Expo Router route), the homepage can read `?u=` and
+ * either deep-link or render a profile-share view.
+ *
+ * Follow-up still wanted:
+ *   1. Add `/u/*` (or `/?u=*` query-pattern match) to AASA in
+ *      mailroom-site/.well-known/apple-app-site-association
+ *   2. Add a profile-share landing page in mailroom-site that reads
+ *      `?u={userId}` and shows "Send {first name} a postcard" + App Store
+ *   3. Add `app/u/[userId].tsx` Expo Router route for installed-app deep
+ *      linking once AASA covers it
  */
-const PROFILE_URL_BASE = "https://app.themailroom.club/u";
+const PROFILE_URL_BASE = "https://app.themailroom.club";
 
 export function QRCodeModal({
   visible,
@@ -49,10 +50,11 @@ export function QRCodeModal({
   userId: string;
   avatarLook?: any;
 }) {
-  // QR value is a stable profile URL. Even when userId is empty (signed
-  // out / local-only mode), encode the base so scans aren't ambiguous.
+  // QR value is a stable URL that 200s today + carries the user id
+  // forward for future profile-share routing. Empty userId falls back
+  // to the bare homepage.
   const qrValue = userId
-    ? `${PROFILE_URL_BASE}/${encodeURIComponent(userId)}`
+    ? `${PROFILE_URL_BASE}/?u=${encodeURIComponent(userId)}`
     : PROFILE_URL_BASE;
 
   return (
@@ -82,7 +84,7 @@ export function QRCodeModal({
             <View style={{ flex: 1 }}>
               <Text style={styles.identityName}>{name}</Text>
               <Text style={styles.identityCity}>{city}, {state}</Text>
-              <Text style={styles.identityCode}>themailroom.club/u/{userId.slice(0, 8)}</Text>
+              <Text style={styles.identityCode}>themailroom.club/?u={userId.slice(0, 8)}</Text>
             </View>
           </View>
 

@@ -69,11 +69,15 @@ serve(async (req) => {
   }
   if (!body.postcard_id) return json({ ok: false, error: "postcard_id required" });
 
-  // 3) Verify ownership + orphan state
+  // 3) Verify ownership + orphan state.
+  // v0.7.0.49 (Codex audit): include lob_error so the client can show
+  // the real reason the original send failed (was persisted by the
+  // claim function on missing-secret path + by lob-send-postcard on
+  // Lob rejection, but never read on retry).
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const { data: pc, error: pcErr } = await admin
     .from("postcards")
-    .select("id, sender_id, to_kind, lob_id, status")
+    .select("id, sender_id, to_kind, lob_id, lob_error, status")
     .eq("id", body.postcard_id)
     .maybeSingle();
   if (pcErr) return json({ ok: false, error: pcErr.message });

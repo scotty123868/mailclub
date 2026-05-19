@@ -541,25 +541,57 @@ serve(async (req: Request) => {
     return json({ ok: false, error: pcErr?.message ?? "Postcard not found" }, 404);
   }
 
-  // v0.7.0.49 idempotency guard (Codex audit P1).
+  // v0.7.0.49 idempotency guard — TWO LAYERS now (Codex audit P1).
   //
-  // If the postcard already has a lob_id, Lob already accepted this
-  // postcard. Re-POSTing produces a duplicate physical card with a new
-  // Lob ID — same content, same address, same credit, two cards. The
-  // race shape: redeem_postcard_claim could (before its atomic fix)
-  // succeed twice for the same token, each path firing lob-send-postcard,
-  // each producing a Lob submission. Even with the redeem fix landed,
-  // any caller (claim handoff, retry-orphan, hypothetical manual retry)
-  // could race against itself or another path.
-  //
-  // Returns the existing lob_id so callers see the operation as a
-  // successful no-op rather than a new send.
+  // Layer 1: late-retry guard. If lob_id is already populated, Lob
+  // already accepted this postcard. Re-POSTing duplicates the physical
+  // card. Catches sequential retries (one POST already finished, second
+  // POST sees the lob_id and bails).
   if ((postcard as any).lob_id) {
     return json({
       ok: true,
       lob_id: (postcard as any).lob_id,
       expected_delivery_date: (postcard as any).lob_expected_delivery,
       idempotent: true,
+    });
+  }
+
+  // Layer 2: concurrent-first-submission lease. The bug Codex caught:
+  // two POSTs arrive at the same millisecond, both SELECT the postcard
+  // before either writes lob_id, both pass Layer 1, both POST to Lob,
+  // both write back — last-write-wins, but the USER got two physical
+  // cards for one credit. Layer 2 closes that race by atomically
+  // inserting a lease row (PRIMARY KEY on postcard_id). First INSERT
+  // wins; concurrent callers get the winning attempt_id back and exit.
+  //
+  // See 2026051904_lob_submission_lease.sql for the table + RPC. The
+  // lease auto-expires after 10 min so a stuck submission (network
+  // hang) doesn't lock the postcard forever — retry-orphan can claim
+  // the expired lease later.
+  const attemptId = crypto.randomUUID();
+  const { data: winningAttempt, error: leaseErr } = await supabase.rpc(
+    "try_acquire_lob_lease",
+    { p_postcard_id: postcard.id, p_attempt_id: attemptId, p_lease_seconds: 600 },
+  );
+  if (leaseErr) {
+    return json({ ok: false, error: `lease error: ${leaseErr.message}` }, 500);
+  }
+  if (winningAttempt !== attemptId) {
+    // Another submission is in flight (or already succeeded). Re-fetch
+    // the postcard to see if the winner finished; if so, return that
+    // lob_id. If still in flight, return a 200 with a "queued" marker
+    // so the caller doesn't retry.
+    const { data: latest } = await supabase
+      .from("postcards")
+      .select("lob_id, lob_expected_delivery")
+      .eq("id", postcard.id)
+      .single();
+    return json({
+      ok: true,
+      lob_id: (latest as any)?.lob_id ?? null,
+      expected_delivery_date: (latest as any)?.lob_expected_delivery ?? null,
+      idempotent: true,
+      lease_held_by_other: true,
     });
   }
 
@@ -775,6 +807,13 @@ serve(async (req: Request) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Network error to Lob";
     await supabase.from("postcards").update({ lob_error: msg }).eq("id", postcard.id);
+    // Release the lease as failed so retry-orphan can claim it.
+    await supabase.rpc("finalize_lob_lease", {
+      p_postcard_id: postcard.id,
+      p_attempt_id: attemptId,
+      p_status: "failed",
+      p_lob_error: msg,
+    });
     return json({ ok: false, error: msg }, 502);
   }
 
@@ -785,6 +824,12 @@ serve(async (req: Request) => {
   if (!lobResp.ok) {
     const msg = lobJson?.error?.message ?? `Lob returned ${lobResp.status}`;
     await supabase.from("postcards").update({ lob_error: msg }).eq("id", postcard.id);
+    await supabase.rpc("finalize_lob_lease", {
+      p_postcard_id: postcard.id,
+      p_attempt_id: attemptId,
+      p_status: "failed",
+      p_lob_error: msg,
+    });
     return json({ ok: false, error: msg }, lobResp.status);
   }
 
@@ -804,6 +849,15 @@ serve(async (req: Request) => {
   // bucket path, signed-URL resolved client-side). Renders live in
   // postcard-renders/{id}/front.jpg for debugging/detail-sheet previews.
   await supabase.from("postcards").update(update).eq("id", postcard.id);
+
+  // Finalize lease with the winning lob_id so any future call sees
+  // ('succeeded', lob_id) and exits cleanly via Layer 1.
+  await supabase.rpc("finalize_lob_lease", {
+    p_postcard_id: postcard.id,
+    p_attempt_id: attemptId,
+    p_status: "succeeded",
+    p_lob_id: lobJson.id,
+  });
 
   return json({
     ok: true,

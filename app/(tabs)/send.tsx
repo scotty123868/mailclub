@@ -577,8 +577,11 @@ export default function SendScreen() {
           Alert.alert("Couldn't save self-address", "Try setting your address in My Card first.");
           return;
         }
+        // v0.7.0.49 (Codex audit): kind reflects content. Text-only
+        // sends are "handwritten" so journal/detail UI is honest about
+        // the absence of a photo.
         const result = await sendPostcard({
-          kind: "photo",
+          kind: photoUri ? "photo" : "handwritten",
           friendId: selfRes.friend.id,
           // v0.7.0.31 PHOTO BUGFIX: photoUri = LOCAL URI (for the
           // optimistic-insert journal tile), preUploadedPath = Storage
@@ -588,7 +591,7 @@ export default function SendScreen() {
           preUploadedPath: resolvedPhotoPath ?? undefined,
           message: message.trim(),
           friend: selfRes.friend,
-        });
+        } as any);
         if (!result.ok) {
           Alert.alert("Couldn't send", "Try again in a moment.");
           return;
@@ -661,8 +664,12 @@ export default function SendScreen() {
 
       // Friend flow below ----------------------------------------------------
       if (deliveryMode === "link") {
+        // v0.7.0.49 (Codex audit): category reflects actual content. When
+        // there's no photo, send as `handwritten` so the journal tile,
+        // detail sheet, and "Photo unavailable" chip don't lie about an
+        // intentional text-only card.
         const result = await sendPostcardViaLink({
-          category: "photo",
+          category: photoUri ? "photo" : "handwritten",
           message,
           // v0.7.0.31 PHOTO BUGFIX: LOCAL URI for optimistic render,
           // Storage path via preUploadedPath for the upload-skip.
@@ -765,16 +772,17 @@ export default function SendScreen() {
         targetFriend = selectedFriend;
       }
 
+      // v0.7.0.49 (Codex audit): kind reflects actual content. Text-only
+      // sends use "handwritten" so the journal tile doesn't show "Photo
+      // unavailable" for an intentional no-photo card.
       const result = await sendPostcard({
-        kind: "photo",
+        kind: photoUri ? "photo" : "handwritten",
         friendId: targetFriendId,
-        // v0.7.0.31 PHOTO BUGFIX: LOCAL URI for optimistic render,
-        // Storage path via preUploadedPath for the upload-skip.
         photoUri: photoUri ?? "",
         preUploadedPath: resolvedPhotoPath ?? undefined,
         message,
         friend: targetFriend ?? undefined,
-      });
+      } as any);
       if (!result.ok) return;
 
       let reciprocationUrl: string | undefined;

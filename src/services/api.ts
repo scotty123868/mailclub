@@ -414,6 +414,7 @@ function postcardFromRow(row: PostcardRow): Postcard {
     claimUrl,
     claimExpiresAt,
     lobId: (row as any).lob_id ?? null,
+    lobError: (row as any).lob_error ?? null,
   };
 }
 

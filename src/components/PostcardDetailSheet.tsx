@@ -341,6 +341,11 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
               <Text style={styles.orphanBlurb}>
                 Looks like this card didn&apos;t reach the printer. Tap below to send it again.
               </Text>
+              {/* v0.7.0.49 (Codex audit): surface the actual reason. Was
+                  persisted in postcards.lob_error but never read on retry. */}
+              {postcard.lobError ? (
+                <Text style={styles.orphanReason}>Last error: {postcard.lobError}</Text>
+              ) : null}
               <Pressable
                 onPress={onRetryShipping}
                 disabled={retrying}
@@ -570,6 +575,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 12,
+  },
+  // v0.7.0.49: rendered when postcard.lobError is present. Smaller +
+  // italicized so it reads as detail, not as the primary failure copy.
+  orphanReason: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 12,
+    marginTop: -4,
   },
   shareKicker: {
     color: colors.postalBlue,
