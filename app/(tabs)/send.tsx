@@ -416,9 +416,12 @@ export default function SendScreen() {
         // is the whole product in that mode.
         return { ok: true };
       case "inside":
-        return message.trim().length > 0
-          ? { ok: true }
-          : { ok: false, reason: "Write a quick note for the back." };
+        // v0.7.0.50: message is optional when a photo is present (build 62
+        // user request — "if user wants to send just a photo, let them").
+        // We still block the empty/empty case so the card isn't both
+        // visually blank AND wordless.
+        if (photoUri || message.trim().length > 0) return { ok: true };
+        return { ok: false, reason: "Add a photo or a quick note before continuing." };
       case "delivery":
         return { ok: true };
     }
@@ -1021,6 +1024,10 @@ export default function SendScreen() {
       <MessageEditorSheet
         visible={editorOpen}
         initial={message}
+        // v0.7.0.50: when the sender already has a photo, the back can stay
+        // wordless. The CoverStep's "Skip — text only" affordance handles
+        // the inverse case (no photo, message-only).
+        allowEmpty={!!photoUri}
         onSave={(msg) => {
           setMessage(msg);
           setEditorOpen(false);

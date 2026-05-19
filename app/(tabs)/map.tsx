@@ -6,7 +6,6 @@ import { Header } from "@/src/components/Header";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 import {
-  CITY_COORDS,
   type MapCity,
   type MapRoute,
   MapPanel,
@@ -14,9 +13,10 @@ import {
   resolveCoord,
 } from "@/src/components/MapPanel";
 import {
-  PostcardDetailSheet,
-  type PostcardDetailSheetRef,
-} from "@/src/components/PostcardDetailSheet";
+  coordKey as toCoordKey,
+  computeCityStats,
+  groupByArea,
+} from "@/src/lib/mapStats";
 import {
   PostcardPreviewSheet,
   type PostcardPreviewSheetRef,
@@ -53,142 +53,80 @@ import { useMailClub } from "@/src/state/MailClubContext";
  */
 export default function MapScreen() {
   const sheetRef = useRef<PostcardPreviewSheetRef>(null);
-  // v0.7.0.7: detail sheet for pending-send pins. Tap the gold dashed
-  // pin → opens the postcard detail with the claim URL + Share Again.
-  const detailRef = useRef<PostcardDetailSheetRef>(null);
   const { postcards, friends, currentUser, authedUserId } = useMailClub();
-  const [highlightRoute, setHighlightRoute] = useState<MapRoute | null>(null);
 
-  // Pin set: the user&apos;s sent-to cities + received-from cities. We
-  // build it from the postcards array directly so the pins reflect
-  // the real history, not a hardcoded fixture.
-  //
-  // v0.7.0.7: also emit a "pending" pin at the sender's home for every
-  // send-link card that hasn't been claimed yet. This populates the map
-  // immediately after the first send — empty map ≠ first impression.
+  // v0.7.0.50 Simplified Atlas:
+  //   1) Aggregate postcards into one stat row per city (sent/received counts).
+  //   2) Collapse nearby cities into ~50mi areas (Bay Area = SF + Oakland + ...).
+  //   3) Every area with any activity gets ONE dotted line from home.
+  //   4) Reciprocated areas get a gold dashed ring on the pin.
+  //   5) No size scaling, no pulse, no per-line color/weight variance.
+  //   6) Selected area's line goes solid + thicker (handled in MapPanel).
+  const cityStats = useMemo(() => {
+    const raw = computeCityStats(postcards, friends, authedUserId);
+    return groupByArea(raw, 50);
+  }, [postcards, friends, authedUserId]);
+
+  // Selected area — tapping a pin OR a line sets this. Drives the
+  // line's solid/thicker render in MapPanel via the isNewest flag
+  // (repurposed: "newest" → "selected"). When null, no line is solid.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  // Pin set: home + every area we've sent to or received from. Pins
+  // carry reciprocated + selected flags so MapPanel can render gold
+  // ring + selection halo.
   const pins: MapCity[] = useMemo(() => {
-    const seen = new Map<string, MapCity>();
-    // v0.7.0.24: keyed pins by coord-string (lat+lng), not arbitrary
-    // ids, so home + sent-to + from at the same city dedupe into one
-    // visual pin. Previously "home" (id="home") and "city-chevy-chase"
-    // (id="city-...") would both render at the same coords with the
-    // same label, causing the "Chevy Chase" double-overlay the user
-    // flagged. Using coord-key as the dedupe key means any subsequent
-    // pin at that exact lat/lng folds into the first one.
-    const coordKey = (c: { latitude: number; longitude: number }) =>
-      `${c.latitude.toFixed(4)}_${c.longitude.toFixed(4)}`;
-
-    // v0.7.0.19: always seed a home pin if profile has city/state.
+    const out: MapCity[] = [];
+    let homeKey: string | null = null;
     if (currentUser.city || currentUser.state) {
       const homeCoord = resolveCoord(currentUser.city, currentUser.state);
       if (homeCoord) {
+        homeKey = toCoordKey(homeCoord);
         const homeName = currentUser.city || currentUser.state || "home";
-        seen.set(coordKey(homeCoord), {
-          id: "home",
-          name: homeName,
-          coord: homeCoord,
-        });
+        out.push({ id: "home", name: homeName, coord: homeCoord });
       }
     }
-
-    for (const p of postcards) {
-      if (p.toFriendId === "") continue;
-      const friend = friends.find((f) => f.id === p.toFriendId);
-      const cityName = p.toCity || friend?.city || "";
-      if (!cityName) continue;
-      const coord = resolveCoord(cityName, friend?.addressState || friend?.state);
-      if (!coord) continue;
-      const key = coordKey(coord);
-      if (!seen.has(key)) {
-        seen.set(key, {
-          id: `city-${normalizeCityKey(cityName)}`,
-          name: cityName,
-          coord,
-          accent: true,
-        });
-      }
-    }
-
-    for (const p of postcards) {
-      if (!p.fromCity) continue;
-      const coord = resolveCoord(p.fromCity, currentUser.state);
-      if (!coord) continue;
-      const key = coordKey(coord);
-      if (!seen.has(key)) {
-        seen.set(key, {
-          id: `city-${normalizeCityKey(p.fromCity)}`,
-          name: p.fromCity,
-          coord,
-        });
-      }
-    }
-    // Pending send-link cards: one pin per unclaimed card, offset
-    // slightly from the sender's home so they don't stack on top of
-    // each other.
-    const pendingCards = postcards.filter((p) => p.toFriendId === "");
-    pendingCards.forEach((p, idx) => {
-      const baseCity = p.fromCity || currentUser?.city || "";
-      const coord = resolveCoord(baseCity, currentUser.state);
-      if (!coord) return;
-      // v0.7.0.28: bumped offset from 0.3deg → 0.9deg (~100km) so the
-      // pin AND its "awaiting address" label don't overlap the home
-      // pin's "Chevy Chase" label. User report from build-46 proof:
-      // the gold awaiting-address dot was sitting almost on top of
-      // the solid home dot, and the two labels were stacking on each
-      // other. 0.9deg is enough visual separation at any zoom the
-      // user can pan to, while still clearly being "near" home.
-      const angle = (idx * 137.5 * Math.PI) / 180; // golden angle
-      const r = 0.9 + idx * 0.15;
-      const jittered = {
-        latitude: coord.latitude + Math.sin(angle) * r,
-        longitude: coord.longitude + Math.cos(angle) * r,
-      };
-      seen.set(`pending-${p.id}`, {
-        id: `pending-${p.id}`,
-        name: "awaiting address",
-        coord: jittered,
-        pending: true,
-        pendingPostcardId: p.id,
+    for (const s of cityStats) {
+      if (homeKey && s.key === homeKey) continue;
+      out.push({
+        id: `city-${normalizeCityKey(s.cityName)}`,
+        name: s.cityName,
+        coord: s.coord,
+        reciprocated: s.sendCount > 0 && s.receivedCount > 0,
+        // Repurpose isNewest as the "selected" flag — MapPanel renders
+        // a small dashed halo around the pin when set. Keeping the field
+        // name avoids another type churn; conceptually it's "stand out
+        // a beat" either way.
+        isNewest: selectedKey != null && s.key === selectedKey,
       });
-    });
-    return Array.from(seen.values());
-  }, [postcards, friends, currentUser]);
-
-  // Routes for polylines. Each unique (fromCity, toCity) pair → one
-  // polyline. v0.7.0.49: now branches on senderId so received cards
-  // render in sage and sent cards in red. Previously every route was
-  // tagged "sent" — receiver-side rows visually looked outbound, which
-  // is wrong (the comment at the top of map.tsx promised "Pin set:
-  // sent-to cities + received-from cities" but the lines didn't
-  // differentiate).
-  const mapRoutes: MapRoute[] = useMemo(() => {
-    const seenPairs = new Set<string>();
-    const out: MapRoute[] = [];
-    for (const p of postcards) {
-      const friend = friends.find((f) => f.id === p.toFriendId);
-      const toCityName = p.toCity || friend?.city || "";
-      if (!p.fromCity || !toCityName) continue;
-      const from = CITY_COORDS[normalizeCityKey(p.fromCity)];
-      const to = CITY_COORDS[normalizeCityKey(toCityName)];
-      if (!from || !to) continue;
-      // If we own the postcard (senderId === me), tone is "sent".
-      // Otherwise the receiver row got synthesized from a reciprocation
-      // scan — the line runs from THEIR city toward our home and is
-      // visually received. authedUserId can be null in dev/local mode.
-      const isMine = !p.senderId || (authedUserId && p.senderId === authedUserId);
-      const tone: MapRoute["tone"] = isMine ? "sent" : "received";
-      const key = `${normalizeCityKey(p.fromCity)}→${normalizeCityKey(toCityName)}:${tone}`;
-      if (seenPairs.has(key)) continue;
-      seenPairs.add(key);
-      out.push({ from, to, tone });
     }
     return out;
-  }, [postcards, friends, authedUserId]);
+  }, [cityStats, selectedKey, currentUser.city, currentUser.state]);
+
+  // Routes — one per area with any activity (sent OR received), all
+  // originating from home, all dotted, all coral. The selected route
+  // is marked isNewest so MapPanel draws it solid + thicker.
+  const mapRoutes: MapRoute[] = useMemo(() => {
+    const homeCoord = resolveCoord(currentUser.city, currentUser.state);
+    if (!homeCoord) return [];
+    const out: MapRoute[] = [];
+    for (const s of cityStats) {
+      if (s.sendCount === 0 && s.receivedCount === 0) continue;
+      out.push({
+        from: homeCoord,
+        to: s.coord,
+        tone: "sent",
+        isNewest: selectedKey != null && s.key === selectedKey,
+      });
+    }
+    return out;
+  }, [cityStats, selectedKey, currentUser.city, currentUser.state]);
 
   // v0.7.0.49: subtitle storytelling. Was just "Map"; now shows
-  // "X cities · Y cards" when the user has any postcards. Numbers are
-  // already in memory, no extra queries.
-  const cityCount = pins.filter((p) => !p.pending).length;
+  // "X cities · Y cards" when the user has any postcards.
+  // v0.7.0.50: exclude home from the cities count — the story is
+  // "places I've mailed to/from," not "places I exist."
+  const cityCount = pins.filter((p) => p.id !== "home").length;
   const cardCount = postcards.length;
   const subtitle =
     cardCount > 0
@@ -205,25 +143,24 @@ export default function MapScreen() {
           <MapPanel
             routes={mapRoutes}
             cities={pins.length > 0 ? pins : undefined}
-            highlightRoute={highlightRoute}
             onCityPress={(city) => {
-              // v0.7.0.7: pending pin → open the postcard detail
-              // sheet directly. Bypasses the city-scoped preview
-              // because pending cards don't have a real destination yet.
-              if (city.pending && city.pendingPostcardId) {
-                detailRef.current?.open(city.pendingPostcardId);
-                return;
-              }
-              // v0.7.0.5 D.2: trace a bright polyline from the tapped
-              // city to the user's home city while the sheet rises.
-              // If home city isn't resolved (no profile city yet), the
-              // highlight just doesn't fire — sheet still opens.
-              const homeCoord = currentUser.city
-                ? CITY_COORDS[normalizeCityKey(currentUser.city)]
-                : null;
-              if (homeCoord && city.coord !== homeCoord) {
-                setHighlightRoute({ from: city.coord, to: homeCoord, tone: "sent" });
-              }
+              // v0.7.0.50: tap a pin → mark its area selected (the line
+              // goes solid + thicker via the isNewest flag on the
+              // matching route), then open the city chapter sheet.
+              // Home tap is a no-op (no chapter for home).
+              if (city.id === "home") return;
+              const key = toCoordKey(city.coord);
+              setSelectedKey(key);
+              sheetRef.current?.open({ kind: "city", cityName: city.name });
+            }}
+            onRoutePress={(route) => {
+              // v0.7.0.50: lines are tappable too. Tapping a polyline
+              // is equivalent to tapping its destination pin — find the
+              // matching city by coord and treat it as a pin tap.
+              const key = toCoordKey(route.to);
+              const city = pins.find((p) => toCoordKey(p.coord) === key);
+              if (!city) return;
+              setSelectedKey(key);
               sheetRef.current?.open({ kind: "city", cityName: city.name });
             }}
           />
@@ -250,13 +187,10 @@ export default function MapScreen() {
           stays hidden (index=-1) until .open() is called. */}
       <PostcardPreviewSheet
         ref={sheetRef}
-        // v0.7.0.49: clear the city→home highlight polyline when the
-        // sheet closes. Was staying drawn indefinitely.
-        onDismiss={() => setHighlightRoute(null)}
+        // v0.7.0.50: clear the selected-area state when the sheet
+        // closes so the line goes back to dotted.
+        onDismiss={() => setSelectedKey(null)}
       />
-
-      {/* v0.7.0.7: per-card detail sheet for pending-send pins. */}
-      <PostcardDetailSheet ref={detailRef} />
     </BottomSheetModalProvider>
   );
 }

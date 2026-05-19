@@ -219,6 +219,41 @@ describe("Fix: MessageEditorSheet grapheme-aware + discard + empty-save", () => 
     // Last char must be an ASCII 'a', NOT a broken half-surrogate
     expect(saved.slice(-1)).toBe("a");
   });
+
+  // v0.7.0.50: photo-only flow — when caller passes allowEmpty, the sheet
+  // accepts an empty message so the user can finalize a photo-only card
+  // without typing anything.
+  it("Done is enabled with empty draft when allowEmpty=true (photo-only)", () => {
+    const { getByTestId } = render(
+      <AllProviders>
+        <MessageEditorSheet
+          visible={true}
+          initial=""
+          onSave={jest.fn()}
+          onCancel={jest.fn()}
+          allowEmpty={true}
+        />
+      </AllProviders>,
+    );
+    expect(getByTestId("msg-save").props.accessibilityState?.disabled).toBe(false);
+  });
+
+  it("allowEmpty=true with empty draft calls onSave with empty string", () => {
+    const onSave = jest.fn();
+    const { getByTestId } = render(
+      <AllProviders>
+        <MessageEditorSheet
+          visible={true}
+          initial=""
+          onSave={onSave}
+          onCancel={jest.fn()}
+          allowEmpty={true}
+        />
+      </AllProviders>,
+    );
+    fireEvent.press(getByTestId("msg-save"));
+    expect(onSave).toHaveBeenCalledWith("");
+  });
 });
 
 // ---------------------------------------------------------------------------

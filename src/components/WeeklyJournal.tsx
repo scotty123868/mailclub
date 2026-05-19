@@ -165,12 +165,16 @@ export function WeeklyJournal({
       const isOutbound = p.senderId
         ? p.senderId === currentUserId
         : true;
+      // v0.7.0.50: outbound label is now the RECIPIENT'S NAME, not the
+      // city. The card belongs to a person, not a place. We fall back
+      // to the city (or "Pen pal" / "Awaiting recipient") when no
+      // friend lookup is available — most users will see a name though.
+      //
       // For inbound cards:
       //   - From a known friend: use friend name
       //   - From a stranger (Postcrossing-matched): "Pen pal" (+ city
       //     if known) since we don't expose the sender's identity
       //   - Unknown: "Someone" fallback
-      // For outbound: label = recipient city (existing).
       //
       // v0.7.0.28: detect stranger via toFriendId === "void". When a
       // pen pal card is matched server-side, the postcard row has
@@ -181,7 +185,16 @@ export function WeeklyJournal({
       // sender's city if we have it.
       let label: string | undefined;
       if (isOutbound) {
-        label = p.toCity || undefined;
+        if (p.toFriendId === "void") {
+          label = "Pen pal";
+        } else if (p.toFriendId === "") {
+          // Claim-link send — recipient hasn't claimed yet.
+          label = "Awaiting recipient";
+        } else if (friendNamesById) {
+          label = friendNamesById.get(p.toFriendId) ?? p.toCity ?? undefined;
+        } else {
+          label = p.toCity || undefined;
+        }
       } else if (p.toFriendId === "void") {
         // Matched stranger card (inbound).
         label = p.fromCity ? `Pen pal · ${p.fromCity}` : "Pen pal";

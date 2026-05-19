@@ -9,6 +9,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from "react-native-reanimated";
+import { useReducedMotion } from "@/src/lib/useReducedMotion";
 import Svg, { Circle, Defs, Ellipse, G, Line, Path, Pattern, RadialGradient, Rect, Stop, Text as SvgText } from "react-native-svg";
 import { sepiaMapStyle } from "@/src/data/sepiaMapStyle";
 import { colors } from "@/src/theme/colors";
@@ -55,14 +56,47 @@ export type MapCity = {
    * "share-a-link" flow where the recipient hasn't claimed yet. The pin
    * gets a dashed gold ring + italic label so the user can see "yeah I
    * sent something, it's waiting on them" right after their first send.
+   *
+   * v0.7.0.50: pending pins were removed from the Map tab (kept as a
+   * prop for future use / map preview reuse).
    */
   pending?: boolean;
   /** Postcard id this pending pin represents. Tap → open detail sheet
    *  with the claim URL + "Share again" button. */
   pendingPostcardId?: string;
+  /**
+   * v0.7.0.50 Map "Option 4" — per-destination signals so the pin can
+   * render the user's relationship with this city at a glance.
+   */
+  /** How many postcards we've sent to this city. Pin scales with count;
+   *  3+ unlocks the "accent" treatment. */
+  sendCount?: number;
+  /** True when we've both sent to AND received from this city — earns a
+   *  gold dashed ring around the pin. The whole point of the product. */
+  reciprocated?: boolean;
+  /** True for the destination of the user's most-recent send. Pin
+   *  gently pulses to mark "this just went out." */
+  isNewest?: boolean;
+  /** True when we've received from this city but never sent back. Pin
+   *  paints sage instead of red/gold and gets no outgoing line. */
+  receivedOnly?: boolean;
 };
 
-export type MapRoute = { from: Geo; to: Geo; tone?: "sent" | "received" };
+export type MapRoute = {
+  from: Geo;
+  to: Geo;
+  tone?: "sent" | "received";
+  /**
+   * v0.7.0.50 Map "Option 4" — visual weighting per route.
+   *   weight: line thickness, scales with sendCount to this city.
+   *   opacity: 0.25–1.0, decays with months since most recent send.
+   *   isNewest: rendered solid (no dash) so the latest line "snaps."
+   */
+  weight?: number;
+  opacity?: number;
+  isNewest?: boolean;
+};
+
 
 // Default demo set — used by the My Card preview AND as a coord lookup table
 // for the Map tab when deriving real routes from user postcards.
@@ -342,7 +376,7 @@ export function MapPanel({
   routes,
   cities,
   onCityPress,
-  highlightRoute,
+  onRoutePress,
 }: {
   compact?: boolean;
   /**
@@ -368,13 +402,12 @@ export function MapPanel({
    */
   onCityPress?: (city: MapCity) => void;
   /**
-   * v0.7.0.5 D.2: when a pin is tapped, the Map tab passes a
-   * highlightRoute to draw a brighter polyline from the tapped city
-   * to a reference city (typically the user&apos;s home). The line
-   * appears INSTANTLY with a strong stroke + no dash — distinct
-   * from the ambient routes — and disappears when the sheet closes.
+   * v0.7.0.50: callback fired when a route (Polyline) is tapped. Lines
+   * are tappable in the Simplified Atlas — tapping a line is
+   * equivalent to tapping its destination pin. Omit to keep lines
+   * non-tappable (e.g. compact preview).
    */
-  highlightRoute?: MapRoute | null;
+  onRoutePress?: (route: MapRoute) => void;
 }) {
   const height = compact ? 168 : 260;
   const liveInteractive = interactive ?? !compact;
@@ -424,33 +457,29 @@ export function MapPanel({
           loadingBackgroundColor="#E8D5A8"
           loadingIndicatorColor="#4A3520"
         >
-          {/* Routes — colored dashed arcs between coord pairs. Red = sent
-              (default), sage green = received. */}
-          {renderRoutes.map((r, i) => (
-            <Polyline
-              key={`route-${i}`}
-              coordinates={[r.from, r.to]}
-              strokeColor={r.tone === "received" ? "#607A55" : colors.postalRed}
-              strokeWidth={2}
-              lineDashPattern={[6, 4]}
-              geodesic
-            />
-          ))}
-
-          {/* v0.7.0.5 D.2: highlight polyline when a pin is tapped.
-              Solid (no dash), thicker, brighter. Renders on top of the
-              ambient routes so the user can clearly see the line
-              connecting the tapped city to home. */}
-          {highlightRoute ? (
-            <Polyline
-              key="highlight-route"
-              coordinates={[highlightRoute.from, highlightRoute.to]}
-              strokeColor={colors.postalRed}
-              strokeWidth={3.5}
-              geodesic
-              zIndex={10}
-            />
-          ) : null}
+          {/* Routes — v0.7.0.50 Simplified Atlas:
+                Every line is dotted coral. Always. No direction
+                color, no recency fade, no weight variance.
+                The SELECTED line (isNewest) draws solid + slightly
+                thicker so the user can see what they tapped.
+                Polylines are tappable; tapping invokes onRoutePress
+                with the same effect as tapping the destination pin. */}
+          {renderRoutes.map((r, i) => {
+            const selected = !!r.isNewest;
+            return (
+              <Polyline
+                key={`route-${i}`}
+                coordinates={[r.from, r.to]}
+                strokeColor={colors.postalRed}
+                strokeWidth={selected ? 3.2 : 1.8}
+                lineDashPattern={selected ? undefined : [6, 4]}
+                geodesic
+                tappable={!!onRoutePress}
+                onPress={onRoutePress ? () => onRoutePress(r) : undefined}
+                zIndex={selected ? 10 : 1}
+              />
+            );
+          })}
 
           {/* Cities — custom paper-pin marker with serif label.
               tracksViewChanges defaults to true for the first render so
@@ -469,9 +498,9 @@ export function MapPanel({
               >
                 <CityPin
                   name={c.name}
-                  accent={!!c.accent}
-                  pending={!!c.pending}
                   staggerIndex={idx}
+                  reciprocated={!!c.reciprocated}
+                  isNewest={!!c.isNewest}
                 />
               </Marker>
             ))}
@@ -506,26 +535,41 @@ export function MapPanel({
 
 function CityPin({
   name,
-  accent,
-  pending = false,
   staggerIndex = 0,
+  reciprocated = false,
+  isNewest = false,
 }: {
   name: string;
-  accent: boolean;
+  // Legacy props (kept on the type for backward compat; not used by
+  // the Simplified Atlas). Pending/received-only/accent rendering is
+  // gone — all pins look the same except for the gold reciprocation
+  // ring and the selection halo.
+  accent?: boolean;
   pending?: boolean;
   staggerIndex?: number;
+  sendCount?: number;
+  reciprocated?: boolean;
+  /** v0.7.0.50: repurposed as "selected" — draws a small dashed ink
+   *  halo around the pin so the user can see which area they tapped. */
+  isNewest?: boolean;
+  receivedOnly?: boolean;
 }) {
-  // v0.7.0.5 D.2: drop-in entrance animation. Each pin springs in
-  // with a small downward offset → settles, delayed by staggerIndex *
-  // 60ms so a map full of pins draws in a satisfying cascade rather
-  // than appearing all at once. ~300ms per pin from offset → settled.
-  // Hoisted to Reanimated shared values so the animation runs on the
-  // UI thread, never the JS thread.
+  // v0.7.0.5 D.2: drop-in entrance animation. Each pin springs in with
+  // a small downward offset → settles, delayed by staggerIndex * 60ms.
+  // The Simplified Atlas keeps this — entrance motion is a one-time
+  // event, not the always-on pulse the previous draft had.
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(-8);
   const scale = useSharedValue(0.7);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      translateY.value = 0;
+      scale.value = 1;
+      return;
+    }
     const delay = staggerIndex * 60;
     opacity.value = withDelay(delay, withTiming(1, { duration: 240 }));
     translateY.value = withDelay(
@@ -536,7 +580,7 @@ function CityPin({
       delay,
       withTiming(1, { duration: 300, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
     );
-  }, [opacity, translateY, scale, staggerIndex]);
+  }, [opacity, translateY, scale, staggerIndex, reducedMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -546,28 +590,50 @@ function CityPin({
     ],
   }));
 
+  // v0.7.0.50 Simplified Atlas: constant pin size. No badge counts,
+  // no scale-by-send-count — keeps the map calm. The map differentiates
+  // areas via line presence + reciprocation ring + selection halo only.
+  const DOT_PX = 16;
+  const RING_PX = DOT_PX + 10; // reciprocation ring sits 5px outside the dot
+  const SELECTION_PX = DOT_PX + 8; // selection halo sits 4px outside the dot
+
   return (
     <Animated.View style={[pinStyles.wrap, animStyle]}>
-      <View
-        style={[
-          pinStyles.dot,
-          accent && pinStyles.dotAccent,
-          pending && pinStyles.dotPending,
-        ]}
-      >
-        <View
-          style={[
-            pinStyles.core,
-            accent && pinStyles.coreAccent,
-            pending && pinStyles.corePending,
-          ]}
-        />
+      {/* Dot-sized container so absolute children (ring + halo) center
+          on the dot, not on the (wider) label wrap. */}
+      <View style={{ width: DOT_PX, height: DOT_PX, alignItems: "center", justifyContent: "center" }}>
+        {reciprocated ? (
+          <View
+            style={[
+              pinStyles.recipRing,
+              {
+                width: RING_PX,
+                height: RING_PX,
+                borderRadius: RING_PX / 2,
+                top: -5,
+                left: -5,
+              },
+            ]}
+          />
+        ) : null}
+        {isNewest ? (
+          <View
+            style={[
+              pinStyles.selectionHalo,
+              {
+                width: SELECTION_PX,
+                height: SELECTION_PX,
+                borderRadius: SELECTION_PX / 2,
+                top: -4,
+                left: -4,
+              },
+            ]}
+          />
+        ) : null}
+        <View style={pinStyles.dot} />
       </View>
-      <View style={[pinStyles.labelWrap, pending && pinStyles.labelWrapPending]}>
-        <Text
-          style={[pinStyles.label, pending && pinStyles.labelPending]}
-          numberOfLines={1}
-        >
+      <View style={pinStyles.labelWrap}>
+        <Text style={pinStyles.label} numberOfLines={1}>
           {name}
         </Text>
       </View>
@@ -599,22 +665,14 @@ const pinStyles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 2,
   },
+  // v0.7.0.50 Simplified Atlas: dotAccent/coreAccent are still
+  // referenced by the CityDot compact preview on the My Card screen.
+  // The main map uses a constant pin size + the reciprocation ring as
+  // the only differentiation; CityPin doesn't apply these anymore.
   dotAccent: {
     width: 18,
     height: 18,
     borderRadius: 9,
-  },
-  // v0.7.0.7: pending-send pin — dashed gold ring + warm inner. Reads as
-  // "still waiting on something" without competing with the bold red
-  // delivered/sent pins.
-  dotPending: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#FBEFD6",
-    borderColor: colors.gold,
-    borderStyle: "dashed",
-    borderWidth: 1.5,
   },
   core: {
     width: 6,
@@ -628,20 +686,32 @@ const pinStyles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.postalRed,
   },
-  corePending: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: colors.gold,
+  // v0.7.0.50: reciprocation ring — gold dashed circle around the pin
+  // for cities where we've both sent AND received. The "yes you have a
+  // pen pal" signal, the whole point of the product. Rendered as an
+  // absolute child of a dot-sized container so it centers on the dot
+  // (earlier draft anchored to the wrap's left edge — wrong).
+  recipRing: {
+    position: "absolute",
+    borderWidth: 1.6,
+    borderColor: colors.gold,
+    borderStyle: "dashed",
+    backgroundColor: "transparent",
+  },
+  // v0.7.0.50: selection halo — a small dashed ink ring around the pin
+  // when its area is selected. Pairs with the polyline going solid +
+  // thicker, so the user can clearly see which dot the line attaches to.
+  selectionHalo: {
+    position: "absolute",
+    borderWidth: 1.2,
+    borderColor: "#2B1A08",
+    borderStyle: "dashed",
+    backgroundColor: "transparent",
   },
   labelWrap: {
     marginTop: 2,
     paddingHorizontal: 4,
     paddingVertical: 1,
-  },
-  labelWrapPending: {
-    backgroundColor: "rgba(217,180,110,0.18)",
-    borderRadius: 3,
   },
   label: {
     color: "#2B1A08",
@@ -652,12 +722,6 @@ const pinStyles = StyleSheet.create({
     textShadowColor: "rgba(232, 213, 168, 0.95)",
     textShadowRadius: 3,
     textShadowOffset: { width: 0, height: 0 },
-  },
-  labelPending: {
-    color: "#6E5421",
-    fontFamily: fonts.serifItalic,
-    letterSpacing: 0.4,
-    textTransform: "none",
   },
 });
 

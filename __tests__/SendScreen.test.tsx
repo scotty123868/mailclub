@@ -154,14 +154,38 @@ describe("SendScreen — multi-step flow", () => {
     expect(getByTestId("send-message-target")).toBeTruthy();
   });
 
-  it("blocks advancing from Inside with an empty note", async () => {
+  // v0.7.0.50: empty Inside is blocked only when there's nothing on the
+  // front either. Without a photo (text-only skip from Cover), the note
+  // is required so the postcard isn't a blank card with nothing on it.
+  it("blocks advancing from Inside with no photo AND empty note", () => {
     const { getByTestId } = renderSend();
+    pickFriendThenName(getByTestId);
+    advance(getByTestId); // → Cover
+    advance(getByTestId); // → Inside (text-only skip from Cover)
+    advance(getByTestId); // attempt to advance past Inside
+    expect(ALERT_SPY).toHaveBeenCalledWith(
+      "Not quite ready",
+      expect.stringMatching(/photo|note/i),
+    );
+  });
+
+  // v0.7.0.50: photo-only flow — message is allowed to be empty when a
+  // photo is attached so the user can send "just a photo."
+  it("allows advancing from Inside with a photo and empty note (photo-only flow)", async () => {
+    const { getByTestId, queryByTestId } = renderSend();
     pickFriendThenName(getByTestId);
     advance(getByTestId);
     await attachPhoto(getByTestId);
-    advance(getByTestId);
-    advance(getByTestId);
-    expect(ALERT_SPY).toHaveBeenCalledWith("Not quite ready", expect.stringContaining("note"));
+    advance(getByTestId); // → Inside
+    advance(getByTestId); // → Delivery (should succeed without typing)
+    // Either the next step renders OR the alert was NOT the "not quite
+    // ready" blocker (i.e. some other gate may apply but the message
+    // gate specifically should not fire).
+    expect(ALERT_SPY).not.toHaveBeenCalledWith(
+      "Not quite ready",
+      expect.stringMatching(/note/i),
+    );
+    expect(queryByTestId("send-step-4")).toBeTruthy();
   });
 
   it("surfaces friend matches as the user types a name on the Name step", () => {

@@ -56,11 +56,19 @@ export function MessageEditorSheet({
   initial,
   onSave,
   onCancel,
+  allowEmpty = false,
 }: {
   visible: boolean;
   initial: string;
   onSave: (msg: string) => void;
   onCancel: () => void;
+  /**
+   * v0.7.0.50: when true (caller has a photo, so the postcard has visual
+   * content even with no text), an empty/whitespace-only message is
+   * allowed to save. Default false preserves the historical "message
+   * required" behavior for text-only sends.
+   */
+  allowEmpty?: boolean;
 }) {
   const [draft, setDraft] = useState(initial);
 
@@ -73,7 +81,7 @@ export function MessageEditorSheet({
   }, [visible]);
 
   const trimmedLength = draft.trim().length;
-  const canSave = trimmedLength > 0;
+  const canSave = allowEmpty || trimmedLength > 0;
   const charCount = countCodepoints(draft);
   const dirty = draft !== initial;
 
@@ -115,7 +123,24 @@ export function MessageEditorSheet({
             >
               <Text style={styles.headerBtn}>Cancel</Text>
             </Pressable>
-            <Text style={styles.headerTitle}>Add a Message</Text>
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>Add a Message</Text>
+              {/* v0.7.0.50: counter promoted from footer → header so it's
+                  always visible. In build 62 the footer counter was being
+                  hidden by the keyboard on smaller screens; user reported
+                  "no character count" because the keyboard ate it. */}
+              <Text
+                style={[styles.headerCount, charCount >= WARN_CHARS && styles.headerCountWarn]}
+                testID="msg-char-count"
+                accessibilityLabel={
+                  charCount >= WARN_CHARS
+                    ? `${charCount} of ${MAX_CHARS} characters, near limit`
+                    : `${charCount} of ${MAX_CHARS} characters`
+                }
+              >
+                {charCount}/{MAX_CHARS}
+              </Text>
+            </View>
             <Pressable
               onPress={handleSave}
               disabled={!canSave}
@@ -135,7 +160,7 @@ export function MessageEditorSheet({
             <TextInput
               value={draft}
               onChangeText={handleChange}
-              placeholder="Add a message..."
+              placeholder={allowEmpty ? "Add a message (optional)…" : "Add a message…"}
               placeholderTextColor="#9A8D76"
               style={styles.input}
               multiline
@@ -156,17 +181,6 @@ export function MessageEditorSheet({
                   centerYear=""
                 />
               </View>
-              <Text
-                style={[styles.count, charCount >= WARN_CHARS && styles.countWarn]}
-                testID="msg-char-count"
-                accessibilityLabel={
-                  charCount >= WARN_CHARS
-                    ? `${charCount} of ${MAX_CHARS} characters, near limit`
-                    : `${charCount} of ${MAX_CHARS} characters`
-                }
-              >
-                {charCount}/{MAX_CHARS}
-              </Text>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -178,14 +192,15 @@ export function MessageEditorSheet({
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.paper, flex: 1 },
   header: { alignItems: "center", borderBottomColor: colors.line, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 18, paddingVertical: 14 },
+  headerCenter: { alignItems: "center" },
   headerTitle: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 17 },
+  headerCount: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, marginTop: 2 },
+  headerCountWarn: { color: colors.postalRed, fontFamily: fonts.serifSemi },
   headerBtn: { color: colors.mutedInk, fontFamily: fonts.serif, fontSize: 16 },
   headerBtnPrimary: { color: colors.ink, fontFamily: fonts.serifSemi },
   headerBtnDisabled: { color: colors.mutedInk, opacity: 0.45 },
   body: { flex: 1, paddingBottom: 12, paddingHorizontal: 20, paddingTop: 18 },
   input: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 22, lineHeight: 30 },
-  footer: { alignItems: "flex-end", flexDirection: "row", justifyContent: "space-between", marginTop: 12, paddingHorizontal: 4, paddingVertical: 8 },
+  footer: { alignItems: "flex-end", flexDirection: "row", justifyContent: "flex-start", marginTop: 12, paddingHorizontal: 4, paddingVertical: 8 },
   stamp: { opacity: 0.4 },
-  count: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 14, marginBottom: 6 },
-  countWarn: { color: colors.postalRed, fontFamily: fonts.serifSemi },
 });
