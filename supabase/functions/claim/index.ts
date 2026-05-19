@@ -123,6 +123,19 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
   if (!internalSecret || !anonKey) {
     // eslint-disable-next-line no-console
     console.error("[claim] MAILROOM_INTERNAL_SECRET or SUPABASE_ANON_KEY not set — cannot hand off to Lob");
+    // v0.7.0.49 (Codex P2): persist lob_error so retry-orphan can pick this
+    // up. Previously the claim returned ok:false but the postcards row had
+    // no durable record of why the handoff never happened — only the edge
+    // function logs. Now the row carries the failure reason and shows up
+    // in the orphan dashboard.
+    try {
+      await admin
+        .from("postcards")
+        .update({ lob_error: "internal secret not configured — handoff skipped" })
+        .eq("id", data.postcard_id);
+    } catch {
+      /* defensive — don't double-fail on the durability write */
+    }
     return jsonResponse({
       ok: false,
       error: "Server misconfigured — please contact support. Your address was saved.",
@@ -174,9 +187,20 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
       // eslint-disable-next-line no-console
       console.warn("[claim] lob-send-postcard returned non-ok:", resp.status, text);
     }
-  }).catch((err) => {
+  }).catch(async (err) => {
     // eslint-disable-next-line no-console
     console.warn("[claim] lob-send-postcard call failed:", err?.message ?? err);
+    // v0.7.0.49 (Codex P2): persist on network failure too. Previously a
+    // dropped connection to lob-send-postcard left the postcard with no
+    // durable error state; the orphan dashboard had nothing to show.
+    try {
+      await admin
+        .from("postcards")
+        .update({ lob_error: `claim handoff failed: ${err?.message ?? "network error"}` })
+        .eq("id", data.postcard_id);
+    } catch {
+      /* defensive */
+    }
   });
   // EdgeRuntime is provided by Supabase's Deno runtime. Guard against
   // local test environments that don't expose it.

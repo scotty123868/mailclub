@@ -50,12 +50,18 @@ export default function ClaimRouteHandler() {
     // maintenance tax for a rare edge case (existing Mailroom user
     // who taps a claim link). After Safari opens we route back to the
     // home tab so the app isn't stuck on this empty handler.
+    // v0.7.0.49 (Codex P2): only navigate away on SUCCESS. The previous
+    // finally-block ran router.replace("/") on both success and failure,
+    // which immediately unmounted the screen and made the error UI below
+    // unreachable — every failure looked like a silent navigation.
     Linking.openURL(url)
-      .catch(() => {
-        setError("Couldn't open the address form. Try again from the link the sender sent.");
-      })
-      .finally(() => {
+      .then(() => {
         router.replace("/");
+      })
+      .catch(() => {
+        setError(
+          "Couldn't open the address form. Try again from the link the sender sent.",
+        );
       });
   }, [t, router]);
 

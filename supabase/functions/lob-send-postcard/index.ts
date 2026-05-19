@@ -541,6 +541,28 @@ serve(async (req: Request) => {
     return json({ ok: false, error: pcErr?.message ?? "Postcard not found" }, 404);
   }
 
+  // v0.7.0.49 idempotency guard (Codex audit P1).
+  //
+  // If the postcard already has a lob_id, Lob already accepted this
+  // postcard. Re-POSTing produces a duplicate physical card with a new
+  // Lob ID — same content, same address, same credit, two cards. The
+  // race shape: redeem_postcard_claim could (before its atomic fix)
+  // succeed twice for the same token, each path firing lob-send-postcard,
+  // each producing a Lob submission. Even with the redeem fix landed,
+  // any caller (claim handoff, retry-orphan, hypothetical manual retry)
+  // could race against itself or another path.
+  //
+  // Returns the existing lob_id so callers see the operation as a
+  // successful no-op rather than a new send.
+  if ((postcard as any).lob_id) {
+    return json({
+      ok: true,
+      lob_id: (postcard as any).lob_id,
+      expected_delivery_date: (postcard as any).lob_expected_delivery,
+      idempotent: true,
+    });
+  }
+
   const toKind = (postcard as any).to_kind;
   const senderId = (postcard as any).sender_id;
   const friendId = (postcard as any).to_friend_id;
