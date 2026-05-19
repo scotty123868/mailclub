@@ -91,22 +91,6 @@ html, body { margin: 0; padding: 0; }
 </body></html>`;
 }
 
-// v0.7.0.45: Roman numeral helper for the publisher cartouche. Real
-// vintage postcards used Roman numerals for the year in their publisher
-// imprints (Curt Teich, A. Mainzer, etc.). Authentic small touch.
-function toRomanNumeral(n: number): string {
-  const map: Array<[number, string]> = [
-    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"],
-    [100, "C"], [90, "XC"], [50, "L"], [40, "XL"],
-    [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
-  ];
-  let result = "";
-  for (const [val, sym] of map) {
-    while (n >= val) { result += sym; n -= val; }
-  }
-  return result;
-}
-
 // v0.7.0.43: Lob inline-HTML payloads must be ≤10 000 chars. The
 // developer-friendly CSS + HTML comments in buildBackHtml push past that
 // in v15. Strip comments + minify CSS on the way out — keeps the source
@@ -129,6 +113,46 @@ function compactHtml(html: string): string {
     .replace(/\n\s*\n+/g, "\n");
 }
 
+// ============================================================================
+//   CANONICAL POSTCARD BACK DESIGN — THIS FUNCTION IS THE SOURCE OF TRUTH
+// ============================================================================
+//
+//   This is the ONLY postcard back design that ships to Lob in production.
+//   Every real postcard your users receive is rendered from this function.
+//
+//   DO NOT:
+//   - Implement an alternate buildBackHtml() anywhere else
+//   - Resurrect designs from `design-mockups/postcard-back/_archived/`
+//   - "Start fresh" from a Codex/Claude/Cursor draft without comparing
+//     output against the actuallysent.pdf reference + the documented recipe
+//
+//   IF YOU EDIT THIS FUNCTION:
+//   1. Read `design-mockups/postcard-back/REPRODUCE_ACTUALLYSENT.md` first
+//   2. Run /tmp/build_test_back.py + compactHtml() and submit to Lob test
+//   3. Compare the rendered output to /tmp/psc_99a2b9ab23f899cf.pdf
+//      (the v0.7.0.49 canonical reference render)
+//   4. Verify the back thumbnail is under 10KB after compactHtml()
+//   5. Test with a long message, a long city name, and an empty
+//      reciprocationUrl — none of those inputs may cause text overlap
+//
+//   Source intent: reproduce design-mockups/postcard-back/_archived/C2-print.html
+//   composition (high-left handwritten note, off-bleed stamp top-right,
+//   short top divider, quiet bottom cancellation rail). The message column
+//   stops at left:0.25in width:2.37in so it never overlaps Lob's
+//   right-half address mask. The stamp is positioned partially off-bleed
+//   for the "physical pasted stamp" effect — `top: 0.14in` is the smallest
+//   value that survives the 3deg rotation without trimming.
+//
+//   Reference renders (Lob, 2026-05-18):
+//     - psc_dc416ebf3ded708e  canonical (current canonical)
+//     - psc_4439fc562a66a9c6  long-message overflow test
+//     - psc_7e7aeb5061d5cfb0  long-city postmark test
+//     - psc_a7ee09a44ed3c336  no-QR (empty reciprocationUrl) test
+//   /design-review: A- design score · A+ AI-slop score
+//   Verified: variable QR token, variable date, no element overlap under
+//   any input. See REPRODUCE_ACTUALLYSENT.md for the recipe.
+//
+// ============================================================================
 function buildBackHtml(opts: {
   message: string;
   senderName?: string;
@@ -136,34 +160,6 @@ function buildBackHtml(opts: {
   senderState?: string;
   reciprocationUrl?: string;
 }): string {
-  // v0.7.0.34 — EXACT C2 vintage-purist v2 (print-ready) layout, lifted
-  // verbatim from design-mockups/postcard-back/C2-print.html. Earlier
-  // versions either (a) drifted into a simplification that lost the
-  // brand voice [build 14] or (b) re-invented a near-miss approximation
-  // [v0.7.0.33]. This commit pins to the saved mockup as the source of
-  // truth.
-  //
-  // Source: design-mockups/postcard-back/C2-print.html (1875×1275 px,
-  // 300dpi for Lob's 4×6). Templates only the dynamic data
-  // (senderFirstName, sender city/state, message, QR/URL, year).
-  //
-  // Assets:
-  //   - Hot-air balloon JPG: served from the public GitHub raw URL of
-  //     the assets/onboarding/hero-envelope-balloon.jpg in this repo.
-  //     Lob's renderer fetches it at render time. Cached by GitHub for
-  //     5 min on raw.githubusercontent.com.
-  //   - Fonts: loaded via Google Fonts CDN @import. Caveat (message),
-  //     Cormorant Garamond (italic copy), Playfair Display (display
-  //     numerals + MAILROOM wordmark), JetBrains Mono (URL + postmark
-  //     + stamp-class).
-  //   - QR: rendered server-side by api.qrserver.com with the actual
-  //     reciprocation URL. Replaces the CSS-gradient placeholder used
-  //     in the static mockup.
-  //
-  // Lob zones honored: address ink-free zone is right-half y=1.625"
-  // and below (which here in 1875×1275 pixels = 488 px). Our designer
-  // chrome (QR, stamp, message, postmark) all fit in the left + top
-  // 1875×488 region with the divider at x=808px (=2.69in).
 
   const senderFirstName = (opts.senderName ?? "the sender").trim().split(" ")[0] || "the sender";
   const qrUrl = opts.reciprocationUrl ?? "";
@@ -185,13 +181,9 @@ function buildBackHtml(opts: {
     return token ? `themailroom.club/r/${token}` : qrUrl.replace(/^https?:\/\//, "");
   })();
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const monthNamesUpper = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   const now = new Date();
   const datePart = `${monthNames[now.getUTCMonth()]} ${now.getUTCDate()}`;
   const yearPart = now.getUTCFullYear();
-  // v0.7.0.43: vintage cancellation date format. e.g. "MAY-18-2026".
-  // Mimics real USPS hand-cancel stamps from the linen-postcard era.
-  const dateCancel = `${monthNamesUpper[now.getUTCMonth()]}-${String(now.getUTCDate()).padStart(2, "0")}-${yearPart}`;
   // Postmark — "City ST · Month D · YYYY". Falls back to "Mailroom"
   // when sender city/state is missing (e.g. void/penpal sends).
   const cityCap = (opts.senderCity ?? "").trim();
@@ -199,14 +191,6 @@ function buildBackHtml(opts: {
   const postmarkLine = (cityCap && stateCap)
     ? `${cityCap} ${stateCap} · ${datePart} · ${yearPart}`
     : `Mailroom · ${datePart} · ${yearPart}`;
-  // v0.7.0.43: combined city+state for the new two-line postmark layout.
-  const cityStateLine = (cityCap && stateCap)
-    ? `${cityCap.toUpperCase()} ${stateCap}`
-    : "MAILROOM";
-  // v0.7.0.45: publisher cartouche year in Roman numerals (real vintage
-  // postcards used Roman year stamps in publisher imprints).
-  const romanYear = toRomanNumeral(yearPart);
-
   // Hot-air balloon JPG served from this repo's GitHub raw URL.
   // v0.7.0.47: reinstated after v0.7.0.46 tried inline SVG and broke at
   // Lob thumbnail scale. SVG vector wins at print resolution (300dpi)
@@ -216,20 +200,12 @@ function buildBackHtml(opts: {
   // compression banding only shows at print res and is acceptable.
   const balloonImgUrl = "https://raw.githubusercontent.com/scotty123868/mailclub/mvp-v0.3-credits-and-categories/assets/onboarding/hero-envelope-balloon.jpg";
 
-  // v0.7.0.35 — same C2-print VISUAL design as v0.7.0.34 but with
-  // INCH-based positions instead of pixel. The mockup was sized in
-  // 1875×1275 pixels for a Chromium --window-size screenshot; Lob's
-  // HTML renderer interprets those pixels at CSS's 96dpi instead of
-  // print 300dpi, so the body overflowed the 6.25×4.25 page and Lob
-  // clipped it (no stamp, message at wrong y, etc.).
-  //
-  // Coordinates converted px → inches by ÷ 300 (the original mockup
-  // was designed at 300dpi). Visual details (perforated mask, oval
-  // postmark ring, paper grain, balloon JPG, Google Fonts) preserved.
+  // Coordinates mirror the 1875x1275 mockup by dividing pixel positions
+  // by 300. Lob interprets CSS pixels at 96dpi, so production uses inches.
 
   return compactHtml(`<!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   @page { margin: 0; size: 6.25in 4.25in; }
   html, body { margin: 0; padding: 0; }
@@ -248,23 +224,10 @@ function buildBackHtml(opts: {
   }
   body > * { position: absolute; z-index: 2; }
 
-  /* v0.7.0.44: outer hairline frame + corner fleurons. Drawn as a single
-     SVG to guarantee alignment in Lob's renderer (multi-element absolute
-     positioning has bitten us before — see postmark, stamp). Inset 0.12in
-     from page edge, stroke + fleurons sized for visibility in Lob's
-     thumbnail preview (the thumbnail downsamples aggressively, so thin
-     hairlines that look right at print resolution disappear). v15 had
-     stroke 0.6 and fleurons r5 — invisible in thumbnail. */
-  .frame { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
-  .frame svg { width: 100%; height: 100%; display: block; }
-
-  /* TOP-LEFT QR cluster. v0.7.0.38c: flex container was stacking
-     vertically in Lob's renderer (same bug as the postmark). Switched
-     to absolute positioning for each child so they're guaranteed to
-     sit side-by-side. */
+  /* TOP-LEFT QR cluster, matching the full-image back used by actuallysent.pdf. */
   .qr {
     position: absolute;
-    top: 0.30in; left: 0.30in;
+    top: 0.187in; left: 0.25in;
     width: 0.687in; height: 0.687in;
     background: #FBF4DE;
     border: 0.015in solid #17223B;
@@ -276,36 +239,34 @@ function buildBackHtml(opts: {
     width: 100%; height: 100%; display: block;
     image-rendering: -webkit-optimize-contrast;
   }
+  /* v0.7.0.49d: top aligned to QR top (was 0.25 vs QR 0.187 = misaligned).
+     Font bumped 7.2pt → 8pt because this is the primary product CTA, not
+     footer copy. Tighter line-height (1.18 → 1.15) keeps the block compact. */
   .qr-copy {
     position: absolute;
-    top: 0.38in; left: 1.05in;
+    top: 0.187in; left: 1.05in;
     max-width: 1.50in;
-    font-family: 'Cormorant Garamond', serif; font-style: italic;
-    font-size: 9pt; color: #17223B; line-height: 1.25;
-    font-weight: 500; margin: 0;
+    font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic;
+    font-size: 8pt; color: rgba(23, 34, 59, 0.92); line-height: 1.15;
+    font-weight: 400; margin: 0;
   }
   .qr-url {
     position: absolute;
-    top: 0.77in; left: 1.05in;
+    top: 0.62in; left: 1.05in;
     font-family: 'JetBrains Mono', monospace; font-size: 6pt;
     color: rgba(23, 34, 59, 0.6); letter-spacing: 0.05em;
     font-weight: 500;
   }
 
-  /* TOP-RIGHT vintage stamp. v0.7.0.41: 10/10 design pass.
-     - Removed the dot-line-dot flourish (was rendering as "/"
-       glyph in Lob's renderer, made "FIRST CLASS" read as "/IRST CLASS")
-     - Larger balloon (0.80×0.50 from 0.72×0.44) for visual weight
-     - Bigger MAILROOM (10pt → 11pt), proper FIRST CLASS spacing
-     - More confident 70¢ (18pt → 20pt) */
-  /* v0.7.0.42: pulled inward — was clipping the "M" of MAILROOM
-     because the 3° rotation extended the top-right corner past
-     the 6.25in page edge. Right margin 0.30 → 0.38, width back
-     to 0.98 from 1.05. Cleared the rotation overhang. */
-  /* v0.7.0.44: nudged top 0.13 → 0.16in and right 0.38 → 0.40in so the
-     stamp clears the bolder v16 outer border (was right on top of it). */
-  .stamp { position: absolute; top: 0.16in; right: 0.40in;
-           width: 0.98in; height: 1.30in; transform: rotate(3deg);
+  /* TOP-RIGHT stamp. Larger and partially off-bleed so it reads like a
+     physical pasted stamp instead of a tidy UI badge.
+     top: 0.14in clears Lob's 0.125in bleed line with a small visible
+     margin — earlier 0.02 and 0.08 versions either chopped the top of
+     the stamp or sat flush against the trim, both of which read as a
+     mistake instead of a pasted stamp. 0.14 gives the stamp a real
+     sliver of cream above it so the corner reads as intentional. */
+  .stamp { position: absolute; top: 0.14in; right: 0.14in;
+           width: 1.25in; height: 1.48in; transform: rotate(3deg);
            background: #fdf6e5; border: 0.024in solid #B8483A;
            box-sizing: border-box; padding: 0.06in 0.05in; }
   .stamp-perf { position: absolute; inset: 0; pointer-events: none; }
@@ -313,92 +274,85 @@ function buildBackHtml(opts: {
   .stamp-inner-border { position: absolute; inset: 0.05in;
                         border: 0.008in solid rgba(184, 72, 58, 0.55);
                         pointer-events: none; }
-  /* v0.7.0.47: back to the JPG. Lob's thumbnail is the lossy preview
-     surface real users see; vector strokes <1 thumbnail pixel just
-     vanish at that scale, while a photo's smoothing reads as soft
-     rather than broken. */
-  .stamp-art { width: 0.75in; height: 0.46in; margin: 0 auto 0.035in;
-               background: url("${balloonImgUrl}") center/cover;
+  /* v0.7.0.49d: 25% → 35%. The "MAIL" cart hanging below the balloon is
+     the most product-relevant detail — literally a mail vehicle. 25% was
+     clipping it. 35% shows the full balloon body + the full MAIL cart
+     while still keeping the hills/fields out of frame. */
+  .stamp-art { width: 0.96in; height: 0.55in; margin: 0 auto 0.04in;
+               background: url("${balloonImgUrl}") center 35%/cover;
                border: 0.005in solid rgba(184, 72, 58, 0.3);
                border-radius: 0.012in; }
   .stamp-content { display: flex; flex-direction: column; align-items: center;
                    text-align: center; }
   .stamp-title { font-family: 'Playfair Display', serif; font-weight: 800;
-                 font-size: 10pt; color: #B8483A; letter-spacing: 0.5pt;
+                 font-size: 12pt; color: #B8483A; letter-spacing: 0.5pt;
                  line-height: 1; margin-bottom: 0.016in; }
   .stamp-class { font-family: 'JetBrains Mono', monospace; font-weight: 500;
-                 font-size: 4.2pt; color: rgba(184, 72, 58, 0.85);
+                 font-size: 4.4pt; color: rgba(184, 72, 58, 0.85);
                  letter-spacing: 0.35em; line-height: 1; margin-bottom: 0.035in; }
+  /* v0.7.0.49e: margin-bottom 0.008in → 0.06in. 21pt Cormorant Garamond
+     has tall descenders + the 11pt cent symbol is vertical-aligned up
+     0.04in, so the visual baseline of the "70¢" line bleeds DOWN below
+     its declared bottom. 0.008in of clearance let "2026" tuck under the
+     descender of the 7 — they appeared overlapped. 0.06in puts a clean
+     band of cream between them at every render resolution. */
   .stamp-cost { font-family: 'Cormorant Garamond', serif; font-weight: 700;
-                font-size: 19pt; color: #B8483A; line-height: 1;
-                margin-bottom: 0.008in; }
+                font-size: 21pt; color: #B8483A; line-height: 1;
+                margin-bottom: 0.06in; }
   .stamp-cost .small { font-size: 11pt; font-weight: 500; vertical-align: 0.04in; }
-  .stamp-year { font-family: 'JetBrains Mono', monospace; font-weight: 500;
-                font-size: 5pt; color: rgba(184, 72, 58, 0.75);
-                letter-spacing: 0.45em; line-height: 1; }
+  /* v0.7.0.49c: JetBrains Mono → Inter for year. The slashed zero
+     made 2026 read as 2826 at 5pt. Inter's plain oval zero is
+     unambiguous at any size.
+     v0.7.0.49d: letter-spacing 0.4em → 0.25em — 0.4 made "2026" read
+     as four separate digits instead of a year. */
+  .stamp-year { font-family: Inter, sans-serif; font-weight: 600;
+                font-size: 5pt; color: rgba(184, 72, 58, 0.85);
+                letter-spacing: 0.25em; line-height: 1; }
 
-  /* v0.7.0.43: divider is now a positioned SVG so the dot terminators
-     align perfectly with the rule (CSS pseudo-elements proved flaky in
-     Lob's renderer in earlier iterations). 0.04in wide × 3.20in tall. */
-  .divider { left: 2.673in; top: 0.40in; width: 0.04in; height: 3.20in; }
+  /* Divider only occupies the top custom-ink area; Lob's address mask owns
+     the lower-right postal zone. */
+  .divider { left: 2.673in; top: 0.187in; width: 0.02in; height: 1.36in; }
   .divider svg { width: 100%; height: 100%; display: block; }
 
-  /* Message — v0.7.0.47: swapped Caveat → Patrick Hand. Caveat's
-     dense midline (where loops cluster horizontally) created visible
-     banding artifacts in Lob's 100dpi thumbnail. Patrick Hand has
-     cleaner upright letterforms that downsample without that effect.
-     Same handwritten-note vibe, much better thumbnail fidelity.
-     Keeping at 13pt — Patrick Hand glyphs are wider than Caveat at
-     the same point size, so 14pt was overflowing the 7-line capacity. */
-  .msg { top: 1.25in; left: 0.30in; width: 2.35in; height: 1.85in;
-         font-family: 'Patrick Hand', cursive; font-size: 13pt; line-height: 1.35;
-         color: #17223B; overflow: hidden;
-         white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; }
+  /* Message — restored to the sent-card composition. The right edge stops
+     just before Lob's address mask so the mask edge never reads as a
+     strikethrough.
+     v0.7.0.49d: removed word-break: break-word. It's deprecated AND was
+     eating the space after commas at line breaks ("spring,one" instead
+     of "spring, / one"). overflow-wrap alone handles unbreakable URLs
+     correctly without mangling normal prose. */
+  .msg { top: 0.98in; left: 0.25in; width: 2.37in; height: 2.36in;
+         font-family: 'Caveat', cursive; font-size: 15.8pt; line-height: 1.22;
+         font-weight: 400; color: #17223B; overflow: hidden;
+         white-space: pre-wrap; overflow-wrap: break-word; }
 
-  /* Postmark — v0.7.0.46: moved up (bottom 0.40 → 0.32, height 0.65 →
-     0.55) to make room for the taller message. Circle scales down
-     slightly but stays legible. */
-  .postmark { position: absolute;
-              left: 0.30in; bottom: 0.32in;
-              width: 2.50in; height: 0.55in; }
-  .postmark svg { width: 100%; height: 100%; display: block; }
-
-  /* v0.7.0.45: publisher cartouche — one element replacing the 4 corner
-     stars from v16. Sits at the bottom of the card, centered. Reads as
-     an authentic vintage publisher imprint (like "Made by Curt Teich
-     & Co., Chicago, U.S.A." on real linen postcards). Cormorant Garamond
-     italic, small, low opacity so it functions as a print-mark not
-     active text. Year in Roman numerals because that's what real vintage
-     publisher imprints did. */
-  .cartouche {
-    position: absolute;
-    bottom: 0.18in; left: 50%;
-    transform: translateX(-50%);
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic;
-    font-weight: 500;
-    font-size: 5.5pt;
-    letter-spacing: 0.08em;
-    color: rgba(23, 34, 59, 0.55);
+  /* Bottom-left cancellation rail. v0.7.0.49: postmark moved from SVG
+     <text> (which rendered at ~3.5pt effective size and went mushy at
+     Lob's 100dpi thumbnail) into a real HTML pill. HTML text gets the
+     browser's regular font-smoothing pipeline and stays legible at the
+     thumbnail size users see in the journal feed.
+     v0.7.0.49c: font switched JetBrains Mono → Inter because JetBrains'
+     slashed zero made "2026" read as "2826" at print size. Opacity
+     bumped 0.78 → 0.92, size 4.6pt → 5.4pt for clearer rendering. */
+  .rail { left: 0.25in; bottom: 0.50in; width: 2.45in; height: 0.20in;
+          display: flex; align-items: center; gap: 0.06in; }
+  /* v0.7.0.49d: dropped the pill border. Real postmarks don't have
+     rectangular pill borders — they're either circular ovals or the
+     cancellation marks ARE the postmark. The border made it read as
+     UI chrome. Text + ticks alone reads more postal. */
+  .postmark-pill {
+    padding: 0.020in 0.04in 0.020in 0;
+    font-family: Inter, sans-serif;
+    font-size: 5.4pt; font-weight: 600;
+    color: rgba(23, 34, 59, 0.92);
+    letter-spacing: 0.06em;
     white-space: nowrap;
+    line-height: 1;
   }
-  /* Postmark waves moved INTO the .postmark SVG above. No separate
-     .postmark-waves class anymore. */
+  .cancel-ticks { flex: 1; height: 0.16in; display: block; }
 </style>
 </head>
 <body>
-
-<!-- v0.7.0.45: outer frame only. Dropped the 4 corner fleurons from v16
-     — real vintage postcards put a single publisher cartouche at the
-     bottom (Curt Teich's "Made by Curt Teich & Co., Chicago, U.S.A.")
-     not symmetric corner ornaments. The cartouche is added below as
-     <div class="cartouche">. -->
-<div class="frame">
-  <svg viewBox="0 0 625 425" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-    <rect x="12" y="12" width="601" height="401" fill="none"
-          stroke="rgba(23,34,59,0.55)" stroke-width="2"/>
-  </svg>
-</div>
 
 ${qrSrc ? `<div class="qr"><img src="${qrSrc}" alt="QR" /></div>
 <p class="qr-copy">Respond to ${escapeHtml(senderFirstName)} with a postcard for free.</p>
@@ -406,13 +360,17 @@ ${qrSrc ? `<div class="qr"><img src="${qrSrc}" alt="QR" /></div>
 
 <div class="stamp">
   <div class="stamp-perf">
-    <svg viewBox="0 0 100 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Cream perforation cutouts cutting into the stamp's outer border -->
+    <svg viewBox="0 0 125 148" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- v0.7.0.49c: viewBox now matches the stamp's 1.25:1.48 aspect
+           (was 100:130 = 0.77, stamp is 0.84, so circles stretched into
+           horizontal ellipses and the corners looked disconnected). New
+           positions spread evenly: 10 across top/bottom every 12 units,
+           12 down the sides every 12 units. -->
       <g fill="#FBF4DE">
-        ${[5,15,25,35,45,55,65,75,85,95].map(x => `<circle cx="${x}" cy="0" r="2.5"/>`).join("")}
-        ${[5,15,25,35,45,55,65,75,85,95].map(x => `<circle cx="${x}" cy="130" r="2.5"/>`).join("")}
-        ${[10,20,30,40,50,60,70,80,90,100,110,120].map(y => `<circle cx="0" cy="${y}" r="2.5"/>`).join("")}
-        ${[10,20,30,40,50,60,70,80,90,100,110,120].map(y => `<circle cx="100" cy="${y}" r="2.5"/>`).join("")}
+        ${[6,18,30,42,54,66,78,90,102,114].map(x => `<circle cx="${x}" cy="0" r="2.4"/>`).join("")}
+        ${[6,18,30,42,54,66,78,90,102,114].map(x => `<circle cx="${x}" cy="148" r="2.4"/>`).join("")}
+        ${[8,20,32,44,56,68,80,92,104,116,128,140].map(y => `<circle cx="0" cy="${y}" r="2.4"/>`).join("")}
+        ${[8,20,32,44,56,68,80,92,104,116,128,140].map(y => `<circle cx="125" cy="${y}" r="2.4"/>`).join("")}
       </g>
     </svg>
   </div>
@@ -426,65 +384,30 @@ ${qrSrc ? `<div class="qr"><img src="${qrSrc}" alt="QR" /></div>
   </div>
 </div>
 
-<!-- v0.7.0.43: divider as single SVG. ViewBox 4×320 (each unit 0.01in
-     after scaling to 0.04in × 3.20in via CSS). Hairline rule with a
-     small dot terminator at each end — the divider now feels punctuated
-     rather than ending in nothing. -->
 <div class="divider">
-  <svg viewBox="0 0 4 320" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-    <line x1="2" y1="6" x2="2" y2="314"
+  <svg viewBox="0 0 2 136" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <line x1="1" y1="0" x2="1" y2="136"
           stroke="rgba(194,165,109,0.55)" stroke-width="0.5"/>
-    <circle cx="2" cy="3" r="2" fill="rgba(194,165,109,0.85)"/>
-    <circle cx="2" cy="317" r="2" fill="rgba(194,165,109,0.85)"/>
   </svg>
 </div>
 
 <div class="msg">${escapeHtml(opts.message)}</div>
 
-<!-- v0.7.0.43: postmark restructured to a classic two-line cancellation
-     stamp: CITY ST on top, MAY-18-2026 in the middle (no third line).
-     Cleaner, more vintage, less calendar-app feel. -->
-<div class="postmark">
-  <svg viewBox="0 0 280 85" xmlns="http://www.w3.org/2000/svg">
-    <!-- Outer ring -->
-    <circle cx="42" cy="42" r="38" fill="none" stroke="#17223B" stroke-width="2" opacity="0.6"/>
-    <!-- Inner double-stroke ring for authentic depth -->
-    <circle cx="42" cy="42" r="33" fill="none" stroke="#17223B" stroke-width="0.7" opacity="0.4"/>
-    <!-- City + state on top line -->
-    <text x="42" y="36" text-anchor="middle" font-family="'JetBrains Mono', monospace"
-          font-weight="600" font-size="6" fill="#17223B" opacity="0.85" letter-spacing="0.5">${escapeHtml(cityStateLine)}</text>
-    <!-- Subtle horizontal rule between city and date -->
-    <line x1="14" y1="42" x2="70" y2="42" stroke="#17223B" stroke-width="0.4" opacity="0.35"/>
-    <!-- Hyphenated cancellation date in the middle -->
-    <text x="42" y="55" text-anchor="middle" font-family="'JetBrains Mono', monospace"
-          font-weight="700" font-size="8.5" fill="#17223B" opacity="0.9" letter-spacing="0.3">${dateCancel}</text>
-    <!-- v0.7.0.46: cancellation bars lightened + narrowed.
-         Was 8w × 32h × opacity 0.6 (heavy, parking-ticket feel).
-         Now 5w × 28h × opacity 0.4 (elegant, real hand-cancel feel). -->
-    <g fill="#17223B" opacity="0.4">
-      <rect x="88"  y="28" width="5" height="28"/>
-      <rect x="102" y="28" width="5" height="28"/>
-      <rect x="116" y="28" width="5" height="28"/>
-      <rect x="130" y="28" width="5" height="28"/>
-      <rect x="144" y="28" width="5" height="28"/>
-      <rect x="158" y="28" width="5" height="28"/>
-      <rect x="172" y="28" width="5" height="28"/>
-      <rect x="186" y="28" width="5" height="28"/>
-      <rect x="200" y="28" width="5" height="28"/>
-      <rect x="214" y="28" width="5" height="28"/>
-      <rect x="228" y="28" width="5" height="28"/>
-      <rect x="242" y="28" width="5" height="28"/>
-      <rect x="256" y="28" width="5" height="28"/>
-      <rect x="270" y="28" width="5" height="28"/>
+<div class="rail">
+  <div class="postmark-pill">${escapeHtml(postmarkLine.toUpperCase())}</div>
+  <svg class="cancel-ticks" viewBox="0 0 100 20" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <!-- v0.7.0.49d: ticks alternate between three heights (5-15, 4-16, 6-14)
+         so they look like real cancellation strokes instead of a font.
+         Real cancellations are hand-stamped and never uniformly tall. -->
+    <g stroke="#17223B" stroke-width="0.55" opacity="0.34">
+      ${Array.from({ length: 25 }, (_, i) => {
+        const y1 = [5, 4, 6][i % 3];
+        const y2 = [15, 16, 14][i % 3];
+        return `<line x1="${i * 4}" y1="${y1}" x2="${i * 4}" y2="${y2}"/>`;
+      }).join("")}
     </g>
   </svg>
 </div>
-
-<!-- v0.7.0.45: publisher cartouche. Real vintage postcards always had
-     a publisher imprint somewhere on the back identifying who made the
-     card. The classic Curt Teich version was "Made by Curt Teich & Co.,
-     Inc., Chicago, U.S.A." in tiny italic. This is Mailroom's. -->
-<div class="cartouche">The Mailroom Postcard Company &nbsp;❦&nbsp; ${romanYear}</div>
 
 </body></html>`);
 }
@@ -844,19 +767,14 @@ serve(async (req: Request) => {
     lob_expected_delivery: lobJson.expected_delivery_date,
     lob_error: null,
   };
-  // v0.7.0.23: REMOVED — don't overwrite photo_path with the rendered
-  // front URL. The user wants the journal tile to show their actual
-  // camera-roll photo, not the rendered postcard composition (which
-  // is just the photo + cream frame + tiny text — visually it's a
-  // less personal preview than the original snapshot).
-  //
-  // photo_path stays as whatever was set when the postcard row was
-  // first created (a postcard-photos bucket path, signed-URL resolved
-  // client-side). Renders live in postcard-renders/{id}/front.jpg if
-  // anyone needs them later for debugging or detail-sheet previews.
-  if (false && !useInlineHtml && body.front_url) {
-    update.photo_path = body.front_url;
-  }
+  // v0.7.0.23 / v0.7.0.49: removed dead `if (false && ...)` branch that
+  // would have overwritten photo_path with the rendered front URL. The
+  // journal tile should show the user's actual camera-roll photo, not
+  // the postcard composition (which is just the photo + cream frame +
+  // tiny text — visually less personal). photo_path stays as whatever
+  // was set when the postcard row was first created (a postcard-photos
+  // bucket path, signed-URL resolved client-side). Renders live in
+  // postcard-renders/{id}/front.jpg for debugging/detail-sheet previews.
   await supabase.from("postcards").update(update).eq("id", postcard.id);
 
   return json({

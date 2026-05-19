@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>C2 actually-sent print back</title>
+<!--
+  SOURCE OF TRUTH FOR PRODUCTION POSTCARD BACK DESIGN
+
+  This file mirrors supabase/functions/lob-send-postcard/index.ts ->
+  buildBackHtml(). It is intentionally based on actuallysent.pdf: the
+  handwritten note is the hero, the address mask never cuts through the note,
+  and the postal decoration stays quiet.
+
+  Mockup uses 1875x1275px coordinates. Production divides these values by 300
+  and emits inch units because Lob interprets CSS px at 96dpi.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1875px; height: 1275px; background: #FBF4DE;
+    position: relative; overflow: hidden; color: #17223B;
+    font-family: Inter, sans-serif;
+  }
+  body::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    z-index: 1; opacity: 0.4; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.08 0 0 0 0 0.05 0 0 0 0.12 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  body > * { position: absolute; z-index: 2; }
+
+  .qr {
+    top: 56px; left: 75px; width: 206px; height: 206px;
+    background: #FBF4DE; border: 4.5px solid #17223B;
+    padding: 9px; box-sizing: border-box;
+  }
+  .qr img {
+    width: 100%; height: 100%; display: block;
+    image-rendering: -webkit-optimize-contrast;
+  }
+  .qr-copy {
+    top: 75px; left: 315px; max-width: 450px;
+    font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic;
+    font-size: 22px; color: rgba(23, 34, 59, 0.9); line-height: 1.18;
+    font-weight: 400; margin: 0;
+  }
+  .qr-url {
+    top: 186px; left: 315px;
+    font-family: 'JetBrains Mono', monospace; font-size: 17px;
+    color: rgba(23, 34, 59, 0.6); letter-spacing: 0.05em;
+    font-weight: 500;
+  }
+
+  .stamp {
+    top: 6px; right: 42px; width: 375px; height: 444px;
+    transform: rotate(3deg); background: #fdf6e5;
+    border: 7px solid #B8483A; box-sizing: border-box;
+    padding: 18px 15px;
+  }
+  .stamp-perf { position: absolute; inset: 0; pointer-events: none; }
+  .stamp-perf svg { width: 100%; height: 100%; display: block; }
+  .stamp-inner-border {
+    position: absolute; inset: 15px;
+    border: 2.5px solid rgba(184, 72, 58, 0.55);
+    pointer-events: none;
+  }
+  .stamp-art {
+    width: 288px; height: 165px; margin: 0 auto 12px;
+    background: url("../../assets/onboarding/hero-envelope-balloon.jpg") center/cover;
+    border: 1.5px solid rgba(184, 72, 58, 0.3);
+    border-radius: 4px;
+  }
+  .stamp-content { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .stamp-title {
+    font-family: 'Playfair Display', serif; font-weight: 800;
+    font-size: 50px; color: #B8483A; letter-spacing: 1.5px;
+    line-height: 1; margin-bottom: 5px;
+  }
+  .stamp-class {
+    font-family: 'JetBrains Mono', monospace; font-weight: 500;
+    font-size: 18px; color: rgba(184, 72, 58, 0.85);
+    letter-spacing: 0.35em; line-height: 1; margin-bottom: 12px;
+  }
+  .stamp-cost {
+    font-family: 'Cormorant Garamond', serif; font-weight: 700;
+    font-size: 70px; color: #B8483A; line-height: 1;
+    margin-bottom: 3px;
+  }
+  .stamp-cost .small { font-size: 37px; font-weight: 500; vertical-align: 11px; }
+  .stamp-year {
+    font-family: 'JetBrains Mono', monospace; font-weight: 500;
+    font-size: 17px; color: rgba(184, 72, 58, 0.75);
+    letter-spacing: 0.45em; line-height: 1;
+  }
+
+  .divider { left: 802px; top: 56px; width: 6px; height: 408px; }
+  .divider svg { width: 100%; height: 100%; display: block; }
+
+  .msg {
+    top: 294px; left: 75px; width: 710px; height: 708px;
+    font-family: 'Caveat', cursive; font-size: 66px; line-height: 1.22;
+    font-weight: 400; color: #17223B; overflow: hidden;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word;
+  }
+
+  .rail { left: 75px; bottom: 150px; width: 735px; height: 60px; }
+  .rail svg { width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+
+<div class="qr">
+  <img src="https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&amp;ecc=H&amp;margin=0&amp;data=https%3A%2F%2Fapp.themailroom.club%2Fwelcome-mail%2FA8B4F2" alt="QR">
+</div>
+<p class="qr-copy">Respond to Scotty with a postcard for free.</p>
+<div class="qr-url">mailroom.app/r/A8B4F2</div>
+
+<div class="stamp">
+  <div class="stamp-perf">
+    <svg viewBox="0 0 100 130" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <g fill="#FBF4DE">
+        <circle cx="5" cy="0" r="2.5"/><circle cx="15" cy="0" r="2.5"/><circle cx="25" cy="0" r="2.5"/><circle cx="35" cy="0" r="2.5"/><circle cx="45" cy="0" r="2.5"/><circle cx="55" cy="0" r="2.5"/><circle cx="65" cy="0" r="2.5"/><circle cx="75" cy="0" r="2.5"/><circle cx="85" cy="0" r="2.5"/><circle cx="95" cy="0" r="2.5"/>
+        <circle cx="5" cy="130" r="2.5"/><circle cx="15" cy="130" r="2.5"/><circle cx="25" cy="130" r="2.5"/><circle cx="35" cy="130" r="2.5"/><circle cx="45" cy="130" r="2.5"/><circle cx="55" cy="130" r="2.5"/><circle cx="65" cy="130" r="2.5"/><circle cx="75" cy="130" r="2.5"/><circle cx="85" cy="130" r="2.5"/><circle cx="95" cy="130" r="2.5"/>
+        <circle cx="0" cy="10" r="2.5"/><circle cx="0" cy="20" r="2.5"/><circle cx="0" cy="30" r="2.5"/><circle cx="0" cy="40" r="2.5"/><circle cx="0" cy="50" r="2.5"/><circle cx="0" cy="60" r="2.5"/><circle cx="0" cy="70" r="2.5"/><circle cx="0" cy="80" r="2.5"/><circle cx="0" cy="90" r="2.5"/><circle cx="0" cy="100" r="2.5"/><circle cx="0" cy="110" r="2.5"/><circle cx="0" cy="120" r="2.5"/>
+        <circle cx="100" cy="10" r="2.5"/><circle cx="100" cy="20" r="2.5"/><circle cx="100" cy="30" r="2.5"/><circle cx="100" cy="40" r="2.5"/><circle cx="100" cy="50" r="2.5"/><circle cx="100" cy="60" r="2.5"/><circle cx="100" cy="70" r="2.5"/><circle cx="100" cy="80" r="2.5"/><circle cx="100" cy="90" r="2.5"/><circle cx="100" cy="100" r="2.5"/><circle cx="100" cy="110" r="2.5"/><circle cx="100" cy="120" r="2.5"/>
+      </g>
+    </svg>
+  </div>
+  <div class="stamp-inner-border"></div>
+  <div class="stamp-art"></div>
+  <div class="stamp-content">
+    <div class="stamp-title">MAILROOM</div>
+    <div class="stamp-class">FIRST CLASS</div>
+    <div class="stamp-cost">70<span class="small">¢</span></div>
+    <div class="stamp-year">2026</div>
+  </div>
+</div>
+
+<div class="divider">
+  <svg viewBox="0 0 2 136" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <line x1="1" y1="0" x2="1" y2="136" stroke="rgba(194,165,109,0.55)" stroke-width="0.5"/>
+  </svg>
+</div>
+
+<div class="msg">Hi Tati. I love you and this photo of us — it was a really special early day in spring, one of the first nice days to just be outside in the grass. I had just come back from the sphere with a new lawn towel that we put to good use. — Scotty</div>
+
+<div class="rail">
+  <svg viewBox="0 0 245 20" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0.5" y="3.5" width="130" height="13" rx="6.5" fill="none" stroke="#17223B" stroke-width="0.45" opacity="0.34"/>
+    <text x="65" y="12.5" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="4.8" font-weight="500" fill="#17223B" opacity="0.55" letter-spacing="1.15">CHEVY CHASE MD · MAY 16 · 2026</text>
+    <g stroke="#17223B" stroke-width="0.55" opacity="0.22">
+      <line x1="142" y1="5" x2="142" y2="15"/><line x1="146" y1="5" x2="146" y2="15"/><line x1="150" y1="5" x2="150" y2="15"/><line x1="154" y1="5" x2="154" y2="15"/><line x1="158" y1="5" x2="158" y2="15"/><line x1="162" y1="5" x2="162" y2="15"/><line x1="166" y1="5" x2="166" y2="15"/><line x1="170" y1="5" x2="170" y2="15"/><line x1="174" y1="5" x2="174" y2="15"/><line x1="178" y1="5" x2="178" y2="15"/><line x1="182" y1="5" x2="182" y2="15"/><line x1="186" y1="5" x2="186" y2="15"/><line x1="190" y1="5" x2="190" y2="15"/><line x1="194" y1="5" x2="194" y2="15"/><line x1="198" y1="5" x2="198" y2="15"/><line x1="202" y1="5" x2="202" y2="15"/><line x1="206" y1="5" x2="206" y2="15"/><line x1="210" y1="5" x2="210" y2="15"/><line x1="214" y1="5" x2="214" y2="15"/><line x1="218" y1="5" x2="218" y2="15"/><line x1="222" y1="5" x2="222" y2="15"/><line x1="226" y1="5" x2="226" y2="15"/><line x1="230" y1="5" x2="230" y2="15"/><line x1="234" y1="5" x2="234" y2="15"/><line x1="238" y1="5" x2="238" y2="15"/>
+    </g>
+  </svg>
+</div>
+
+</body></html>
