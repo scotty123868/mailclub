@@ -10,7 +10,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useReducedMotion } from "@/src/lib/useReducedMotion";
-import Svg, { Circle, Defs, Ellipse, G, Line, Path, Pattern, RadialGradient, Rect, Stop, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Line, Path, Pattern, RadialGradient, Rect, Stop, Text as SvgText } from "react-native-svg";
 import { sepiaMapStyle } from "@/src/data/sepiaMapStyle";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -490,17 +490,16 @@ export function MapPanel({
               and accept a tiny CPU cost during the 300ms drop. */}
           {!compact &&
             renderCities.map((c, idx) => {
-              // v0.7.0.51: home gets a literal 🏠 emoji disc; cities
-              // get the red plastic map-pin. The anchor differs because
-              // the city pin's needle base is at the BOTTOM of its SVG
-              // (so anchor y=1 lands the needle tip on the coord),
-              // while the home disc is centered (anchor y=0.5).
+              // v0.7.0.52: Codex pin's needle tip is at bottom-RIGHT of
+              // the SVG (around x=23/28 ≈ 0.82), not bottom-center.
+              // Anchor moves accordingly so the needle tip lands exactly
+              // on the lat/lng. Home disc stays centered.
               const isHome = c.id === "home";
               return (
                 <Marker
                   key={c.id}
                   coordinate={c.coord}
-                  anchor={isHome ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 0.92 }}
+                  anchor={isHome ? { x: 0.5, y: 0.5 } : { x: 0.82, y: 0.92 }}
                   onPress={onCityPress ? () => onCityPress(c) : undefined}
                 >
                   {isHome ? (
@@ -618,110 +617,180 @@ function CityPin({
     ],
   }));
 
-  // v0.7.0.51 Physical map pin: bright red plastic head + visible
-  // silver needle + cast shadow. Matches the corkboard wall-map vibe
-  // (the user's reference photo).
+  // v0.7.0.52 Codex pin — diagonal needle pushpin.
   //
-  // SVG layout (24 wide × 32 tall viewBox):
-  //   [12, 30] shadow ellipse (sits on the map)
-  //   [12, 26-12] needle shaft (silver, vertical)
-  //   [12, 11] head circle r=8 (red plastic w/ radial gradient)
-  //   [9.5, 8] specular highlight (white ellipse top-left)
-  //   [8.5, 7] specular dot (small bright white)
+  // The big realism move (vs build 64's vertical-needle dot): the metal
+  // shaft exits the back-right of the head and angles down-right, as if
+  // the pin were pushed into the paper at a slight angle. Matches the
+  // corkboard wall-map vibe of physical map tacks.
+  //
+  // SVG layout (28 wide × 36 tall viewBox):
+  //   [19.8, 31.2] paper contact shadow (rotated 32°, blurred)
+  //   [15.2 → 23.2, 21.2 → 33.4] needle shaft (dark base + metal gradient + bright glint)
+  //   [13.6, 14] head circle r=9.35 (red plastic + radial gradient + drop-shadow filter)
+  //   underside curve at y≈18 (subtle curvature shadow on the dome)
+  //   [10.4, 10.6] specular highlight (white ellipse tilted -24°)
+  //   [9.15, 9.55] specular hot-spot (small bright white dot)
   const HEAD_SVG_W = 28;
   const HEAD_SVG_H = 36;
   const isSelected = isNewest;
+  // Unique id suffix so multiple pins each get their own filter/gradient
+  // (RN-SVG re-uses the global URL namespace across all Svg instances).
+  const idSuffix = name.replace(/[^a-zA-Z0-9]/g, "");
 
   return (
     <Animated.View style={[pinStyles.wrap, animStyle]}>
-      {/* Pin SVG. The Svg has its own "stage" so reciprocation rings
-          can sit at the base where the needle meets the map. */}
       <View style={{ width: HEAD_SVG_W, height: HEAD_SVG_H, alignItems: "center", justifyContent: "flex-end" }}>
         <Svg width={HEAD_SVG_W} height={HEAD_SVG_H} viewBox={`0 0 ${HEAD_SVG_W} ${HEAD_SVG_H}`}>
           <Defs>
-            <RadialGradient id={`pinHead-${name}`} cx="32%" cy="28%">
-              <Stop offset="0%" stopColor="#FF8B7E" />
-              <Stop offset="22%" stopColor="#E5402F" />
-              <Stop offset="70%" stopColor="#B5170A" />
-              <Stop offset="100%" stopColor="#5A0A04" />
+            {/* Red plastic head — 5-stop radial gradient gives believable
+                3D form: bright top-left highlight, mid-red body, dark
+                bottom-right curvature shadow. */}
+            <RadialGradient id={`pinHead-${idSuffix}`} cx="30%" cy="24%" r="76%">
+              <Stop offset="0%" stopColor="#FFD2CA" />
+              <Stop offset="15%" stopColor="#FF7A6B" />
+              <Stop offset="43%" stopColor="#E13225" />
+              <Stop offset="72%" stopColor="#AF160A" />
+              <Stop offset="100%" stopColor="#530904" />
             </RadialGradient>
+            {/* Metal needle — linear gradient along the shaft axis gives
+                a believable bounced highlight (light → dark → bright →
+                dark = catches light at one edge, shadowed at the other). */}
+            <LinearGradient
+              id={`pinMetal-${idSuffix}`}
+              x1="14"
+              y1="21"
+              x2="23"
+              y2="34"
+              gradientUnits="userSpaceOnUse"
+            >
+              <Stop offset="0%" stopColor="#E8E4DA" />
+              <Stop offset="28%" stopColor="#9D9B94" />
+              <Stop offset="62%" stopColor="#F6F0DF" />
+              <Stop offset="100%" stopColor="#5F5C55" />
+            </LinearGradient>
           </Defs>
-          {/* Shadow under the pin head (offset slightly down-right, suggests light from upper-left) */}
-          <Ellipse
-            cx={HEAD_SVG_W / 2 + 1}
-            cy={HEAD_SVG_H - 2}
-            rx={isSelected ? 10 : 8}
-            ry={isSelected ? 3 : 2.4}
-            fill="#000"
-            opacity={0.32}
-          />
-          {/* Reciprocation ring — gold dashed ellipse at the base
-              (looks etched into the map where the pin was pressed in) */}
-          {reciprocated ? (
-            <Ellipse
-              cx={HEAD_SVG_W / 2}
-              cy={HEAD_SVG_H - 4}
-              rx={11}
-              ry={3.2}
-              fill="none"
-              stroke={colors.gold}
-              strokeWidth={1.6}
-              strokeDasharray="3 2"
-            />
-          ) : null}
-          {/* Selection halo — dashed ink ring around the base, shown
-              when this pin's area is the selected one */}
+
+          {/* Selection halo — dashed ink ring at the contact point,
+              rotated to match the needle angle so it reads as part of
+              the same composition. */}
           {isSelected ? (
             <Ellipse
-              cx={HEAD_SVG_W / 2}
-              cy={HEAD_SVG_H - 4}
-              rx={13}
+              cx={21.6}
+              cy={32.1}
+              rx={12.4}
               ry={3.6}
               fill="none"
               stroke="#2B1A08"
-              strokeWidth={1.2}
+              strokeWidth={1.1}
               strokeDasharray="2 2"
+              opacity={0.78}
+              transform="rotate(32 21.6 32.1)"
             />
           ) : null}
-          {/* Silver needle going from head down into the map */}
-          <Line
-            x1={HEAD_SVG_W / 2}
-            y1={HEAD_SVG_H - 4}
-            x2={HEAD_SVG_W / 2}
-            y2={HEAD_SVG_H / 2 + 1}
-            stroke="#7A7A7A"
-            strokeWidth={1.4}
-          />
-          <Line
-            x1={HEAD_SVG_W / 2}
-            y1={HEAD_SVG_H - 4}
-            x2={HEAD_SVG_W / 2}
-            y2={HEAD_SVG_H / 2 + 1}
-            stroke="#C8C8C8"
-            strokeWidth={0.5}
-          />
-          {/* Red plastic head */}
-          <Circle
-            cx={HEAD_SVG_W / 2}
-            cy={HEAD_SVG_H / 2 - 4}
-            r={isSelected ? 10 : 9}
-            fill={`url(#pinHead-${name})`}
-            stroke="#5A0A04"
-            strokeWidth={0.5}
-          />
-          {/* Specular highlight (suggests glossy plastic) */}
+          {/* Reciprocation ring — gold dashed, same axis. */}
+          {reciprocated ? (
+            <Ellipse
+              cx={21.6}
+              cy={32.1}
+              rx={10.6}
+              ry={3.05}
+              fill="none"
+              stroke={colors.gold}
+              strokeWidth={1.45}
+              strokeDasharray="3 2"
+              opacity={0.94}
+              transform="rotate(32 21.6 32.1)"
+            />
+          ) : null}
+          {/* Paper contact shadow under the needle tip — two stacked
+              ellipses (one larger + softer, one smaller + darker) to
+              approximate a Gaussian-blurred soft shadow without
+              relying on the SVG filter (which RN-SVG doesn't reliably
+              re-export from its main barrel). */}
           <Ellipse
-            cx={HEAD_SVG_W / 2 - 3}
-            cy={HEAD_SVG_H / 2 - 6}
-            rx={2.8}
-            ry={1.8}
-            fill="#FFFFFF"
-            opacity={0.72}
+            cx={isSelected ? 19.9 : 19.8}
+            cy={isSelected ? 31.4 : 31.2}
+            rx={isSelected ? 10 : 9}
+            ry={isSelected ? 2.6 : 2.4}
+            fill="#000"
+            opacity={isSelected ? 0.14 : 0.12}
+            transform={`rotate(32 ${isSelected ? 19.9 : 19.8} ${isSelected ? 31.4 : 31.2})`}
           />
+          <Ellipse
+            cx={isSelected ? 19.9 : 19.8}
+            cy={isSelected ? 31.4 : 31.2}
+            rx={isSelected ? 8.7 : 7.8}
+            ry={isSelected ? 2.2 : 2.05}
+            fill="#000"
+            opacity={isSelected ? 0.28 : 0.25}
+            transform={`rotate(32 ${isSelected ? 19.9 : 19.8} ${isSelected ? 31.4 : 31.2})`}
+          />
+          {/* Needle: 3-layered for metal sheen — dark base + bright shaft + crisp glint. */}
+          <Path
+            d={isSelected ? "M15.8 21.5 L23.5 33.2" : "M15.2 21.2 L23.2 33.4"}
+            stroke="#4D4942"
+            strokeWidth={isSelected ? 1.7 : 1.6}
+            strokeLinecap="round"
+            opacity={isSelected ? 0.58 : 0.55}
+          />
+          <Path
+            d={isSelected ? "M15.2 21 L22.9 32.8" : "M14.7 20.8 L22.5 32.7"}
+            stroke={`url(#pinMetal-${idSuffix})`}
+            strokeWidth={isSelected ? 1.22 : 1.15}
+            strokeLinecap="round"
+          />
+          <Path
+            d={isSelected ? "M14.6 20.8 L21.1 30.5" : "M14.2 20.6 L20.8 30.5"}
+            stroke="#FFF7E9"
+            strokeWidth={isSelected ? 0.4 : 0.36}
+            strokeLinecap="round"
+            opacity={isSelected ? 0.95 : 0.9}
+          />
+          {/* Drop-shadow under the head — offset darker circle, sits
+              behind the actual red head. Approximates a Gaussian
+              drop-shadow filter without relying on RN-SVG filter
+              re-exports. */}
           <Circle
-            cx={HEAD_SVG_W / 2 - 4}
-            cy={HEAD_SVG_H / 2 - 7}
-            r={0.9}
+            cx={(isSelected ? 13.7 : 13.6) + 1.25}
+            cy={14 + 1.9}
+            r={isSelected ? 10.15 : 9.35}
+            fill="#2B1A08"
+            opacity={0.38}
+          />
+          {/* Red plastic head. */}
+          <Circle
+            cx={isSelected ? 13.7 : 13.6}
+            cy={14}
+            r={isSelected ? 10.15 : 9.35}
+            fill={`url(#pinHead-${idSuffix})`}
+            stroke="#5A0A04"
+            strokeWidth={isSelected ? 0.7 : 0.65}
+          />
+          {/* Underside curvature shadow — a subtle dark arc on the bottom
+              of the dome to sell the 3D form. */}
+          <Path
+            d={isSelected
+              ? "M5.8 16.8 C8.8 22.3 18.6 23 22.4 16.6 C21.4 21.8 17.4 25 12.8 24.4 C8.9 24 6.4 21.1 5.8 16.8Z"
+              : "M6.2 16.7 C9.1 21.9 17.9 22.5 21.7 16.5 C20.7 21.3 17.1 24.2 12.9 23.8 C9.3 23.5 6.8 20.9 6.2 16.7Z"}
+            fill="#3E0502"
+            opacity={0.16}
+          />
+          {/* Specular highlight — tilted ellipse top-left of the dome. */}
+          <Ellipse
+            cx={isSelected ? 10.2 : 10.4}
+            cy={isSelected ? 10.45 : 10.6}
+            rx={isSelected ? 3.55 : 3.25}
+            ry={isSelected ? 2 : 1.85}
+            fill="#FFFFFF"
+            opacity={0.78}
+            transform={`rotate(-24 ${isSelected ? 10.2 : 10.4} ${isSelected ? 10.45 : 10.6})`}
+          />
+          {/* Specular hot-spot — small bright crisp dot. */}
+          <Circle
+            cx={isSelected ? 8.85 : 9.15}
+            cy={isSelected ? 9.35 : 9.55}
+            r={isSelected ? 0.95 : 0.85}
             fill="#FFFFFF"
             opacity={0.95}
           />
