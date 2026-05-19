@@ -146,24 +146,10 @@ describe("api.sendIntoVoid", () => {
   });
 });
 
-describe("api.purchaseCredits", () => {
-  it("calls purchase_credits RPC with pack id", async () => {
-    sb.rpc.mockResolvedValue({
-      data: {
-        id: "u1", name: "Pat", city: "Boise", state: "ID", since: "2026",
-        avatar_initials: "PA", tagline: "", interests: "", send_me: "",
-        birthday: "", currently_into: "", credits: 15, free_credits_remaining: 5,
-        has_seen_free_credits_intro: true, has_completed_signup: true,
-        notifications: { cardDelivered: true, replyReceived: true, birthdays: true },
-        privacy: { whoCanSendToMe: "anyone" },
-      },
-      error: null,
-    });
-    const result = await api.purchaseCredits("p10");
-    expect(sb.rpc).toHaveBeenCalledWith("purchase_credits", { p_pack_id: "p10" });
-    expect(result.credits).toBe(15);
-  });
-});
+// v0.7.0.49: api.purchaseCredits removed. The underlying public.purchase_credits
+// RPC was dropped because it credited users without receipt validation. Real
+// credit grants now flow through Stripe webhook → apply_stripe_credit_purchase,
+// which is covered by the stripe-webhook function's own tests.
 
 describe("api.addFriend", () => {
   it("derives initials from a name like 'Jamie River'", async () => {

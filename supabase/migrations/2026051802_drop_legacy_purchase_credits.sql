@@ -1,0 +1,38 @@
+-- =========================================================================
+-- 2026-05-18 — Drop legacy public.purchase_credits (P0 audit closure)
+-- =========================================================================
+--
+-- Background: 2026051200_initial_schema.sql defined `purchase_credits` as
+-- a placeholder pre-Stripe RPC that took `(p_pack_id text)` and credited
+-- the caller WITHOUT validating any receipt. A `-- TODO: validate
+-- Apple/Stripe receipt` comment in the body documented the unfinished
+-- security-critical part.
+--
+-- v0.6.x flipped to Stripe (2026051207) and:
+--   - revoked execute from `authenticated` (2026051211:80)
+--   - left the function in place "for backwards compatibility"
+--
+-- This created a long-tail risk: any future caller wired via service_role
+-- (a new edge function, a recovery script, a CLI tool) could credit a
+-- user with zero receipt validation. It's free money waiting for a
+-- mistake.
+--
+-- The Stripe flow has already moved on to `apply_stripe_credit_purchase`
+-- which:
+--   - is idempotent on stripe_payment_intent_id (unique index)
+--   - is called ONLY by the stripe-webhook edge function, which itself
+--     verifies the Stripe-signed payload via STRIPE_WEBHOOK_SECRET
+--   - inserts a `credit_purchases` ledger row that's auditable per user
+--
+-- That covers receipt validation properly. The legacy RPC just adds risk
+-- without value. Drop it and the unused client wrapper that referenced
+-- it (api.purchaseCredits + MailClubContext.purchaseCreditsAction —
+-- neither is reachable from any UI component as of v0.7.0.49).
+--
+-- If a future credit-grant pathway is needed (gift cards, refunds, comp
+-- credits), add it as a NEW function with explicit auditing and either
+-- (a) a signed receipt parameter, or (b) admin-only execute. Don't
+-- resurrect this one.
+-- =========================================================================
+
+drop function if exists public.purchase_credits(text);

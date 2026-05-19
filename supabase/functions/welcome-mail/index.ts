@@ -148,7 +148,10 @@ function receiverLandingPage(
     sender_city: string;
     message_preview: string;
     category: string;
-    photo_path?: string;
+    // v0.7.0.49: photo_path → has_photo. The HTML web fallback doesn't
+    // render the photo today, but the type now matches the RPC response
+    // shape so future renders won't be tempted to pull a raw storage key.
+    has_photo?: boolean;
     sent_at?: string;
     flavor: string;
   },

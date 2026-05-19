@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PostalCard } from "@/src/components/PostalCard";
-import { getSignedPhotoUrl, lookupReciprocation, recordReciprocationScan } from "@/src/services/api";
+import { fetchReciprocationPhotoUrl, lookupReciprocation, recordReciprocationScan } from "@/src/services/api";
 import { clearPendingInvite, setPendingInvite } from "@/src/state/pendingInvite";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors, gradients } from "@/src/theme/colors";
@@ -87,18 +87,21 @@ export default function WelcomeMailScreen() {
     };
   }, [token, hasCompletedSignup]);
 
-  // Phase 3.5: mint a signed URL for the postcard photo so the receiver
-  // can see the actual image (not just the message preview). The photo
-  // path on lookup is the Supabase Storage key; the bucket isn't public.
-  // v0.7.0.49: track photo failures explicitly. Before, a failed sign
-  // silently set photoUrl=null and the recipient saw a card with no
-  // photo and no indication anything went wrong. Now we surface a small
-  // hint and the message preview still renders so the card isn't broken.
+  // Phase 3.5 / v0.7.0.49: fetch the postcard photo via the
+  // reciprocation-photo Edge Function. Used to call
+  // getSignedPhotoUrl(photo_path), but that pattern required the raw
+  // storage key to ride along on the lookup response — which leaked
+  // sender user_id + upload timestamp. Now we pass only the token; the
+  // function validates it server-side and returns a signed URL.
+  //
+  // photoFailed tracks explicit failure so the card UI shows a "Photo
+  // unavailable" chip instead of silently rendering the card without
+  // its photo (which used to look like a missing-asset bug).
   useEffect(() => {
-    if (!lookup?.ok || !lookup.photo_path) return;
+    if (!lookup?.ok || !lookup.has_photo || !token) return;
     let cancelled = false;
     setPhotoFailed(false);
-    getSignedPhotoUrl(lookup.photo_path)
+    fetchReciprocationPhotoUrl(token)
       .then((url) => {
         if (cancelled) return;
         if (url) {
@@ -113,7 +116,7 @@ export default function WelcomeMailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [lookup]);
+  }, [lookup, token]);
 
   // Step 2: authenticated scan. Fires the FIRST time we have BOTH a valid
   // lookup AND a signed-in user. Idempotent on the server (already-scanned
@@ -256,7 +259,7 @@ export default function WelcomeMailScreen() {
                 <View style={styles.cardPhotoWrap}>
                   <Image source={{ uri: photoUrl }} style={styles.cardPhoto} resizeMode="cover" />
                 </View>
-              ) : photoFailed && lookup.photo_path ? (
+              ) : photoFailed && lookup.has_photo ? (
                 // v0.7.0.49: explicit photo-failure hint. Card still renders
                 // (message preview below stays). The "Photo unavailable"
                 // chip tells the recipient this is a load issue, not a

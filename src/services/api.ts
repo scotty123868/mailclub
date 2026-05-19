@@ -648,7 +648,12 @@ export type ReciprocationLookup = {
   sender_city: string;
   message_preview: string;
   category: string;
-  photo_path?: string;
+  // v0.7.0.49: photo_path removed (P2 audit). The raw storage key leaked
+  // sender user_id + upload timestamp to any token holder. Clients now
+  // see has_photo and fetch the actual URL via fetchReciprocationPhotoUrl
+  // which calls the reciprocation-photo Edge Function. The function
+  // signs the URL with service_role; the path stays server-side.
+  has_photo: boolean;
   sent_at?: string;
   lob_status?: string;
   already_scanned: boolean;
@@ -668,6 +673,37 @@ export async function lookupReciprocation(token: string): Promise<ReciprocationL
   });
   if (error) throw error;
   return data as ReciprocationLookup;
+}
+
+/**
+ * Mint a fresh signed URL for the photo on the postcard a given
+ * reciprocation token points at. The token is the only authorization
+ * required — same model as lookupReciprocation. Returns null if the
+ * token is invalid, expired, or the postcard has no photo.
+ *
+ * Replaces the old pattern of calling getSignedPhotoUrl(photo_path)
+ * with a path that was returned by lookup_reciprocation — paths are
+ * no longer leaked to clients.
+ */
+export async function fetchReciprocationPhotoUrl(
+  token: string,
+  expiresIn = 60 * 60,
+): Promise<string | null> {
+  if (!token) return null;
+  try {
+    const { data, error } = await supabase.functions.invoke<{
+      ok: boolean;
+      signed_url?: string;
+      reason?: string;
+      error?: string;
+    }>("reciprocation-photo", {
+      body: { token, expires_in: expiresIn },
+    });
+    if (error || !data?.ok || !data.signed_url) return null;
+    return data.signed_url;
+  } catch {
+    return null;
+  }
 }
 
 export type ReciprocationScanResult = {
@@ -817,11 +853,13 @@ export async function sendIntoVoid(message: string, photoUri?: string, preUpload
   return postcardFromRow(data as PostcardRow);
 }
 
-export async function purchaseCredits(packId: string) {
-  const { data, error } = await supabase.rpc("purchase_credits", { p_pack_id: packId });
-  if (error) throw error;
-  return profileFromRow(data as ProfileRow);
-}
+// v0.7.0.49: api.purchaseCredits removed. Calling it would have hit the
+// legacy public.purchase_credits RPC, which is now DROPPED. Production
+// credit grants go through:
+//   - stripe-webhook → apply_stripe_credit_purchase (idempotent, ledger-backed)
+//   - one-off comp/gift credits should be added as a NEW admin-gated RPC
+// If you need a new direct credit-grant pathway, do NOT resurrect this
+// function — write a fresh one with explicit receipt validation.
 
 // -----------------------------------------------------------------------------
 // Void replies (read-only client side; server populates them when delivery

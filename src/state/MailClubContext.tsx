@@ -111,7 +111,12 @@ type MailClubState = {
     placeName?: string;
   }) => Promise<SendViaLinkResult>;
   sendIntoVoid: (message: string, photoUri?: string, preUploadedPath?: string) => Promise<{ ok: boolean }>;
-  purchaseCredits: (packId: string) => Promise<CreditsPurchaseResult>;
+  // v0.7.0.49: purchaseCredits removed from the context surface — its server
+  // counterpart (public.purchase_credits) was dropped because it credited
+  // without receipt validation. The real Stripe purchase flow lives in
+  // src/components/CreditsSheet.tsx which uses createPaymentIntent +
+  // Stripe SDK directly and is settled by the stripe-webhook +
+  // apply_stripe_credit_purchase pipeline.
   refreshProfile: () => Promise<void>;
   markFreeCreditsIntroSeen: () => Promise<void>;
   updateAboutMe: (patch: Partial<CurrentUser>) => Promise<void>;
@@ -794,24 +799,13 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
   }, [authedUserId, credits, freeCreditsRemaining, postcards, userInfo.city]);
 
-  const purchaseCreditsAction = useCallback(async (packId: string): Promise<CreditsPurchaseResult> => {
-    const pack = CREDIT_PACKS.find((p) => p.id === packId);
-    if (!pack) return { ok: false };
-    if (!SUPABASE_CONFIGURED || !authedUserId) {
-      setCredits((c) => c + pack.credits);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return { ok: true, creditsAdded: pack.credits };
-    }
-    try {
-      const profile = await api.purchaseCredits(packId);
-      setCredits(profile.credits);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return { ok: true, creditsAdded: pack.credits };
-    } catch (err: any) {
-      Alert.alert("Purchase failed", err?.message ?? "Try again.");
-      return { ok: false };
-    }
-  }, [authedUserId]);
+  // v0.7.0.49: purchaseCreditsAction removed. The path it took
+  // (api.purchaseCredits → public.purchase_credits RPC) credited the user
+  // without ANY receipt validation, and was already revoked from
+  // authenticated. Production credit grants now flow through
+  // CreditsSheet → createPaymentIntent → Stripe SDK → stripe-webhook →
+  // apply_stripe_credit_purchase. No UI component invoked this action
+  // as of removal, so the surface drop is safe.
 
   const refreshProfileAction = useCallback(async () => {
     if (!SUPABASE_CONFIGURED || !authedUserId) return;
@@ -1281,7 +1275,6 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     sendPostcard: sendPostcardAction,
     sendPostcardViaLink: sendPostcardViaLinkAction,
     sendIntoVoid: sendIntoVoidAction,
-    purchaseCredits: purchaseCreditsAction,
     refreshProfile: refreshProfileAction,
     markFreeCreditsIntroSeen: markFreeCreditsIntroSeenAction,
     updateAboutMe: updateAboutMeAction,
@@ -1304,7 +1297,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
   }), [
     userInfo, visibleFriends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup, hasSentFirstCard,
     hydrated, authedUserId, voidReplies, notifications, privacy, celebration,
-    sendPostcardAction, sendPostcardViaLinkAction, sendIntoVoidAction, purchaseCreditsAction, refreshProfileAction, markFreeCreditsIntroSeenAction,
+    sendPostcardAction, sendPostcardViaLinkAction, sendIntoVoidAction, refreshProfileAction, markFreeCreditsIntroSeenAction,
     updateAboutMeAction, removeFriendAction, addFriendByAddressAction, queueInvitationAction,
     addMayaConnectionAction, updateNotificationsAction, updatePrivacyAction, signOutAction,
     completeSignupAction, signInWithEmailAction, signUpWithEmailAction, signInWithAppleAction,
