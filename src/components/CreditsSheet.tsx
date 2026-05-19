@@ -5,6 +5,7 @@ import { Sparkles, X } from "lucide-react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { CREDIT_PACKS, type CreditPack } from "@/src/data/credits";
 import { isStripeConfigured, loadStripeSdk, purchasePack, stripeLoadError } from "@/src/services/payments";
+import { fetchProfile } from "@/src/services/api";
 import { StripeShell } from "@/src/services/StripeShell";
 import { useMailClub } from "@/src/state/MailClubContext";
 import { colors } from "@/src/theme/colors";
@@ -50,11 +51,43 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
         } catch {
           // simulator without haptic engine — non-fatal
         }
-        await refreshProfile();
-        Alert.alert(
-          "You're in!",
-          `${result.creditsAdded} stamp${result.creditsAdded === 1 ? "" : "s"} added to your balance. Go mail something.`,
-        );
+        // v0.7.0.49: don't show "you're in!" until the stripe-webhook
+        // has actually credited the user. Before this, the alert fired
+        // right after Stripe Sheet dismissed — but webhook delivery is
+        // a separate async path that can take seconds. User saw "5
+        // stamps added" while their balance still showed the old count.
+        // Now we poll fetchProfile (via refreshProfile) for the credit
+        // delta. Up to 6 attempts, 1.5s apart = ~9s ceiling — covers
+        // typical webhook latency. On timeout, show "pending" copy so
+        // the user knows to check back, not that nothing happened.
+        const expectedDelta = pack.credits;
+        const startCredits = credits;
+        let credited = false;
+        for (let i = 0; i < 6; i++) {
+          await refreshProfile();
+          // The credit balance lives in MailClubContext; refreshProfile
+          // updates it in state. We rely on the closure value for the
+          // check — read the latest by re-importing after each poll.
+          // (refreshProfile returns void; we trust the side effect.)
+          const fresh = await fetchProfile().catch(() => null);
+          const latest = fresh?.credits ?? startCredits;
+          if (latest >= startCredits + expectedDelta) {
+            credited = true;
+            break;
+          }
+          if (i < 5) await new Promise((r) => setTimeout(r, 1500));
+        }
+        if (credited) {
+          Alert.alert(
+            "You're in!",
+            `${result.creditsAdded} stamp${result.creditsAdded === 1 ? "" : "s"} added to your balance. Go mail something.`,
+          );
+        } else {
+          Alert.alert(
+            "Payment received",
+            `Your ${result.creditsAdded} stamp${result.creditsAdded === 1 ? "" : "s"} should appear shortly. If you don't see them in a few minutes, pull-to-refresh on your card, then email scotty@themailroom.club if it's still missing.`,
+          );
+        }
         onClose();
       } else if (result.reason === "cancelled") {
         // No alert on cancel — user knows what they did.

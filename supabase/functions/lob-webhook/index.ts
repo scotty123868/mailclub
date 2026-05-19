@@ -184,9 +184,15 @@ serve(async (req) => {
     // see what's happening from the Lob Debugger UI without scraping
     // function logs. SAFE to include: we print header NAMES + sig
     // length/prefix, never the secret or a valid signature.
+    //
+    // v0.7.0.49: in prod, send a minimal 401 response and log the full
+    // debug payload server-side. Previously the full debug was returned
+    // in the response BODY, giving attackers a free fingerprinting
+    // oracle (which secret count is loaded, what their request looked
+    // like after parsing, etc.). To keep debugging useful during
+    // integration, the verbose body still ships when LOB_WEBHOOK_DEBUG=true.
     const allHeaders: Record<string, string> = {};
     req.headers.forEach((v, k) => {
-      // Don't leak Authorization or anything that looks like a secret.
       if (k.toLowerCase().includes("auth") || k.toLowerCase() === "cookie") return;
       allHeaders[k] = k.toLowerCase().includes("signature") ? `${v.slice(0, 24)}…(len=${v.length})` : v;
     });
@@ -206,10 +212,15 @@ serve(async (req) => {
       received_headers: allHeaders,
     };
     console.warn("[lob-webhook] signature mismatch", debug);
-    return new Response(JSON.stringify(debug, null, 2), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    const verbose = Deno.env.get("LOB_WEBHOOK_DEBUG") === "true";
+    return new Response(
+      JSON.stringify(
+        verbose ? debug : { ok: false, reason: "signature_mismatch" },
+        null,
+        2,
+      ),
+      { status: 401, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   let event: any;

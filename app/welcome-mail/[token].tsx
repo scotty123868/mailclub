@@ -211,6 +211,15 @@ export default function WelcomeMailScreen() {
             title: "Already claimed.",
             body: "Someone else already scanned this card. Each Mailroom card can only be claimed by one recipient.",
           };
+        case "WRONG_FLAVOR":
+          // v0.7.0.49: token is still in address-collection mode — the
+          // sender mailed via "Share a link" and the recipient hasn't
+          // pasted their address yet. Scanning the printed QR before
+          // the printed card exists is a category error.
+          return {
+            title: "Not ready yet.",
+            body: "This card's still waiting for the recipient's address. The QR can be scanned after the card prints.",
+          };
         default:
           return {
             title: "Hmm.",
