@@ -1,7 +1,8 @@
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import { Sparkles } from "lucide-react-native";
+import { Check, Mail, Sparkles } from "lucide-react-native";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { CREDIT_PACKS, type CreditPack } from "@/src/data/credits";
@@ -29,7 +30,26 @@ import { fonts } from "@/src/theme/typography";
  */
 export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { credits, refreshProfile } = useMailClub();
+  const router = useRouter();
   const [busyPackId, setBusyPackId] = useState<string | null>(null);
+  // v0.7.0.49 (Codex P2 #10): inline purchase confirmation state. Was
+  // closing the sheet then popping a native Alert — jarring against the
+  // cream paper aesthetic. Now shows result inline above the pack list
+  // with a "Mail something" CTA that closes the sheet AND deep-links
+  // into Send. User stays in the product flow.
+  const [purchaseResult, setPurchaseResult] = useState<
+    | { status: "credited" | "pending"; credits: number }
+    | null
+  >(null);
+
+  // Clear stale purchase result when the sheet re-opens so a second
+  // visit doesn't see the previous purchase's success state.
+  if (!visible && purchaseResult) {
+    // setState during render: React batches and re-renders. Acceptable
+    // here because the alternative (useEffect on visible) introduces a
+    // frame of stale UI on close-then-reopen.
+    setPurchaseResult(null);
+  }
   // Distinguish "publishable key not set" (dev-config issue) from "native
   // SDK failed to load on this device" (e.g. iOS 26 sim, version skew).
   // CRITICAL: only probe the SDK when the sheet is actually visible. RN's
@@ -78,18 +98,12 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
           }
           if (i < 5) await new Promise((r) => setTimeout(r, 1500));
         }
-        if (credited) {
-          Alert.alert(
-            "You're in!",
-            `${result.creditsAdded} stamp${result.creditsAdded === 1 ? "" : "s"} added to your balance. Go mail something.`,
-          );
-        } else {
-          Alert.alert(
-            "Payment received",
-            `Your ${result.creditsAdded} stamp${result.creditsAdded === 1 ? "" : "s"} should appear shortly. If you don't see them in a few minutes, pull-to-refresh on your card, then email scotty@themailroom.club if it's still missing.`,
-          );
-        }
-        onClose();
+        // v0.7.0.49 (Codex P2 #10): inline confirmation. Was native Alert
+        // + onClose; now state-driven success surface above the pack list.
+        setPurchaseResult({
+          status: credited ? "credited" : "pending",
+          credits: result.creditsAdded,
+        });
       } else if (result.reason === "cancelled") {
         // No alert on cancel — user knows what they did.
       } else {
@@ -137,6 +151,59 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
         />
 
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+          {/* v0.7.0.49: inline purchase confirmation. Renders above the
+              pack list after a successful Stripe checkout. */}
+          {purchaseResult ? (
+            <View
+              style={[
+                styles.resultCard,
+                purchaseResult.status === "credited"
+                  ? styles.resultCardCredited
+                  : styles.resultCardPending,
+              ]}
+              testID="credits-result-card"
+            >
+              <View style={styles.resultIconCircle}>
+                <Check color={colors.white} size={20} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.resultTitle}>
+                {purchaseResult.status === "credited"
+                  ? `${purchaseResult.credits} ${purchaseResult.credits === 1 ? "stamp" : "stamps"} added.`
+                  : "Payment received."}
+              </Text>
+              <Text style={styles.resultBody}>
+                {purchaseResult.status === "credited"
+                  ? `Your balance is ${credits} ${credits === 1 ? "stamp" : "stamps"}. Mail something.`
+                  : `Your ${purchaseResult.credits} ${purchaseResult.credits === 1 ? "stamp" : "stamps"} should appear shortly. Check back in a moment.`}
+              </Text>
+              <View style={styles.resultActions}>
+                <Pressable
+                  onPress={() => {
+                    onClose();
+                    // Deep-link straight into Send so the user goes from
+                    // "bought" → "writing" without thinking. Falls back
+                    // gracefully if Send isn't mounted yet.
+                    setTimeout(() => router.push("/(tabs)/send"), 50);
+                  }}
+                  style={({ pressed }) => [styles.resultPrimary, pressed && styles.resultPrimaryPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mail something now"
+                  testID="credits-result-mail-cta"
+                >
+                  <Mail color={colors.white} size={15} strokeWidth={1.8} />
+                  <Text style={styles.resultPrimaryText}>Mail something</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setPurchaseResult(null)}
+                  style={styles.resultSecondary}
+                  accessibilityRole="button"
+                  accessibilityLabel="Buy more stamps"
+                >
+                  <Text style={styles.resultSecondaryText}>Buy more</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
           {!stripeKeySet ? (
             <View style={styles.warnBanner} testID="credits-stripe-missing">
               <Text style={styles.warnTitle}>Stripe not configured yet.</Text>
@@ -261,4 +328,77 @@ const styles = StyleSheet.create({
   taxNote: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 17, marginTop: 16, textAlign: "center" },
   fineprint: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, lineHeight: 17, marginTop: 8 },
   footer: { paddingBottom: 12, paddingTop: 8 },
+  // v0.7.0.49: inline purchase result card. Replaces native Alert that
+  // closed the sheet then popped over whatever screen the user came from.
+  resultCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 14,
+    padding: 16,
+  },
+  resultCardCredited: {
+    backgroundColor: "rgba(155,175,155,0.18)",
+    borderColor: "rgba(155,175,155,0.45)",
+  },
+  resultCardPending: {
+    backgroundColor: "rgba(217,180,110,0.18)",
+    borderColor: "rgba(217,180,110,0.5)",
+  },
+  resultIconCircle: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: 18,
+    height: 36,
+    justifyContent: "center",
+    marginBottom: 10,
+    width: 36,
+  },
+  resultTitle: {
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 18,
+  },
+  resultBody: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  resultActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+  resultPrimary: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: 10,
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  resultPrimaryPressed: {
+    opacity: 0.85,
+  },
+  resultPrimaryText: {
+    color: colors.white,
+    fontFamily: fonts.serifSemi,
+    fontSize: 14,
+  },
+  resultSecondary: {
+    alignItems: "center",
+    borderColor: colors.line,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  resultSecondaryText: {
+    color: colors.ink,
+    fontFamily: fonts.serifSemi,
+    fontSize: 14,
+  },
 });

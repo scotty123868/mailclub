@@ -6,6 +6,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -437,9 +438,17 @@ export function WelcomeSheet({
   async function pickPhoto() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
+      // v0.7.0.49 (Codex P2 #5): actionable deny. Was a dead-end Alert.
       Alert.alert(
         "Photo access needed",
-        "Mailroom needs photo access to attach an image to your postcard. Enable it in iOS Settings → Mailroom.",
+        "Mailroom needs photo access to attach an image. Or continue without — your handwritten note carries the card.",
+        [
+          { text: "Continue without photo", style: "default" },
+          {
+            text: "Open Settings",
+            onPress: () => Linking.openSettings().catch(() => undefined),
+          },
+        ],
       );
       return;
     }

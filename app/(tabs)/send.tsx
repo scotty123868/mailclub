@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { ArrowLeft, ArrowRight, Camera, Check, Link as LinkIcon, Mail, MapPin, Send, User as UserIcon, Users as UsersIcon } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Pressable, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppShell } from "@/src/components/AppShell";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
@@ -323,9 +323,21 @@ export default function SendScreen() {
   async function openPhotoPicker() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
+      // v0.7.0.49 (Codex P2 #5): give the user concrete next steps. Was a
+      // dead-end Alert with no action. Now: a button to open iOS Settings
+      // (Linking.openSettings) AND an explicit "send text-only" path so
+      // the user isn't stuck. Pairs with the photo-optional flow shipped
+      // in this same release — they can dismiss this and hit Next.
       Alert.alert(
         "Photo access needed",
-        "Mailroom needs photo access to attach an image to your postcard. You can enable this in Settings.",
+        "Mailroom needs photo access to attach an image. Or skip — text-only postcards work too.",
+        [
+          { text: "Skip the photo", style: "default" },
+          {
+            text: "Open Settings",
+            onPress: () => Linking.openSettings().catch(() => undefined),
+          },
+        ],
       );
       return;
     }
