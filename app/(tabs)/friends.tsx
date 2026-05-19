@@ -17,7 +17,7 @@ import { fonts } from "@/src/theme/typography";
 
 export default function FriendsScreen() {
   const router = useRouter();
-  const { currentUser, friends } = useMailClub();
+  const { currentUser, friends, authedUserId } = useMailClub();
   const [qrOpen, setQrOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
@@ -105,13 +105,18 @@ export default function FriendsScreen() {
 
       <PrivacyCard />
 
+      {/* v0.7.0.49: userId was hardcoded "scotty-001" — every user's QR
+          modal was rendering the founder's identity hash. The QR's
+          internal hashGrid uses `mailroom:<userId>:<name>` so two users
+          sharing their QR could collide. Use the real authedUserId
+          (falls back to a stable per-session string for unauth/dev). */}
       <QRCodeModal
         visible={qrOpen}
         onClose={() => setQrOpen(false)}
         name={currentUser.name}
         city={currentUser.city}
         state={currentUser.state}
-        userId="scotty-001"
+        userId={authedUserId ?? "local-self"}
         avatarLook="scotty"
       />
 

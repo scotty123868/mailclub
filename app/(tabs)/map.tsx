@@ -56,7 +56,7 @@ export default function MapScreen() {
   // v0.7.0.7: detail sheet for pending-send pins. Tap the gold dashed
   // pin → opens the postcard detail with the claim URL + Share Again.
   const detailRef = useRef<PostcardDetailSheetRef>(null);
-  const { postcards, friends, currentUser } = useMailClub();
+  const { postcards, friends, currentUser, authedUserId } = useMailClub();
   const [highlightRoute, setHighlightRoute] = useState<MapRoute | null>(null);
 
   // Pin set: the user&apos;s sent-to cities + received-from cities. We
@@ -155,9 +155,12 @@ export default function MapScreen() {
   }, [postcards, friends, currentUser]);
 
   // Routes for polylines. Each unique (fromCity, toCity) pair → one
-  // polyline. Tone defaults to "sent" since postcards in the array
-  // are predominantly outbound; receiver-side rows would need senderId
-  // logic but the visual is fine either way for v0.7.0.4.
+  // polyline. v0.7.0.49: now branches on senderId so received cards
+  // render in sage and sent cards in red. Previously every route was
+  // tagged "sent" — receiver-side rows visually looked outbound, which
+  // is wrong (the comment at the top of map.tsx promised "Pin set:
+  // sent-to cities + received-from cities" but the lines didn't
+  // differentiate).
   const mapRoutes: MapRoute[] = useMemo(() => {
     const seenPairs = new Set<string>();
     const out: MapRoute[] = [];
@@ -168,13 +171,19 @@ export default function MapScreen() {
       const from = CITY_COORDS[normalizeCityKey(p.fromCity)];
       const to = CITY_COORDS[normalizeCityKey(toCityName)];
       if (!from || !to) continue;
-      const key = `${normalizeCityKey(p.fromCity)}→${normalizeCityKey(toCityName)}`;
+      // If we own the postcard (senderId === me), tone is "sent".
+      // Otherwise the receiver row got synthesized from a reciprocation
+      // scan — the line runs from THEIR city toward our home and is
+      // visually received. authedUserId can be null in dev/local mode.
+      const isMine = !p.senderId || (authedUserId && p.senderId === authedUserId);
+      const tone: MapRoute["tone"] = isMine ? "sent" : "received";
+      const key = `${normalizeCityKey(p.fromCity)}→${normalizeCityKey(toCityName)}:${tone}`;
       if (seenPairs.has(key)) continue;
       seenPairs.add(key);
-      out.push({ from, to, tone: "sent" });
+      out.push({ from, to, tone });
     }
     return out;
-  }, [postcards, friends]);
+  }, [postcards, friends, authedUserId]);
 
   return (
     <BottomSheetModalProvider>
@@ -229,7 +238,12 @@ export default function MapScreen() {
       {/* The sheet must live OUTSIDE AppShell so it can render over
           the tab bar + nav. It mounts as a portal at the root and
           stays hidden (index=-1) until .open() is called. */}
-      <PostcardPreviewSheet ref={sheetRef} />
+      <PostcardPreviewSheet
+        ref={sheetRef}
+        // v0.7.0.49: clear the city→home highlight polyline when the
+        // sheet closes. Was staying drawn indefinitely.
+        onDismiss={() => setHighlightRoute(null)}
+      />
 
       {/* v0.7.0.7: per-card detail sheet for pending-send pins. */}
       <PostcardDetailSheet ref={detailRef} />

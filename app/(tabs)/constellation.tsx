@@ -93,9 +93,14 @@ export default function ConstellationScreen() {
   // the sender can re-share the claim URL.
   const detailRef = useRef<PostcardDetailSheetRef>(null);
 
-  // Stage size: square inset from screen width, capped at 360.
+  // Stage size: square inset from screen width.
+  // v0.7.0.49: dropped the 360pt cap. On a 14 Pro Max (430pt wide) the
+  // graph was 360pt with 35pt of black void on each side. The simulation
+  // already adapts to dense/sparse layouts so a wider stage just spreads
+  // the existing graph out — no quality loss. Cap by screen HEIGHT only
+  // (so the graph never collides with the header/tab bar).
   const { width: screenW, height: screenH } = Dimensions.get("window");
-  const stageSize = Math.min(screenW - 24, screenH - 200, 360);
+  const stageSize = Math.min(screenW - 24, screenH - 220);
   const cx = stageSize / 2;
   const cy = stageSize / 2;
 
@@ -181,9 +186,14 @@ export default function ConstellationScreen() {
   const ty = useSharedValue(0);
   const sy = useSharedValue(0);
 
+  // v0.7.0.49: pan is now single-finger. Two-finger pan was the convention
+  // from iOS Maps but it's undiscoverable in React Native — users tap-pan
+  // expecting drag and get nothing. Single-finger pan with a 14pt
+  // activation distance so node taps still register (a Tap gesture wins
+  // when motion is below the threshold).
   const panGesture = Gesture.Pan()
-    .minPointers(2)
-    .maxPointers(2)
+    .activeOffsetX([-14, 14])
+    .activeOffsetY([-14, 14])
     .onUpdate((e) => {
       tx.value = sx.value + e.translationX;
       ty.value = sy.value + e.translationY;
@@ -250,11 +260,54 @@ export default function ConstellationScreen() {
     setActiveFriendId(node.id);
   }
 
+  // v0.7.0.49: deterministic star field for the dark-sky background. The
+  // screen is called "Constellation" — without literal stars the metaphor
+  // doesn't land. ~60 dots, randomized once per mount using a seeded RNG
+  // so the layout stays stable across re-renders. Different brightness +
+  // size tiers give the sky depth without being distracting.
+  const starField = useMemo(() => {
+    // Simple deterministic PRNG so the star positions don't reshuffle
+    // every render (Math.random would jitter on each gesture event).
+    let seed = 1729;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    return Array.from({ length: 60 }, (_, i) => ({
+      key: i,
+      cx: rand() * screenW,
+      cy: rand() * screenH,
+      r: rand() < 0.85 ? 0.6 + rand() * 0.6 : 1.4 + rand() * 0.8,
+      opacity: 0.18 + rand() * 0.32,
+    }));
+  }, [screenW, screenH]);
+
   return (
     <BottomSheetModalProvider>
     <View style={styles.root} testID="constellation-screen">
       {/* Dark sky background — full bleed under everything */}
       <View style={styles.sky} pointerEvents="none" />
+      {/* v0.7.0.49: literal stars behind the graph. Renders as a single
+          Svg with 60 random Circles, deterministically seeded so they
+          don't move during gestures. Sits between .sky and the graph
+          stage in z-order; pointerEvents=none keeps gestures unaffected. */}
+      <Svg
+        style={StyleSheet.absoluteFill}
+        width={screenW}
+        height={screenH}
+        pointerEvents="none"
+      >
+        {starField.map((s) => (
+          <Circle
+            key={`star-${s.key}`}
+            cx={s.cx}
+            cy={s.cy}
+            r={s.r}
+            fill="#FFFFFF"
+            opacity={s.opacity}
+          />
+        ))}
+      </Svg>
 
       {/* v0.7.0.2: custom dark-themed header. The shared <Header /> renders
           ink-on-paper which is invisible against the night sky, and it

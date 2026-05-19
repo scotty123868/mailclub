@@ -38,8 +38,15 @@ export type PostcardPreviewSheetRef = {
   close: () => void;
 };
 
-export const PostcardPreviewSheet = forwardRef<PostcardPreviewSheetRef>(
-  (_, ref) => {
+// v0.7.0.49: onDismiss surfaces close events to the parent so callers
+// can clean up coupled state (e.g. the Map screen's highlightRoute,
+// which used to stay drawn after the sheet closed).
+export type PostcardPreviewSheetProps = {
+  onDismiss?: () => void;
+};
+
+export const PostcardPreviewSheet = forwardRef<PostcardPreviewSheetRef, PostcardPreviewSheetProps>(
+  ({ onDismiss }, ref) => {
     const router = useRouter();
     const sheetRef = useRef<BottomSheet>(null);
     const { postcards, authedUserId } = useMailClub();
@@ -159,6 +166,12 @@ export const PostcardPreviewSheet = forwardRef<PostcardPreviewSheetRef>(
         backdropComponent={renderBackdrop}
         backgroundStyle={styles.bgPanel}
         handleIndicatorStyle={styles.handleIndicator}
+        onChange={(index) => {
+          // index === -1 is the closed state. Fire onDismiss exactly once
+          // per close so parents can release state coupled to the open
+          // sheet (highlightRoute on the Map screen, etc.).
+          if (index === -1) onDismiss?.();
+        }}
       >
         <BottomSheetView style={styles.body}>
           {/* Header row */}
