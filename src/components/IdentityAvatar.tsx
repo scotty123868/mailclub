@@ -1,23 +1,23 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Defs, Pattern, Rect } from "react-native-svg";
-import { IllustratedAvatar, AvatarLook } from "@/src/components/Avatar";
 import { CurrentUser, Friend } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
-
-const KNOWN_LOOKS: AvatarLook[] = ["scotty", "tatiana", "alex", "maya", "nora", "ben", "sam"];
-
-function isKnownLook(id: string): id is AvatarLook {
-  return (KNOWN_LOOKS as string[]).includes(id);
-}
+import { emojiForFriendId } from "@/src/lib/friendEmoji";
 
 /**
- * Picks the right visual for the current user: illustrated portrait for the
- * known mock identities, monogram-on-parchment for everyone else.
+ * v0.7.0.51: avatars are now PHOTO → EMOJI → MONOGRAM in that priority.
  *
- * The fallback is a paper-toned disc with serif initials and a faint inner
- * grain — meant to feel like an embossed monogram on letterhead, not a flat
- * dark mugshot. Designed to match the postal vocabulary rather than fight it.
+ *   1. Photo: round-cropped, postal-blue rim. Wins always.
+ *   2. Emoji (Friend without photo): deterministic emoji from the
+ *      friend id hashed into a curated pool. Same friend always shows
+ *      the same emoji. Replaces the old IllustratedAvatar path which
+ *      silently rendered everyone with unknown ids using the Sam
+ *      palette — every new friend looked identical (build 63 bug).
+ *   3. Monogram (CurrentUser or Friend with no id): paper-toned disc
+ *      with serif initials + paper grain. Preserves the existing
+ *      "embossed monogram on letterhead" feel for the user's own
+ *      identity before they set a photo.
  */
 export function IdentityAvatar({
   user,
@@ -59,13 +59,50 @@ export function IdentityAvatar({
     );
   }
 
-  // 2. Known illustrated identity? Show the portrait.
-  const id = "id" in user ? user.id : undefined;
-  if (id && isKnownLook(id)) {
-    return <IllustratedAvatar look={id} size={size} />;
+  // 2. Friend without photo → emoji on paper. Deterministic from the
+  // friend id, so the same person always shows the same emoji.
+  const friendId = "id" in user ? user.id : undefined;
+  if (friendId) {
+    const emoji = emojiForFriendId(friendId);
+    const emojiSize = size * (isHero ? 0.5 : 0.55);
+    return (
+      <View
+        style={[
+          styles.disc,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderWidth,
+          },
+        ]}
+        accessibilityLabel={`${user.name || "Mailroom member"} avatar`}
+      >
+        <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+          <Defs>
+            <Pattern id={`emoji-grain-${friendId}-${size}`} patternUnits="userSpaceOnUse" width={4} height={4}>
+              <Rect width={4} height={4} fill={colors.paperDark} />
+              <Circle cx={1} cy={1} r={0.4} fill="#D8C19A" opacity={0.45} />
+              <Circle cx={3} cy={3} r={0.3} fill="#D8C19A" opacity={0.3} />
+            </Pattern>
+          </Defs>
+          <Circle cx={size / 2} cy={size / 2} r={size / 2 - 1} fill={`url(#emoji-grain-${friendId}-${size})`} />
+        </Svg>
+        {isHero && (
+          <View style={[styles.heroRing, { width: size - 10, height: size - 10, borderRadius: (size - 10) / 2 }]} />
+        )}
+        <Text
+          style={[styles.emoji, { fontSize: emojiSize, lineHeight: emojiSize * 1.1 }]}
+          numberOfLines={1}
+          allowFontScaling={false}
+        >
+          {emoji}
+        </Text>
+      </View>
+    );
   }
 
-  // 3. Fallback: monogram on paper.
+  // 3. CurrentUser without photo → monogram on paper.
   const fromName = user.name
     .split(/\s+/)
     .map((p) => p[0] ?? "")
@@ -126,5 +163,9 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontFamily: fonts.serifBold,
     letterSpacing: 1.5,
+  },
+  emoji: {
+    // System font — Apple Color Emoji renders as the glyph regardless.
+    textAlign: "center",
   },
 });

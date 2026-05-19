@@ -7,29 +7,20 @@ import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
 /**
- * v0.7.0.49: real QR encoding.
+ * v0.7.0.51: QR encoding for end-to-end add-friend.
  *
- * Before: hashGrid() rendered a 21x21 pattern that LOOKED like a QR (corner
- * finder patterns + random dots) but encoded nothing. Trust-breaker.
+ * URL format: `https://app.themailroom.club/u/{userId}?n={name}&c={city}`
  *
- * v1: encoded `https://app.themailroom.club/u/{userId}`. Codex audit caught
- * that /u/* is not routed on production (returns 404). Scanning landed on a
- * Not Found page — worse than the homepage fallback we wanted.
- *
- * Now: encode `https://app.themailroom.club/?u={userId}` instead. The
- * marketing homepage at `/` returns 200 and ignores unknown query params,
- * so any scan resolves to a working Mailroom page. The `u` param is
- * forward-compatible: when /u/* shipping work lands (AASA entry + Vercel
- * landing page + Expo Router route), the homepage can read `?u=` and
- * either deep-link or render a profile-share view.
- *
- * Follow-up still wanted:
- *   1. Add `/u/*` (or `/?u=*` query-pattern match) to AASA in
- *      mailroom-site/.well-known/apple-app-site-association
- *   2. Add a profile-share landing page in mailroom-site that reads
- *      `?u={userId}` and shows "Send {first name} a postcard" + App Store
- *   3. Add `app/u/[userId].tsx` Expo Router route for installed-app deep
- *      linking once AASA covers it
+ * - Path `/u/{userId}` is covered by AASA (deployed on Vercel separately)
+ *   and routed by `app/u/[userId].tsx` in this app. So:
+ *   • App installed → iOS opens Mailroom directly at the add-friend confirm
+ *   • App not installed → Safari → marketing site can render an "Open in
+ *     Mailroom / Download" page. App Clip (build 65+) intercepts before
+ *     Safari ever loads.
+ * - Query params `?n=` and `?c=` are embedded so the confirm screen can
+ *   show the friend's name + city WITHOUT a backend lookup. Public info
+ *   anyway. Quirk to note: AASA matches the path, not query — query is
+ *   passed through to the app intact.
  */
 const PROFILE_URL_BASE = "https://app.themailroom.club";
 
@@ -50,11 +41,11 @@ export function QRCodeModal({
   userId: string;
   avatarLook?: any;
 }) {
-  // QR value is a stable URL that 200s today + carries the user id
-  // forward for future profile-share routing. Empty userId falls back
-  // to the bare homepage.
+  // v0.7.0.51: encode userId in the path + name/city in query params so
+  // the scanner's app can render the confirm screen without a backend
+  // round-trip. Empty userId falls back to the bare homepage.
   const qrValue = userId
-    ? `${PROFILE_URL_BASE}/?u=${encodeURIComponent(userId)}`
+    ? `${PROFILE_URL_BASE}/u/${encodeURIComponent(userId)}?n=${encodeURIComponent(name)}&c=${encodeURIComponent(city)}${state ? `&s=${encodeURIComponent(state)}` : ""}`
     : PROFILE_URL_BASE;
 
   return (
@@ -84,7 +75,7 @@ export function QRCodeModal({
             <View style={{ flex: 1 }}>
               <Text style={styles.identityName}>{name}</Text>
               <Text style={styles.identityCity}>{city}, {state}</Text>
-              <Text style={styles.identityCode}>themailroom.club/?u={userId.slice(0, 8)}</Text>
+              <Text style={styles.identityCode}>themailroom.club/u/{userId.slice(0, 8)}…</Text>
             </View>
           </View>
 

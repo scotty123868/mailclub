@@ -1,6 +1,6 @@
 import { Cake, ChevronRight, MapPin } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { IllustratedAvatar, AvatarLook } from "@/src/components/Avatar";
+import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { Friend } from "@/src/types/mail";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
@@ -33,7 +33,7 @@ export function RolodexCard({
       accessibilityLabel={`${friend.name}, ${friend.city}. Tap for details.`}
     >
       <View style={styles.body}>
-        <IllustratedAvatar look={friend.id as AvatarLook} size={52} />
+        <IdentityAvatar user={friend} size={52} />
         <View style={styles.copy}>
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>{friend.name}</Text>

@@ -1,6 +1,6 @@
 import { Mail, Trash2 } from "lucide-react-native";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { IllustratedAvatar, AvatarLook } from "@/src/components/Avatar";
+import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { SheetCloseButton } from "@/src/components/system/SheetCloseButton";
 import { useMailClub } from "@/src/state/MailClubContext";
@@ -55,7 +55,7 @@ export function FriendDetailSheet({
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <View style={styles.identity}>
-            <IllustratedAvatar look={friend.id as AvatarLook} size={92} />
+            <IdentityAvatar user={friend} size={92} variant="hero" />
             <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{friend.name}</Text>
             <Text style={styles.city}>{friend.city}{friend.state ? `, ${friend.state}` : ""}</Text>
             {friend.relationshipSignal ? (

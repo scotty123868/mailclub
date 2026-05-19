@@ -4,7 +4,7 @@ import Svg, { Path } from "react-native-svg";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 import { Friend } from "@/src/types/mail";
-import { IllustratedAvatar, AvatarLook } from "./Avatar";
+import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 
 function PostcardStack({ color = "#5E6472" }: { color?: string }) {
   return (
@@ -30,7 +30,7 @@ export function FriendRow({ friend }: { friend: Friend }) {
   const isBirthday = (friend.relationshipSignal ?? "").toLowerCase().includes("birthday");
   return (
     <View style={styles.row}>
-      <IllustratedAvatar look={friend.id as AvatarLook} size={48} />
+      <IdentityAvatar user={friend} size={48} />
       <View style={styles.copy}>
         <Text style={styles.name}>{friend.name}</Text>
         <View style={styles.metaRow}>

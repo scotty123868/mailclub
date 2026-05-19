@@ -489,21 +489,33 @@ export function MapPanel({
               iOS/Android; we leave the marker tracking on for v0.7.0.5
               and accept a tiny CPU cost during the 300ms drop. */}
           {!compact &&
-            renderCities.map((c, idx) => (
-              <Marker
-                key={c.id}
-                coordinate={c.coord}
-                anchor={{ x: 0.5, y: 0.5 }}
-                onPress={onCityPress ? () => onCityPress(c) : undefined}
-              >
-                <CityPin
-                  name={c.name}
-                  staggerIndex={idx}
-                  reciprocated={!!c.reciprocated}
-                  isNewest={!!c.isNewest}
-                />
-              </Marker>
-            ))}
+            renderCities.map((c, idx) => {
+              // v0.7.0.51: home gets a literal 🏠 emoji disc; cities
+              // get the red plastic map-pin. The anchor differs because
+              // the city pin's needle base is at the BOTTOM of its SVG
+              // (so anchor y=1 lands the needle tip on the coord),
+              // while the home disc is centered (anchor y=0.5).
+              const isHome = c.id === "home";
+              return (
+                <Marker
+                  key={c.id}
+                  coordinate={c.coord}
+                  anchor={isHome ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 0.92 }}
+                  onPress={onCityPress ? () => onCityPress(c) : undefined}
+                >
+                  {isHome ? (
+                    <HomePin name={c.name} staggerIndex={idx} />
+                  ) : (
+                    <CityPin
+                      name={c.name}
+                      staggerIndex={idx}
+                      reciprocated={!!c.reciprocated}
+                      isNewest={!!c.isNewest}
+                    />
+                  )}
+                </Marker>
+              );
+            })}
 
           {compact &&
             renderCities.filter((c) => c.accent).map((c) => (
@@ -533,6 +545,21 @@ export function MapPanel({
 // Custom marker views
 // ────────────────────────────────────────────────────────────────
 
+/**
+ * v0.7.0.51: deterministic tilt for each pin. Same city always tilts
+ * the same way, so the map reads as hand-placed rather than stamped.
+ * Range -8° to +8° — enough variation to look organic, small enough
+ * that labels remain readable.
+ */
+function tiltDegFromName(name: string): number {
+  let h = 5381;
+  for (let i = 0; i < name.length; i++) {
+    h = ((h << 5) + h + name.charCodeAt(i)) & 0xffffffff;
+  }
+  // Map hash to -8..+8 degrees
+  return ((Math.abs(h) % 161) - 80) / 10;
+}
+
 function CityPin({
   name,
   staggerIndex = 0,
@@ -541,23 +568,187 @@ function CityPin({
 }: {
   name: string;
   // Legacy props (kept on the type for backward compat; not used by
-  // the Simplified Atlas). Pending/received-only/accent rendering is
-  // gone — all pins look the same except for the gold reciprocation
-  // ring and the selection halo.
+  // the Simplified Atlas).
   accent?: boolean;
   pending?: boolean;
   staggerIndex?: number;
   sendCount?: number;
   reciprocated?: boolean;
-  /** v0.7.0.50: repurposed as "selected" — draws a small dashed ink
-   *  halo around the pin so the user can see which area they tapped. */
+  /** v0.7.0.50: repurposed as "selected" — drops the tilt + brightens
+   *  the head + grows the shadow for emphasis. */
   isNewest?: boolean;
   receivedOnly?: boolean;
 }) {
   // v0.7.0.5 D.2: drop-in entrance animation. Each pin springs in with
   // a small downward offset → settles, delayed by staggerIndex * 60ms.
-  // The Simplified Atlas keeps this — entrance motion is a one-time
-  // event, not the always-on pulse the previous draft had.
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(-8);
+  const scale = useSharedValue(0.7);
+  const reducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      translateY.value = 0;
+      scale.value = 1;
+      return;
+    }
+    const delay = staggerIndex * 60;
+    opacity.value = withDelay(delay, withTiming(1, { duration: 240 }));
+    translateY.value = withDelay(
+      delay,
+      withTiming(0, { duration: 300, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
+    );
+    scale.value = withDelay(
+      delay,
+      withTiming(1, { duration: 300, easing: Easing.bezier(0.34, 1.56, 0.64, 1) }),
+    );
+  }, [opacity, translateY, scale, staggerIndex, reducedMotion]);
+
+  // v0.7.0.51: deterministic tilt per city. Selected pin straightens
+  // up (tilt = 0) for emphasis. Tilt is applied via the marker's transform.
+  const tiltDeg = isNewest ? 0 : tiltDegFromName(name);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateY: translateY.value },
+      { scale: scale.value },
+      { rotate: `${tiltDeg}deg` },
+    ],
+  }));
+
+  // v0.7.0.51 Physical map pin: bright red plastic head + visible
+  // silver needle + cast shadow. Matches the corkboard wall-map vibe
+  // (the user's reference photo).
+  //
+  // SVG layout (24 wide × 32 tall viewBox):
+  //   [12, 30] shadow ellipse (sits on the map)
+  //   [12, 26-12] needle shaft (silver, vertical)
+  //   [12, 11] head circle r=8 (red plastic w/ radial gradient)
+  //   [9.5, 8] specular highlight (white ellipse top-left)
+  //   [8.5, 7] specular dot (small bright white)
+  const HEAD_SVG_W = 28;
+  const HEAD_SVG_H = 36;
+  const isSelected = isNewest;
+
+  return (
+    <Animated.View style={[pinStyles.wrap, animStyle]}>
+      {/* Pin SVG. The Svg has its own "stage" so reciprocation rings
+          can sit at the base where the needle meets the map. */}
+      <View style={{ width: HEAD_SVG_W, height: HEAD_SVG_H, alignItems: "center", justifyContent: "flex-end" }}>
+        <Svg width={HEAD_SVG_W} height={HEAD_SVG_H} viewBox={`0 0 ${HEAD_SVG_W} ${HEAD_SVG_H}`}>
+          <Defs>
+            <RadialGradient id={`pinHead-${name}`} cx="32%" cy="28%">
+              <Stop offset="0%" stopColor="#FF8B7E" />
+              <Stop offset="22%" stopColor="#E5402F" />
+              <Stop offset="70%" stopColor="#B5170A" />
+              <Stop offset="100%" stopColor="#5A0A04" />
+            </RadialGradient>
+          </Defs>
+          {/* Shadow under the pin head (offset slightly down-right, suggests light from upper-left) */}
+          <Ellipse
+            cx={HEAD_SVG_W / 2 + 1}
+            cy={HEAD_SVG_H - 2}
+            rx={isSelected ? 10 : 8}
+            ry={isSelected ? 3 : 2.4}
+            fill="#000"
+            opacity={0.32}
+          />
+          {/* Reciprocation ring — gold dashed ellipse at the base
+              (looks etched into the map where the pin was pressed in) */}
+          {reciprocated ? (
+            <Ellipse
+              cx={HEAD_SVG_W / 2}
+              cy={HEAD_SVG_H - 4}
+              rx={11}
+              ry={3.2}
+              fill="none"
+              stroke={colors.gold}
+              strokeWidth={1.6}
+              strokeDasharray="3 2"
+            />
+          ) : null}
+          {/* Selection halo — dashed ink ring around the base, shown
+              when this pin's area is the selected one */}
+          {isSelected ? (
+            <Ellipse
+              cx={HEAD_SVG_W / 2}
+              cy={HEAD_SVG_H - 4}
+              rx={13}
+              ry={3.6}
+              fill="none"
+              stroke="#2B1A08"
+              strokeWidth={1.2}
+              strokeDasharray="2 2"
+            />
+          ) : null}
+          {/* Silver needle going from head down into the map */}
+          <Line
+            x1={HEAD_SVG_W / 2}
+            y1={HEAD_SVG_H - 4}
+            x2={HEAD_SVG_W / 2}
+            y2={HEAD_SVG_H / 2 + 1}
+            stroke="#7A7A7A"
+            strokeWidth={1.4}
+          />
+          <Line
+            x1={HEAD_SVG_W / 2}
+            y1={HEAD_SVG_H - 4}
+            x2={HEAD_SVG_W / 2}
+            y2={HEAD_SVG_H / 2 + 1}
+            stroke="#C8C8C8"
+            strokeWidth={0.5}
+          />
+          {/* Red plastic head */}
+          <Circle
+            cx={HEAD_SVG_W / 2}
+            cy={HEAD_SVG_H / 2 - 4}
+            r={isSelected ? 10 : 9}
+            fill={`url(#pinHead-${name})`}
+            stroke="#5A0A04"
+            strokeWidth={0.5}
+          />
+          {/* Specular highlight (suggests glossy plastic) */}
+          <Ellipse
+            cx={HEAD_SVG_W / 2 - 3}
+            cy={HEAD_SVG_H / 2 - 6}
+            rx={2.8}
+            ry={1.8}
+            fill="#FFFFFF"
+            opacity={0.72}
+          />
+          <Circle
+            cx={HEAD_SVG_W / 2 - 4}
+            cy={HEAD_SVG_H / 2 - 7}
+            r={0.9}
+            fill="#FFFFFF"
+            opacity={0.95}
+          />
+        </Svg>
+      </View>
+      <View style={pinStyles.labelWrap}>
+        <Text style={pinStyles.label} numberOfLines={1}>
+          {name}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+/**
+ * v0.7.0.51: home pin uses the actual house emoji 🏠 on a paper-cream
+ * disc — instantly recognizable as "you are here" without being a
+ * differently-colored version of the city pin. The user's request: make
+ * home an actual home emoji.
+ */
+function HomePin({
+  name,
+  staggerIndex = 0,
+}: {
+  name: string;
+  staggerIndex?: number;
+}) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(-8);
   const scale = useSharedValue(0.7);
@@ -590,47 +781,32 @@ function CityPin({
     ],
   }));
 
-  // v0.7.0.50 Simplified Atlas: constant pin size. No badge counts,
-  // no scale-by-send-count — keeps the map calm. The map differentiates
-  // areas via line presence + reciprocation ring + selection halo only.
-  const DOT_PX = 16;
-  const RING_PX = DOT_PX + 10; // reciprocation ring sits 5px outside the dot
-  const SELECTION_PX = DOT_PX + 8; // selection halo sits 4px outside the dot
+  const DISC_PX = 28;
 
   return (
     <Animated.View style={[pinStyles.wrap, animStyle]}>
-      {/* Dot-sized container so absolute children (ring + halo) center
-          on the dot, not on the (wider) label wrap. */}
-      <View style={{ width: DOT_PX, height: DOT_PX, alignItems: "center", justifyContent: "center" }}>
-        {reciprocated ? (
-          <View
-            style={[
-              pinStyles.recipRing,
-              {
-                width: RING_PX,
-                height: RING_PX,
-                borderRadius: RING_PX / 2,
-                top: -5,
-                left: -5,
-              },
-            ]}
-          />
-        ) : null}
-        {isNewest ? (
-          <View
-            style={[
-              pinStyles.selectionHalo,
-              {
-                width: SELECTION_PX,
-                height: SELECTION_PX,
-                borderRadius: SELECTION_PX / 2,
-                top: -4,
-                left: -4,
-              },
-            ]}
-          />
-        ) : null}
-        <View style={pinStyles.dot} />
+      <View
+        style={{
+          width: DISC_PX,
+          height: DISC_PX,
+          borderRadius: DISC_PX / 2,
+          backgroundColor: colors.paper,
+          borderWidth: 1.5,
+          borderColor: colors.ink,
+          alignItems: "center",
+          justifyContent: "center",
+          shadowColor: "#2B1A08",
+          shadowOffset: { width: 0, height: 1.5 },
+          shadowOpacity: 0.35,
+          shadowRadius: 2.5,
+        }}
+      >
+        <Text
+          style={{ fontSize: DISC_PX * 0.6, lineHeight: DISC_PX * 0.68 }}
+          allowFontScaling={false}
+        >
+          🏠
+        </Text>
       </View>
       <View style={pinStyles.labelWrap}>
         <Text style={pinStyles.label} numberOfLines={1}>
