@@ -103,7 +103,13 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
         return friend?.name ?? postcard.fromCity ?? "Someone";
       }
       // Outbound — original behavior.
-      if (postcard.toFriendId === "void") return "Pen pal (anonymous)";
+      // v0.7.0.49: differentiate "matching pending" from "matched + shipped".
+      // A void card with no toCity is still in the matching queue (no recipient
+      // yet); after matching the server populates toCity with the recipient's
+      // location. Honest label so the user knows what's happening.
+      if (postcard.toFriendId === "void") {
+        return postcard.toCity ? "Pen pal (anonymous)" : "Finding a pen pal…";
+      }
       const friend = friends.find((f) => f.id === postcard.toFriendId);
       return friend?.name ?? postcard.toCity ?? "Recipient";
     }, [postcard, isPending, isInbound, friends]);
@@ -295,6 +301,11 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
                   ? "Send this link to the recipient. They'll add their mailing address, and we'll drop the card in the post."
                   : "This is the link you sent. Share again if they lost it."}
               </Text>
+              {/* v0.7.0.49: expiry hint on unclaimed cards. Claims expire
+                  30 days after creation; sender had no warning before. */}
+              {isPending && postcard.claimExpiresAt ? (
+                <ExpiryHint expiresAt={postcard.claimExpiresAt} />
+              ) : null}
               <View style={styles.urlBox}>
                 <Text style={styles.urlText} numberOfLines={2} ellipsizeMode="middle">
                   {postcard.claimUrl}
@@ -358,6 +369,57 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
 );
 
 PostcardDetailSheet.displayName = "PostcardDetailSheet";
+
+/**
+ * v0.7.0.49: visible expiry hint on unclaimed Share-Link cards. Three
+ * states: plenty (>7 days), soon (1-7 days), expired (≤0). The
+ * yellow/red tone matches the existing postal palette.
+ */
+function ExpiryHint({ expiresAt }: { expiresAt: string }) {
+  const expiresMs = new Date(expiresAt).getTime();
+  const nowMs = Date.now();
+  const daysLeft = Math.ceil((expiresMs - nowMs) / (1000 * 60 * 60 * 24));
+  if (Number.isNaN(daysLeft)) return null;
+
+  let label: string;
+  let tone: "plenty" | "soon" | "expired";
+  if (daysLeft <= 0) {
+    label = "Link expired — reshare or recreate the card";
+    tone = "expired";
+  } else if (daysLeft <= 7) {
+    label = `Link expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"} — share soon`;
+    tone = "soon";
+  } else {
+    label = `Link expires in ${daysLeft} days`;
+    tone = "plenty";
+  }
+  return (
+    <View style={[expiryStyles.chip, expiryStyles[`${tone}Chip`]]}>
+      <Text style={[expiryStyles.text, expiryStyles[`${tone}Text`]]}>{label}</Text>
+    </View>
+  );
+}
+
+const expiryStyles = StyleSheet.create({
+  chip: {
+    alignSelf: "flex-start",
+    borderRadius: 8,
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  text: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  plentyChip: { backgroundColor: "rgba(155,175,155,0.18)" },
+  plentyText: { color: "#3F5239" },
+  soonChip: { backgroundColor: "rgba(217,180,110,0.24)" },
+  soonText: { color: "#76561F" },
+  expiredChip: { backgroundColor: "rgba(184,72,58,0.18)" },
+  expiredText: { color: "#7B2D24" },
+});
 
 function statusKicker(status: Postcard["status"]): string {
   switch (status) {

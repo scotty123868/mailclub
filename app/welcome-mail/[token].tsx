@@ -207,9 +207,14 @@ export default function WelcomeMailScreen() {
             body: "The link might be mistyped, or this card was never registered with Mailroom. Double-check the URL on your card.",
           };
         case "ALREADY_SCANNED_BY_OTHER":
+          // v0.7.0.49: copy improved per audit. The previous "Already claimed.
+          // Someone else already scanned this card" copy felt accusatory and
+          // gave no recovery path. New copy acknowledges the edge case
+          // (different device, lost-and-found card, etc.) and tells the
+          // recipient what to do.
           return {
-            title: "Already claimed.",
-            body: "Someone else already scanned this card. Each Mailroom card can only be claimed by one recipient.",
+            title: "Already scanned.",
+            body: "This card was already scanned on another device. If that wasn't you, ask the sender to mail you a new one — they'll know to send a fresh QR.",
           };
         case "WRONG_FLAVOR":
           // v0.7.0.49: token is still in address-collection mode — the

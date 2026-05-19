@@ -372,10 +372,18 @@ function postcardFromRow(row: PostcardRow): Postcard {
   // /claim Edge Function — no server-side changes needed for this
   // switch. Just the link destination.
   let claimUrl: string | undefined;
+  let claimExpiresAt: string | undefined;
   const claimRow = (row as any).postcard_claims;
   const claimToken: string | undefined = Array.isArray(claimRow)
     ? claimRow[0]?.claim_token
     : claimRow?.claim_token;
+  // v0.7.0.49: expose expires_at on the client Postcard so the journal
+  // can show an "expires in N days" indicator on unclaimed cards. The
+  // claim_token comes through the existing LEFT JOIN; we just need the
+  // companion column.
+  const claimExpiresRaw: string | undefined = Array.isArray(claimRow)
+    ? claimRow[0]?.expires_at
+    : claimRow?.expires_at;
   if (claimToken) {
     // v0.7.0.32: switched from mailroomclub.vercel.app → app.themailroom.club
     // when build 55 migrated to the user's owned domain. Universal Links
@@ -383,6 +391,7 @@ function postcardFromRow(row: PostcardRow): Postcard {
     // legacy domain meant share URLs never triggered the App Clip / app
     // intercept. Codex P1.1.
     claimUrl = `https://app.themailroom.club/claim?t=${claimToken}`;
+    claimExpiresAt = claimExpiresRaw ?? undefined;
   }
   return {
     id: row.id,
@@ -403,6 +412,7 @@ function postcardFromRow(row: PostcardRow): Postcard {
     customTone: row.custom_tone ?? undefined,
     referencePhotoUris: row.reference_photo_uris,
     claimUrl,
+    claimExpiresAt,
     lobId: (row as any).lob_id ?? null,
   };
 }
@@ -440,7 +450,7 @@ export async function fetchPostcards(): Promise<Postcard[]> {
   // surface "Share again" on past pending cards.
   const { data, error } = await supabase
     .from("postcards")
-    .select("*, postcard_claims(claim_token)")
+    .select("*, postcard_claims(claim_token, expires_at)")
     .order("sent_at", { ascending: false });
   if (error) throw error;
   const cards = (data as PostcardRow[]).map(postcardFromRow);

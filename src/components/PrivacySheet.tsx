@@ -1,6 +1,7 @@
-import { Check, Lock, X } from "lucide-react-native";
+import { Check, Lock } from "lucide-react-native";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { PrivacyPrefs, useMailClub } from "@/src/state/MailClubContext";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
@@ -31,21 +32,13 @@ export function PrivacySheet({ visible, onClose }: { visible: boolean; onClose: 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.root}>
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Privacy</Text>
-            <Text style={styles.subtitle}>Who can send mail to you.</Text>
-          </View>
-          <Pressable
-            onPress={onClose}
-            style={styles.closeBtn}
-            testID="privacy-close"
-            accessibilityRole="button"
-            accessibilityLabel="Close privacy"
-          >
-            <X color={colors.ink} size={22} strokeWidth={1.5} />
-          </Pressable>
-        </View>
+        <SheetHeader
+          title="Privacy"
+          subtitle="Who can send mail to you."
+          onClose={onClose}
+          closeAccessibilityLabel="Close privacy"
+          closeTestID="privacy-close"
+        />
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <View style={styles.banner}>
@@ -82,10 +75,7 @@ export function PrivacySheet({ visible, onClose }: { visible: boolean; onClose: 
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.paper, flex: 1, paddingHorizontal: 20, paddingTop: 18 },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
   scroll: { flex: 1, marginTop: 14 },
   scrollContent: { gap: 10, paddingBottom: 30 },
   banner: { alignItems: "flex-start", backgroundColor: "rgba(60,110,143,0.06)", borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 10, padding: 12 },

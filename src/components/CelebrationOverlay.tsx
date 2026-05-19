@@ -158,13 +158,17 @@ function CelebrationContent({
   }));
 
   const recipientLabel = recipientName?.trim() || (kind === "self" ? "you" : "your friend");
+  // v0.7.0.49: penpal copy was misleading — said "Sent into the void.
+  // A Mailroom recipient picks it up." Implied the card was already mailed.
+  // Today the postcard inserts with to_profile_id=null and waits in a
+  // matching queue. Honest copy tells the user we're searching.
   const title =
     kind === "link"
       ? "Link sent."
       : kind === "self"
         ? "See you in the mailbox."
         : kind === "penpal"
-          ? "Sent into the void."
+          ? "Finding you a pen pal..."
           : "Your card is on its way.";
   const subtitle =
     kind === "link"
@@ -172,7 +176,7 @@ function CelebrationContent({
       : kind === "self"
         ? "USPS time, 4-7 days. We'll drop a pin on your map when it lands."
         : kind === "penpal"
-          ? "A Mailroom recipient picks it up. If they reply, you'll see it in your inbox."
+          ? "We'll match your card with another Mailroom user looking for a stranger letter. You'll see it in your journal once it ships, and on your map when they reply."
           : `${recipientLabel} gets it in 4-7 days, USPS time. We'll drop a pin on your map when it lands.`;
   const buttonLabel = "Open Mailroom →";
 

@@ -1,6 +1,7 @@
-import { Bell, Cake, Mail, Sparkles, X } from "lucide-react-native";
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Bell, Cake, Mail, Sparkles } from "lucide-react-native";
+import { Modal, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { NotificationPrefs, useMailClub } from "@/src/state/MailClubContext";
+import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
 
@@ -16,21 +17,13 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.root}>
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Notifications</Text>
-            <Text style={styles.subtitle}>Choose what's worth a buzz.</Text>
-          </View>
-          <Pressable
-            onPress={onClose}
-            style={styles.closeBtn}
-            testID="notifications-close"
-            accessibilityRole="button"
-            accessibilityLabel="Close notifications"
-          >
-            <X color={colors.ink} size={22} strokeWidth={1.5} />
-          </Pressable>
-        </View>
+        <SheetHeader
+          title="Notifications"
+          subtitle="Choose what's worth a buzz."
+          onClose={onClose}
+          closeAccessibilityLabel="Close notifications"
+          closeTestID="notifications-close"
+        />
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           {ROWS.map((row) => {
@@ -71,10 +64,7 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.paper, flex: 1, paddingHorizontal: 20, paddingTop: 18 },
-  header: { alignItems: "flex-start", flexDirection: "row", gap: 12 },
-  title: { color: colors.ink, fontFamily: fonts.serifSemi, fontSize: 28 },
-  subtitle: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 4 },
-  closeBtn: { backgroundColor: "rgba(155,175,155,0.2)", borderRadius: 18, padding: 8 },
+  // v0.7.0.49: header/title/subtitle/closeBtn extracted to SheetHeader.
   scroll: { flex: 1, marginTop: 14 },
   scrollContent: { gap: 10, paddingBottom: 30 },
   row: { alignItems: "center", backgroundColor: colors.white, borderColor: colors.line, borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 12, padding: 14 },

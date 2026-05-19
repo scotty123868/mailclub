@@ -86,6 +86,13 @@ export type Postcard = {
    */
   claimUrl?: string;
   /**
+   * v0.7.0.49: claim link expiry timestamp from postcard_claims.expires_at.
+   * 30 days from claim creation. Used by PostcardDetailSheet to surface an
+   * "expires in N days" indicator on unclaimed cards so the sender knows
+   * to reshare before the recipient loses access.
+   */
+  claimExpiresAt?: string;
+  /**
    * Lob postcard id, populated only after the Lob handoff succeeds.
    * Null/undefined while the card is in flight to Lob OR if the handoff
    * failed silently (the orphan state we built `retry-orphan` to fix).
