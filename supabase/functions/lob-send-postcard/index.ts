@@ -172,8 +172,14 @@ function buildBackHtml(opts: {
   const qrSrc = qrUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&ecc=H&margin=0&data=${encodeURIComponent(qrUrl)}`
     : "";
-  // Display URL under the QR: short form using the /r/:token Vercel
-  // rewrite which resolves to /welcome-mail/:token.
+  // Display URL under the QR — short form via Vercel /r/* rewrite which
+  // 200s to the welcome-mail page. The QR encodes the full /welcome-mail/
+  // path (in current AASA) so iOS Universal Link fires on scan; the
+  // displayed /r/ URL is the human-readable fallback. /r/* will also
+  // fire Universal Link once Vercel ships the updated AASA file from
+  // `vercel-staging/.well-known/apple-app-site-association` (the file is
+  // committed; the Vercel project just hasn't redeployed since 7:40 AM
+  // ET 2026-05-18). Tracked in TODOS.md.
   const displayUrl = (() => {
     if (!qrUrl) return "";
     const m = qrUrl.match(/\/(?:welcome-mail|r)\/([^/?#]+)/);
