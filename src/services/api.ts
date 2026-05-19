@@ -407,6 +407,33 @@ function postcardFromRow(row: PostcardRow): Postcard {
   };
 }
 
+// v0.7.0.49: in-memory cache for signed photo URLs. The journal feed
+// refreshes on every focus, on every send, and on every pull-to-refresh.
+// Pre-cache: 50 postcards = 50 round-trips to Supabase Storage per fetch.
+// Post-cache: signed URLs live 24h server-side, we keep them client-side
+// for 23h (1h safety margin before the URL itself expires) keyed by the
+// storage path. Subsequent fetches skip ALL the storage calls.
+//
+// Cache is module-scoped and cleared on cold start. RN reloads keep it
+// warm across screen transitions, which is the hot path.
+const SIGNED_URL_EXPIRY = 60 * 60 * 24; // 24h, what we ask Supabase for
+const SIGNED_URL_CACHE_TTL_MS = (60 * 60 * 23) * 1000; // 23h client cache
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
+
+function getCachedSignedUrl(path: string): string | undefined {
+  const hit = signedUrlCache.get(path);
+  if (!hit) return undefined;
+  if (Date.now() > hit.expiresAt) {
+    signedUrlCache.delete(path);
+    return undefined;
+  }
+  return hit.url;
+}
+
+function setCachedSignedUrl(path: string, url: string): void {
+  signedUrlCache.set(path, { url, expiresAt: Date.now() + SIGNED_URL_CACHE_TTL_MS });
+}
+
 export async function fetchPostcards(): Promise<Postcard[]> {
   // v0.7.0.7: LEFT JOIN postcard_claims so each send-link card carries
   // its claim_token (→ shareable URL) into the client. Lets the gallery
@@ -428,27 +455,47 @@ export async function fetchPostcards(): Promise<Postcard[]> {
   //   4. Storage object path "<user>/<ts>-<name>.jpg" — uploaded to the
   //      PRIVATE postcard-photos bucket. NEEDS a signed URL to render.
   //
-  // The journal tile renders blank for case (4) because `<Image source={{
-  // uri: "<user>/<ts>-photo.jpg" }}>` can't load a relative path. The
-  // audit on build 17 showed every welcome-flow send is hitting (4).
-  // Resolve in parallel here so the gallery has working URLs.
-  const SIGNED_URL_EXPIRY = 60 * 60 * 24; // 24h
+  // v0.7.0.49 PERF FIX: was Promise.all(map(createSignedUrl)) — one HTTP
+  // call per postcard. 50 cards = 50 round-trips on every journal refresh.
+  // Switched to a single createSignedUrls() batch + client-side 23h cache
+  // (URLs are valid for 24h server-side; we expire ourselves 1h early so
+  // the user never sees a freshly-stale URL).
   const needsSigning = (uri?: string) =>
     !!uri && !uri.startsWith("http") && !uri.startsWith("file://");
-  await Promise.all(
-    cards.map(async (card) => {
-      if (!needsSigning(card.photoUri)) return;
-      try {
-        const { data: signed } = await supabase.storage
-          .from("postcard-photos")
-          .createSignedUrl(card.photoUri!, SIGNED_URL_EXPIRY);
-        if (signed?.signedUrl) card.photoUri = signed.signedUrl;
-      } catch {
-        // Couldn't sign — leave the raw path so the Image at least
-        // tries (will silently fail, but not crash).
+  // Pass 1: fill from cache. Collect remaining paths.
+  const toSign: string[] = [];
+  for (const card of cards) {
+    if (!needsSigning(card.photoUri)) continue;
+    const cached = getCachedSignedUrl(card.photoUri!);
+    if (cached) {
+      card.photoUri = cached;
+    } else {
+      toSign.push(card.photoUri!);
+    }
+  }
+  // Pass 2: batch-sign whatever wasn't cached. Single round-trip.
+  if (toSign.length > 0) {
+    try {
+      const { data: signed } = await supabase.storage
+        .from("postcard-photos")
+        .createSignedUrls(toSign, SIGNED_URL_EXPIRY);
+      const byPath = new Map<string, string>();
+      for (const entry of signed ?? []) {
+        if (entry.path && entry.signedUrl && !entry.error) {
+          byPath.set(entry.path, entry.signedUrl);
+          setCachedSignedUrl(entry.path, entry.signedUrl);
+        }
       }
-    }),
-  );
+      for (const card of cards) {
+        if (!needsSigning(card.photoUri)) continue;
+        const u = byPath.get(card.photoUri!);
+        if (u) card.photoUri = u;
+      }
+    } catch {
+      // Batch sign failed — leave raw paths so Image tries (will silently
+      // fail, but not crash). Better than blocking the entire journal feed.
+    }
+  }
 
   return cards;
 }
