@@ -40,6 +40,10 @@ export default function WelcomeMailScreen() {
   const [scanning, setScanning] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  // v0.7.0.49: explicit failure flag so the receiver UI can show a small
+  // hint ("photo unavailable") instead of silently rendering a card with
+  // no image. Before, the photo just didn't appear and looked like a bug.
+  const [photoFailed, setPhotoFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Step 1: public lookup. Runs on every mount, no auth needed.
@@ -64,7 +68,16 @@ export default function WelcomeMailScreen() {
         }
       } catch (e: any) {
         if (cancelled) return;
-        setError(e?.message ?? "Couldn't look up this card.");
+        // v0.7.0.49: distinguish network failures from server errors so the
+        // recipient knows whether to retry or contact the sender. Before
+        // this every error rendered as the same generic "Hmm." message.
+        const raw = e?.message ?? "";
+        const isNetwork = /network|fetch|timeout|abort|offline/i.test(raw);
+        setError(
+          isNetwork
+            ? "Couldn't reach Mailroom. Check your connection and try again."
+            : raw || "Something went wrong on our end. Try again in a moment.",
+        );
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -77,14 +90,26 @@ export default function WelcomeMailScreen() {
   // Phase 3.5: mint a signed URL for the postcard photo so the receiver
   // can see the actual image (not just the message preview). The photo
   // path on lookup is the Supabase Storage key; the bucket isn't public.
+  // v0.7.0.49: track photo failures explicitly. Before, a failed sign
+  // silently set photoUrl=null and the recipient saw a card with no
+  // photo and no indication anything went wrong. Now we surface a small
+  // hint and the message preview still renders so the card isn't broken.
   useEffect(() => {
     if (!lookup?.ok || !lookup.photo_path) return;
     let cancelled = false;
+    setPhotoFailed(false);
     getSignedPhotoUrl(lookup.photo_path)
       .then((url) => {
-        if (!cancelled) setPhotoUrl(url ?? null);
+        if (cancelled) return;
+        if (url) {
+          setPhotoUrl(url);
+        } else {
+          setPhotoFailed(true);
+        }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setPhotoFailed(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -163,16 +188,37 @@ export default function WelcomeMailScreen() {
   }
 
   if (!lookup.ok) {
-    const msg =
-      lookup.reason === "EXPIRED"
-        ? "This card's link has expired. The sender can send you another one."
-        : lookup.reason === "NOT_FOUND"
-          ? "This card link couldn't be found."
-          : "Couldn't load this card.";
+    // v0.7.0.49: every reason gets its own specific message so the
+    // recipient knows whether to retry, contact the sender, or wait.
+    // Previously all three reasons collapsed to vague "Hmm." copy.
+    const { title, body } = (() => {
+      switch (lookup.reason) {
+        case "EXPIRED":
+          return {
+            title: "Link expired.",
+            body: "This card's QR was only valid for 30 days. The sender can mail you a new one.",
+          };
+        case "NOT_FOUND":
+          return {
+            title: "We don't have this card.",
+            body: "The link might be mistyped, or this card was never registered with Mailroom. Double-check the URL on your card.",
+          };
+        case "ALREADY_SCANNED_BY_OTHER":
+          return {
+            title: "Already claimed.",
+            body: "Someone else already scanned this card. Each Mailroom card can only be claimed by one recipient.",
+          };
+        default:
+          return {
+            title: "Hmm.",
+            body: "Something went wrong loading this card. Try again in a moment, or ask the sender to resend.",
+          };
+      }
+    })();
     return (
       <BackdropShell>
-        <Text style={styles.errorTitle}>Hmm.</Text>
-        <Text style={styles.errorBody}>{msg}</Text>
+        <Text style={styles.errorTitle}>{title}</Text>
+        <Text style={styles.errorBody}>{body}</Text>
         <Pressable onPress={dismiss} style={styles.dismissBtn}>
           <Text style={styles.dismissBtnText}>OK</Text>
         </Pressable>
@@ -209,6 +255,14 @@ export default function WelcomeMailScreen() {
               {photoUrl ? (
                 <View style={styles.cardPhotoWrap}>
                   <Image source={{ uri: photoUrl }} style={styles.cardPhoto} resizeMode="cover" />
+                </View>
+              ) : photoFailed && lookup.photo_path ? (
+                // v0.7.0.49: explicit photo-failure hint. Card still renders
+                // (message preview below stays). The "Photo unavailable"
+                // chip tells the recipient this is a load issue, not a
+                // missing-photo bug or a stylistic choice by the sender.
+                <View style={[styles.cardPhotoWrap, styles.cardPhotoMissing]}>
+                  <Text style={styles.cardPhotoMissingText}>Photo unavailable — tap your printed card to see it.</Text>
                 </View>
               ) : null}
               <View style={styles.cardFromLine}>
@@ -265,13 +319,20 @@ export default function WelcomeMailScreen() {
                 />
               ) : null}
 
+              {/* v0.7.0.49: button label was "Or sign up with email →" which
+                  implied a dedicated sign-up page. We don't have one — this
+                  routes to /my-card where WelcomeGate auto-mounts the
+                  WelcomeSheet (handles email sign-up/sign-in + city/state).
+                  pendingInvite is already stashed in context so the
+                  reciprocation flow resumes after sign-up completes.
+                  Relabeled to match the actual destination. */}
               <Pressable
                 onPress={() => router.replace("/")}
                 style={[styles.secondaryBtn, { marginTop: 4 }]}
                 accessibilityRole="button"
-                accessibilityLabel="Sign up with email instead"
+                accessibilityLabel="Continue with email to join Mailroom"
               >
-                <Text style={styles.secondaryBtnText}>Or sign up with email →</Text>
+                <Text style={styles.secondaryBtnText}>Continue with email →</Text>
               </Pressable>
             </View>
           ) : scanning ? (
@@ -361,6 +422,24 @@ const styles = StyleSheet.create({
   card: { padding: 22 },
   cardPhotoWrap: { aspectRatio: 3 / 2, borderRadius: 4, marginBottom: 14, overflow: "hidden" },
   cardPhoto: { height: "100%", width: "100%" },
+  // v0.7.0.49: explicit "photo unavailable" placeholder when the signed URL
+  // mint failed. Same aspect ratio as a real photo so the card layout
+  // doesn't shift between success and failure states.
+  cardPhotoMissing: {
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.04)",
+    borderColor: "rgba(0,0,0,0.1)",
+    borderStyle: "dashed",
+    borderWidth: 1,
+    justifyContent: "center",
+    padding: 16,
+  },
+  cardPhotoMissingText: {
+    color: colors.mutedInk,
+    fontFamily: fonts.serifItalic,
+    fontSize: 12,
+    textAlign: "center",
+  },
   cardFromLine: { marginBottom: 12 },
   cardFromLabel: { color: colors.mutedInk, fontFamily: fonts.sansBold, fontSize: 9, letterSpacing: 1.8 },
   cardFromName: { color: colors.ink, fontFamily: fonts.serifItalic, fontSize: 17, marginTop: 3 },

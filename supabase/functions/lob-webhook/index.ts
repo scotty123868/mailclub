@@ -113,10 +113,18 @@ async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
  *  Lob webhooks or some Debugger configs). */
 async function verifySignature(rawBody: string, headerSig: string): Promise<boolean> {
   if (LOB_WEBHOOK_SECRETS.length === 0) {
-    // Fail open ONLY if no secret is configured — for local dev. Logs
-    // a warning so this never happens silently in prod.
-    console.warn("[lob-webhook] no LOB_WEBHOOK_SECRET* env vars set; skipping signature check");
-    return true;
+    // v0.7.0.49: fail-closed in prod by default. Previously this returned
+    // true when no secret was configured — convenient for local dev but a
+    // real security hole if a prod deploy ever dropped LOB_WEBHOOK_SECRET
+    // (anyone could POST forged status updates and mutate postcard rows).
+    // Now you have to set LOB_WEBHOOK_SKIP_VERIFY=true explicitly to skip,
+    // which we only do on the local Supabase emulator.
+    if (Deno.env.get("LOB_WEBHOOK_SKIP_VERIFY") === "true") {
+      console.warn("[lob-webhook] LOB_WEBHOOK_SKIP_VERIFY=true — signature check bypassed (dev only)");
+      return true;
+    }
+    console.error("[lob-webhook] no LOB_WEBHOOK_SECRET* env vars set in prod — rejecting request");
+    return false;
   }
   if (!headerSig) return false;
 
@@ -243,8 +251,13 @@ serve(async (req) => {
       lob_status: eventType,
       // expected_delivery_date arrives on some Lob events as
       // body.expected_delivery_date — propagate when present.
+      // v0.7.0.49: column name was wrong (expected_delivery_date) and
+      // schema has lob_expected_delivery (see 2026051205_lob_integration.sql).
+      // Every Lob event with that field was silently failing the row update,
+      // so journal-feed delivery dates were never getting populated from
+      // webhook callbacks. Fixed.
       ...(event?.body?.expected_delivery_date
-        ? { expected_delivery_date: event.body.expected_delivery_date }
+        ? { lob_expected_delivery: event.body.expected_delivery_date }
         : {}),
     })
     .eq("lob_id", lobId)

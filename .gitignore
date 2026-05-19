@@ -44,3 +44,4 @@ expo-start.log
 
 # supabase CLI transient cache (project linkage, version pins)
 supabase/.temp/
+build/

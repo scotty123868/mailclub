@@ -4,7 +4,9 @@
       {
         "appIDs": ["824QVPJ3B5.com.mailrooms.app"],
         "components": [
-          { "/": "/welcome-mail/*" }
+          { "/": "/welcome-mail/*" },
+          { "/": "/r/*" },
+          { "/": "/claim", "?": { "t": "*" } }
         ]
       }
     ]

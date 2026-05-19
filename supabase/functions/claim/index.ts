@@ -130,6 +130,14 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
     }, 500);
   }
   const lobFnUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/lob-send-postcard`;
+  // v0.7.0.49: lob-send-postcard ALWAYS returns HTTP 200 (see json()
+  // helper there — outcome lives in body.ok). Previously we only checked
+  // resp.ok which was always true, so Lob rejections were completely
+  // invisible — recipient saw "On its way!" while the postcard rotted as
+  // an orphan (status=sent, lob_id=null). Now we parse the body and
+  // persist any error to postcards.lob_error so the retry-orphan button
+  // can see + act on it. Still fire-and-forget via waitUntil — the
+  // recipient's claim succeeded; only the print step might have failed.
   const lobHandoff = fetch(lobFnUrl, {
     method: "POST",
     headers: {
@@ -145,9 +153,26 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
       render_mode: "html",
     }),
   }).then(async (resp) => {
-    if (!resp.ok) {
+    // Always parse body.ok — resp.ok is always true (200) by design.
+    const text = await resp.text().catch(() => "");
+    let parsed: { ok?: boolean; error?: string } = {};
+    try { parsed = text ? JSON.parse(text) : {}; } catch { /* non-JSON */ }
+    if (parsed.ok === false) {
       // eslint-disable-next-line no-console
-      console.warn("[claim] lob-send-postcard returned non-ok:", resp.status, await resp.text().catch(() => ""));
+      console.warn("[claim] lob-send-postcard body.ok=false:", parsed.error, "(HTTP", resp.status + ")");
+      // Persist so the retry-orphan UI can show the real reason.
+      try {
+        await admin
+          .from("postcards")
+          .update({ lob_error: parsed.error ?? `Lob send failed (HTTP ${resp.status})` })
+          .eq("id", data.postcard_id);
+      } catch (writeErr) {
+        // eslint-disable-next-line no-console
+        console.error("[claim] failed to persist lob_error:", writeErr);
+      }
+    } else if (!resp.ok) {
+      // eslint-disable-next-line no-console
+      console.warn("[claim] lob-send-postcard returned non-ok:", resp.status, text);
     }
   }).catch((err) => {
     // eslint-disable-next-line no-console
