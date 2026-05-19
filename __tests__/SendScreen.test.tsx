@@ -130,12 +130,18 @@ describe("SendScreen — multi-step flow", () => {
     await attachPhoto(getByTestId);
   });
 
-  it("blocks advancing from Cover with no photo picked", () => {
+  // v0.7.0.49 (Codex P2): photo is now OPTIONAL. The Cover step lets
+  // users advance text-only — the front renders a cream Mailroom
+  // placeholder, the back's handwriting carries the card. This test
+  // used to assert the "must pick a photo" gate; that gate was removed.
+  it("advances from Cover with no photo picked (text-only flow)", () => {
     const { getByTestId } = renderSend();
     pickFriendThenName(getByTestId);
     advance(getByTestId);
     advance(getByTestId);
-    expect(ALERT_SPY).toHaveBeenCalledWith("Not quite ready", expect.stringContaining("photo"));
+    expect(getByTestId("send-step-3")).toBeTruthy();
+    expect(getByTestId("send-message-target")).toBeTruthy();
+    expect(ALERT_SPY).not.toHaveBeenCalledWith("Not quite ready", expect.stringContaining("photo"));
   });
 
   it("advances to Inside after a photo is picked", async () => {

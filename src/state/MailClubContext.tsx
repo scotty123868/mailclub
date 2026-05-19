@@ -471,7 +471,23 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       // can't load a relative Storage path → blank tile.
       let photoUri: string | undefined;
       let refUris: string[] = [];
-      if (input.kind === "photo" || input.kind === "place") {
+      // v0.7.0.49 (Codex P2): text-only postcards are now allowed. If the
+      // caller passed an empty photoUri AND no preUploadedPath, the user
+      // explicitly skipped the photo step — fall through with photoUri
+      // undefined. The front renders a cream Mailroom placeholder (see
+      // buildFrontHtml in lob-send-postcard) and the back's handwriting
+      // carries the card.
+      //
+      // We only attempt + require upload when the caller signaled they
+      // have a photo (preUploadedPath OR a non-empty photoUri). The `in`
+      // check keeps TypeScript happy across the SendInput union — only
+      // photo/place variants have these fields.
+      const hasPhotoIntent =
+        ((input.kind === "photo" || input.kind === "place") &&
+          (!!input.preUploadedPath ||
+            (!!input.photoUri && input.photoUri.length > 0)));
+
+      if ((input.kind === "photo" || input.kind === "place") && hasPhotoIntent) {
         if (input.preUploadedPath) {
           // Pre-uploaded path from send.tsx photoUploadCacheRef. Skip
           // the upload step entirely — saves ~1-3s on Send.
@@ -481,7 +497,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
           // photoUri (legacy callers / tests). Keep working.
           photoUri = input.photoUri;
         } else {
-          const path = await api.uploadPostcardPhoto(input.photoUri, `${input.kind}.jpg`);
+          const path = await api.uploadPostcardPhoto(input.photoUri!, `${input.kind}.jpg`);
           photoUri = path ?? undefined;
         }
         // v0.7.0.32 codex P1.4: if the upload failed (returned null) AND
@@ -489,7 +505,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
         // sent a "photo" RPC with photoUri="" — user picked a photo,
         // celebration fired, real card printed text-only. Now: abort the
         // send with a clear alert + restore credits via the catch block.
-        // The Welcome-flow path already does this; mirroring here.
+        // (The text-only case bypasses this branch entirely above.)
         if (!photoUri) {
           throw new Error(
             "We couldn't upload your photo. Check your connection and try again — no credit was used."

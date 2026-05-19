@@ -243,7 +243,9 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
           <View style={styles.headerRow}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.kicker}>
-                {isPending ? "AWAITING ADDRESS" : statusKicker(postcard.status)}
+                {/* v0.7.0.49 (Codex P2 #8): warm copy. Cold "AWAITING ADDRESS"
+                    label felt like admin software; this app is emotional. */}
+                {isPending ? "WAITING FOR THEIR ADDRESS" : statusKicker(postcard.status)}
               </Text>
               <Text style={styles.title} numberOfLines={1}>
                 {headerPrefix} {recipientLabel}
@@ -294,12 +296,14 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
           {postcard.claimUrl ? (
             <View style={styles.shareBlock}>
               <Text style={styles.shareKicker}>
-                {isPending ? "SOLICIT THEIR ADDRESS" : "SHARE LINK"}
+                {/* v0.7.0.49 (Codex P2 #8): warmer voice. "SOLICIT THEIR
+                    ADDRESS" reads like a debt collector. */}
+                {isPending ? "SHARE THE ADDRESS LINK" : "SHARE LINK AGAIN"}
               </Text>
               <Text style={styles.shareBlurb}>
                 {isPending
-                  ? "Send this link to the recipient. They'll add their mailing address, and we'll drop the card in the post."
-                  : "This is the link you sent. Share again if they lost it."}
+                  ? "Send this link to your recipient. When they add their address, we drop the card in the post."
+                  : "Here's the link you sent — share it again if they lost it."}
               </Text>
               {/* v0.7.0.49: expiry hint on unclaimed cards. Claims expire
                   30 days after creation; sender had no warning before. */}
@@ -426,11 +430,12 @@ function statusKicker(status: Postcard["status"]): string {
     case "delivered":
       return "DELIVERED";
     case "sent":
-      return "IN TRANSIT";
+      return "ON ITS WAY";
     case "draft":
       return "DRAFT";
     case "awaiting_address":
-      return "WAITING ON ADDRESS";
+      // v0.7.0.49 (Codex P2 #8): warmer voice (was "WAITING ON ADDRESS").
+      return "WAITING FOR THEIR ADDRESS";
   }
 }
 

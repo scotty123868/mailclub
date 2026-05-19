@@ -395,9 +395,14 @@ export default function SendScreen() {
         return { ok: true };
       }
       case "cover":
-        return photoUri
-          ? { ok: true }
-          : { ok: false, reason: "Pick a photo first to keep moving." };
+        // v0.7.0.49 (Codex P2): photo is now OPTIONAL. The product is
+        // "send a memory for less than a stamp" — sometimes a quick
+        // thought IS the memory. The CoverStep shows a "Skip — text only"
+        // affordance below the picker. When skipped, the front renders
+        // a cream Mailroom placeholder (see buildFrontHtml in
+        // lob-send-postcard/index.ts). The back's handwritten message
+        // is the whole product in that mode.
+        return { ok: true };
       case "inside":
         return message.trim().length > 0
           ? { ok: true }
@@ -1143,7 +1148,16 @@ function CoverStep({
         >
           <Text style={coverStyles.changeLinkText}>Change photo</Text>
         </Pressable>
-      ) : null}
+      ) : (
+        // v0.7.0.49 (Codex P2): photo is optional. Without this affordance,
+        // users with no photo on hand were blocked at the cover step. Now
+        // they can hit Next, which advances to the inside (message) step
+        // and ships a text-only card. The front renders a cream Mailroom
+        // placeholder; the back's handwriting is the whole product.
+        <Text style={coverStyles.skipHint}>
+          Or skip this step — text-only postcards work too.
+        </Text>
+      )}
     </View>
   );
 }
@@ -1156,6 +1170,8 @@ const coverStyles = StyleSheet.create({
   emptyHint: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12 },
   changeLink: { alignSelf: "center", marginTop: 14 },
   changeLinkText: { color: colors.postalBlue, fontFamily: fonts.serifSemi, fontSize: 14, textDecorationLine: "underline" },
+  // v0.7.0.49: hint under the empty picker that the photo step is optional.
+  skipHint: { alignSelf: "center", color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 14, textAlign: "center" },
 });
 
 // =============================================================================
