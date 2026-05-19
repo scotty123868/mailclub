@@ -432,17 +432,29 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       return sendPostcardLocal(input, cost, friend);
     }
 
-    // Optimistic local update. We capture EVERY mutated piece of state so
-    // the catch handler can fully restore on failure. The previous version
-    // forgot `freeCreditsRemaining`, which silently burned a free credit
-    // every time Lob upload or the RPC failed mid-send. Fixed now: any
-    // throw below the deduct rolls all four pieces back to pre-send state.
-    const prevCredits = credits;
-    const prevFreeCreditsRemaining = freeCreditsRemaining;
-    const prevPostcards = postcards;
-    const prevFriends = friends;
+    // v0.7.0.49 (Codex P2 #6): delta-based revert instead of snapshot.
+    //
+    // Previously this captured prevPostcards/prevFriends/prevCredits/
+    // prevFreeCreditsRemaining and on error restored ALL of them. That
+    // clobbered any concurrent updates that landed during the in-flight
+    // request — a profile refresh, a realtime postcard event, a Stripe
+    // webhook crediting purchase — all of which got wiped.
+    //
+    // What's actually optimistic here? Just `credits` and
+    // `freeCreditsRemaining`. The postcard insert + friend cardsSent
+    // bump happen AFTER the API call succeeds (see further down), so
+    // there's nothing to revert on those — they were never mutated.
+    //
+    // We compute the exact freeCreditsRemaining delta inside the
+    // functional setter (Math.max(0, b - cost) means an empty free
+    // balance gets a no-op decrement; the revert needs to match).
+    let freeCreditDelta = 0;
     setCredits((c) => c - cost);
-    setFreeCreditsRemaining((b) => Math.max(0, b - cost));
+    setFreeCreditsRemaining((b) => {
+      const next = Math.max(0, b - cost);
+      freeCreditDelta = b - next;
+      return next;
+    });
 
     try {
       // Upload photo first if present.
@@ -516,13 +528,16 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true, friendName: friend.name, creditsRemaining, postcardId: postcard.id };
     } catch (err: any) {
-      // Revert ALL optimistic mutations. Critical: freeCreditsRemaining
-      // gets restored here too — without it, a Lob/RPC failure permanently
-      // burns the user's free credit even though no postcard was sent.
-      setCredits(prevCredits);
-      setFreeCreditsRemaining(prevFreeCreditsRemaining);
-      setPostcards(prevPostcards);
-      setFriends(prevFriends);
+      // v0.7.0.49 (Codex P2 #6): delta-based revert. Adds cost back to
+      // credits and freeCreditDelta back to freeCreditsRemaining via
+      // functional setters — preserves any concurrent updates (profile
+      // refresh, realtime event, etc.) that landed during the request.
+      setCredits((c) => c + cost);
+      if (freeCreditDelta > 0) {
+        setFreeCreditsRemaining((b) => b + freeCreditDelta);
+      }
+      // postcards + friends were never mutated (the inserts happen on
+      // success only), so no revert needed for those.
       Alert.alert("Couldn't send", err?.message ?? "Try again in a moment.");
       return { ok: false, friendName: friend.name };
     }
@@ -768,11 +783,16 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true };
     }
-    const prevCredits = credits;
-    const prevFreeCreditsRemaining = freeCreditsRemaining;
-    const prevPostcards = postcards;
+    // v0.7.0.49 (Codex P2 #6): delta-based revert. See sendPostcardAction
+    // for the rationale — snapshot restoration clobbered concurrent
+    // updates (profile refreshes, realtime events) during in-flight sends.
+    let freeCreditDelta = 0;
     setCredits((c) => c - 1);
-    setFreeCreditsRemaining((b) => Math.max(0, b - 1));
+    setFreeCreditsRemaining((b) => {
+      const next = Math.max(0, b - 1);
+      freeCreditDelta = b - next;
+      return next;
+    });
     try {
       // v0.7.0.31 PHOTO BUGFIX: pass both the local URI (for upload
       // fallback if pre-upload missed) AND the pre-uploaded Storage
@@ -789,11 +809,12 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return { ok: true };
     } catch (err: any) {
-      // Restore both credit counters — the previous version reverted
-      // setCredits but left freeCreditsRemaining drained.
-      setCredits(prevCredits);
-      setFreeCreditsRemaining(prevFreeCreditsRemaining);
-      setPostcards(prevPostcards);
+      // Delta-revert: add the deducted amounts back via functional setters
+      // so concurrent updates aren't clobbered.
+      setCredits((c) => c + 1);
+      if (freeCreditDelta > 0) {
+        setFreeCreditsRemaining((b) => b + freeCreditDelta);
+      }
       Alert.alert("Couldn't send", err?.message ?? "Try again.");
       return { ok: false };
     }
