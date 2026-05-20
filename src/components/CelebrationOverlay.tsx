@@ -178,7 +178,7 @@ function CelebrationContent({
         : kind === "penpal"
           ? "We'll match your card with another Mailroom user looking for a stranger letter. You'll see it in your journal once it ships, and on your map when they reply."
           : `${recipientLabel} gets it in 4-7 days, USPS time. We'll drop a pin on your map when it lands.`;
-  const buttonLabel = "Open Mailroom →";
+  const buttonLabel = "Continue →";
 
   return (
     <View style={styles.root}>
@@ -203,7 +203,7 @@ function CelebrationContent({
         onPress={onDismiss}
         style={({ pressed }) => [styles.button, pressed && { opacity: 0.85 }]}
         accessibilityRole="button"
-        accessibilityLabel="Open Mailroom"
+        accessibilityLabel="Continue"
         testID="celebration-dismiss-btn"
       >
         <Text style={styles.buttonText}>{buttonLabel}</Text>

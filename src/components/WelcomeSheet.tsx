@@ -1467,7 +1467,7 @@ function NoteStep({
       <TextInput
         value={message}
         onChangeText={onMessageChange}
-        placeholder="the hike we kept saying we'd do —"
+        placeholder="saw this and thought of you..."
         placeholderTextColor={colors.mutedInk}
         autoFocus
         multiline
