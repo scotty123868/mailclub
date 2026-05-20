@@ -38,6 +38,7 @@ import {
   type AddressSuggestion,
 } from "@/src/services/addressAutocomplete";
 import { isAppleSignInAvailable } from "@/src/services/apple-auth";
+import { fetchProfile } from "@/src/services/api";
 import { lookupReciprocation, refundPostcardCredit } from "@/src/services/api";
 import {
   capturePostcardForPrint,
@@ -373,20 +374,44 @@ export function WelcomeSheet({
         return;
       }
       setAuthed(true);
-      // codex Phase 6 P1: trust hasCompletedSignup over isNewUser. Apple
-      // only knows whether THIS Apple ID has used the relying party
-      // before; it doesn&apos;t know whether the Mailroom profile is
-      // complete. Always advance through the full flow unless the
-      // profile is already done.
       if (result.fullName) {
         const first = result.fullName.split(/\s+/)[0] ?? "";
         setPresetFirstName(first);
         setYourFirstName(first);
       }
-      // v0.7.0.1: insert the "explain" interstitial after auth so the
-      // jump from sign-in to photo-pick isn&apos;t jarring. Returning
-      // users (rare, since hasCompletedSignup+hasSentFirstCard=true
-      // closes the sheet entirely) also see it briefly — not a problem.
+
+      // v0.7.0.54 BUGFIX: don't optimistically advance to "explain" — wait
+      // for the profile fetch to settle so we know if this is a returning
+      // user.
+      //
+      // The bug was: after Apple Sign In, this used to immediately
+      // `setStep("explain")`. The context's hasCompletedSignup updates
+      // asynchronously (profile fetch fires off the authedUserId change in
+      // MailClubContext useEffect). Result: returning users who already
+      // completed signup were briefly shown the signup flow, tapped through
+      // to "explain", and by the time WelcomeGate's isReturningUser hatch
+      // fired to dismiss the sheet, the user had already been confused.
+      //
+      // Fix: fetch the profile here, synchronously, before deciding which
+      // step to take. If hasCompletedSignup is true, stay on hero — the
+      // useEffect below (line 276) will advance us to "photo" once the
+      // context catches up (or WelcomeGate will close us if hasSentFirstCard
+      // is also true). If false (genuinely new or incomplete signup),
+      // advance to "explain" so they can finish.
+      try {
+        const profile = await fetchProfile();
+        if (profile?.hasCompletedSignup) {
+          // Returning user with completed signup. Stay on hero. The context
+          // will catch up shortly, and either WelcomeGate dismisses us or
+          // the hasCompletedSignup useEffect advances us to "photo".
+          return;
+        }
+      } catch (err) {
+        // Profile fetch failed — fall through to signup flow. The user can
+        // always retry by closing/reopening the sheet.
+        // eslint-disable-next-line no-console
+        console.warn("Post-Apple-Sign-In profile fetch failed:", (err as any)?.message);
+      }
       setStep("explain");
     } catch (e: any) {
       setError(e?.message ?? "Something went wrong.");
@@ -408,6 +433,18 @@ export function WelcomeSheet({
           return;
         }
         setAuthed(true);
+        // v0.7.0.54: same fix as Apple Sign In — wait for the profile
+        // fetch so we don't optimistically advance a returning user
+        // through the signup flow.
+        try {
+          const profile = await fetchProfile();
+          if (profile?.hasCompletedSignup) {
+            return;
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("Post-email-signin profile fetch failed:", (err as any)?.message);
+        }
         setStep("explain");
         return;
       }
