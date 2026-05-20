@@ -59,9 +59,19 @@ export function WelcomeGate() {
   // session — kept the gate closed even though the user was now
   // unauthenticated, stranding them on My Card. Reset the local
   // dismissal whenever any onboarding flag flips false.
+  //
+  // v0.7.0.53 BUGFIX (sign-in-after-sign-out loop):
+  // Also reset hasStartedFlowRef. Previously the latch stayed true after
+  // sign-out, so the returning-user hatch below couldn't fire — a user
+  // who signed out and signed back in with the SAME Apple ID was
+  // shown the signup flow every time (their hasCompletedSignup did
+  // eventually flip to true server-side, but the latch held the sheet
+  // open until they dismissed manually).
   useEffect(() => {
     if (!hasCompletedSignup || !hasSentFirstCard || !hasSeenFreeCreditsIntro) {
       setDismissedLocal(false);
+      hasStartedFlowRef.current = false;
+      forceRender((n) => n + 1);
     }
   }, [hasCompletedSignup, hasSentFirstCard, hasSeenFreeCreditsIntro]);
 
@@ -71,41 +81,21 @@ export function WelcomeGate() {
   const shouldShow = useMemo(() => {
     if (!hydrated) return false;
     if (dismissedLocal) return false;
-    // If we already latched the flow open, stay open until user dismisses.
-    if (hasStartedFlowRef.current) return true;
 
     const fullyOnboarded =
       hasSeenFreeCreditsIntro && hasCompletedSignup && hasSentFirstCard;
     if (fullyOnboarded) return false;
 
-    // Returning-user hatch v0.7.0.27 — broadened.
-    //
-    // Previous (build 39) version required server-side postcards to
-    // exist. That failed two real cases:
-    //   a) User signed up, completed profile, then bailed before first
-    //      send. Coming back on a new device: hasCompletedSignup=true
-    //      but 0 server postcards. WelcomeGate kept showing welcome.
-    //      Worse, their previous-session credits had been debited (the
-    //      RPC charges before client-side share completion in some
-    //      paths), so they hit INSUFFICIENT_CREDITS at "Mail it" and
-    //      got stuck. User feedback: "if a user is going through the
-    //      sign up flow, then they shouldn't have already been signed
-    //      up."
-    //   b) User in build < 41 sent cards but the journal-overwrite race
-    //      blew them away locally. Server has the rows but local
-    //      `postcards` was stuck empty during this evaluation. Welcome
-    //      showed again, INSUFFICIENT_CREDITS again, loop.
-    //
-    // New gate: if the user has completed signup server-side, they're
-    // done with welcome forever. The "must send a card to enter the
-    // app" enforcement was always client-side aspirational; the real
-    // checkpoint is server-side profile creation. If they have 0
-    // credits + 0 visible postcards, that's a "buy more stamps"
-    // problem to solve inside the app shell, not a "redo welcome"
-    // problem.
+    // v0.7.0.53 BUGFIX: returning-user hatch must run BEFORE the latch
+    // check, otherwise a user who signs out + signs back in still sees
+    // the signup flow (the latch was set during the pre-auth render).
     const isReturningUser = !!authedUserId && hasCompletedSignup;
     if (isReturningUser) return false;
 
+    // v0.7.0.53: the returning-user hatch + latch check were duplicated
+    // here from above (where they now live, so they run BEFORE the latch
+    // can hold the sheet open through a sign-out → sign-in cycle).
+    // Reaching this point means we should show the welcome flow.
     return true;
   }, [
     hydrated,
