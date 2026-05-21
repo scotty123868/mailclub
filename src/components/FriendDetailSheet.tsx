@@ -1,5 +1,5 @@
 import { Mail, Trash2 } from "lucide-react-native";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { PrimaryButton } from "@/src/components/Buttons";
 import { SheetCloseButton } from "@/src/components/system/SheetCloseButton";
@@ -106,13 +106,52 @@ function StatCell({ value, label, tone }: { value: number; label: string; tone?:
 }
 
 function PostcardRow({ card }: { card: Postcard }) {
+  // v0.7.0.55: rolodex rows used to be "PHOTO   —   1c" — the category enum
+  // and credit cost are internal accounting, not what the user wants to see
+  // about a card they sent to a friend. Now: photo thumbnail + handwritten-
+  // message preview + relative date. If no photo, render a small paper-color
+  // placeholder square so the row layout stays consistent.
+  const photoSrc = card.photoUri || undefined;
+  const dateLabel = formatRelativeSentAt(card.sentAt);
   return (
     <View style={postcardStyles.row}>
-      <Text style={postcardStyles.category}>{card.category}</Text>
-      <Text style={postcardStyles.message} numberOfLines={1}>{card.message || "—"}</Text>
-      <Text style={postcardStyles.cost}>{card.creditCost}c</Text>
+      {photoSrc ? (
+        <Image source={{ uri: photoSrc }} style={postcardStyles.thumb} resizeMode="cover" />
+      ) : (
+        <View style={[postcardStyles.thumb, postcardStyles.thumbEmpty]} />
+      )}
+      <View style={postcardStyles.body}>
+        <Text style={postcardStyles.message} numberOfLines={2}>
+          {card.message?.trim() || "No note"}
+        </Text>
+        <Text style={postcardStyles.date}>{dateLabel}</Text>
+      </View>
     </View>
   );
+}
+
+function formatRelativeSentAt(iso: string): string {
+  try {
+    const sent = new Date(iso).getTime();
+    if (Number.isNaN(sent)) return "";
+    const diffMs = Date.now() - sent;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return "Sent today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) {
+      const wks = Math.floor(diffDays / 7);
+      return wks === 1 ? "1 week ago" : `${wks} weeks ago`;
+    }
+    if (diffDays < 365) {
+      const mos = Math.floor(diffDays / 30);
+      return mos === 1 ? "1 month ago" : `${mos} months ago`;
+    }
+    const yrs = Math.floor(diffDays / 365);
+    return yrs === 1 ? "1 year ago" : `${yrs} years ago`;
+  } catch {
+    return "";
+  }
 }
 
 const styles = StyleSheet.create({
@@ -142,8 +181,39 @@ const statStyles = StyleSheet.create({
 });
 
 const postcardStyles = StyleSheet.create({
-  row: { alignItems: "center", borderBottomColor: colors.line, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: "row", gap: 10, paddingVertical: 8 },
-  category: { color: colors.postalRed, fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase", width: 90 },
-  message: { color: colors.ink, flex: 1, fontFamily: fonts.serif, fontSize: 14 },
-  cost: { color: colors.mutedInk, fontFamily: fonts.sansBold, fontSize: 11 },
+  row: {
+    alignItems: "center",
+    borderBottomColor: colors.line,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: 12,
+    paddingVertical: 10,
+  },
+  thumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 4,
+    backgroundColor: colors.paper,
+  },
+  thumbEmpty: {
+    borderColor: colors.line,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  body: {
+    flex: 1,
+    gap: 4,
+  },
+  message: {
+    color: colors.ink,
+    fontFamily: fonts.serif,
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  date: {
+    color: colors.mutedInk,
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
 });

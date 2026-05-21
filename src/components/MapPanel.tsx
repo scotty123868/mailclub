@@ -482,12 +482,13 @@ export function MapPanel({
           })}
 
           {/* Cities — custom paper-pin marker with serif label.
-              tracksViewChanges defaults to true for the first render so
-              the entrance animation actually composites, then we'd
-              ideally disable it once settled. Marker's animation
-              behavior with React Native Reanimated is fiddly across
-              iOS/Android; we leave the marker tracking on for v0.7.0.5
-              and accept a tiny CPU cost during the 300ms drop. */}
+              v0.7.0.55: tracksViewChanges flipped to false after the
+              initial entrance animation so the marker stops re-rasterizing
+              on every re-render. Without this, any unrelated state update
+              (selectedKey, sheet open/close, etc.) caused the marker to
+              re-composite at default origin (0,0) for one frame before
+              snapping back — that's the "Denver teleport to top-left"
+              bug the user saw. */}
           {!compact &&
             renderCities.map((c, idx) => {
               // v0.7.0.52: Codex pin's needle tip is at bottom-RIGHT of
@@ -501,6 +502,12 @@ export function MapPanel({
                   coordinate={c.coord}
                   anchor={isHome ? { x: 0.5, y: 0.5 } : { x: 0.82, y: 0.92 }}
                   onPress={onCityPress ? () => onCityPress(c) : undefined}
+                  // Allow tracksViewChanges only during the drop-in animation
+                  // (first ~700ms). After that, freeze the marker — re-renders
+                  // upstream no longer cause it to re-rasterize. The pin
+                  // animations use Reanimated on a separate thread so they
+                  // still work even with tracksViewChanges=false.
+                  tracksViewChanges={false}
                 >
                   {isHome ? (
                     <HomePin name={c.name} staggerIndex={idx} />
@@ -870,12 +877,38 @@ function HomePin({
           shadowRadius: 2.5,
         }}
       >
-        <Text
-          style={{ fontSize: DISC_PX * 0.6, lineHeight: DISC_PX * 0.68 }}
-          allowFontScaling={false}
-        >
-          🏠
-        </Text>
+        {/* v0.7.0.55: replaced 🏠 emoji (juvenile, inconsistent with the
+            line-art / paper-stamp identity used everywhere else) with a
+            refined SVG house outline. Strokes match the brand ink color
+            and the 1.5-weight line-art seen in the How It Works icons. */}
+        <Svg width={DISC_PX * 0.58} height={DISC_PX * 0.58} viewBox="0 0 24 24" fill="none">
+          {/* House: gabled roof + body + door */}
+          <Path
+            d="M3.5 11.2 L12 4 L20.5 11.2 V20 H3.5 Z"
+            stroke={colors.ink}
+            strokeWidth={1.7}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            fill="none"
+          />
+          {/* Door */}
+          <Path
+            d="M10 20 V14.2 H14 V20"
+            stroke={colors.ink}
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            fill="none"
+          />
+          {/* Tiny chimney detail — subtle, but signals "house" beyond a generic shape */}
+          <Path
+            d="M16.6 7.4 V5 H18 V8.6"
+            stroke={colors.ink}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            fill="none"
+          />
+        </Svg>
       </View>
       <View style={pinStyles.labelWrap}>
         <Text style={pinStyles.label} numberOfLines={1}>
@@ -895,7 +928,15 @@ function CityDot({ accent }: { accent: boolean }) {
 }
 
 const pinStyles = StyleSheet.create({
-  wrap: { alignItems: "center" },
+  // v0.7.0.55 BUGFIX (line endpoint alignment): the wrap previously laid
+  // out the pin SVG + label in normal flow. The label added ~15px to the
+  // bottom of the Marker's bounding box, which shifted the (0.82, 0.92)
+  // anchor down INTO the label — so Polyline endpoints (which target the
+  // lat/lng = anchor) landed on the label, not at the pin needle tip.
+  // Fix: absolute-position the label so it floats below the pin without
+  // expanding the wrap's bbox. Now the Marker bbox = pin SVG only, and
+  // (0.82, 0.92) correctly hits the needle tip at (23.2, 33.4).
+  wrap: { alignItems: "center", position: "relative" },
   dot: {
     width: 16,
     height: 16,
@@ -954,9 +995,13 @@ const pinStyles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   labelWrap: {
+    // Absolute so the label doesn't expand the Marker bbox — see wrap comment
+    position: "absolute",
+    top: "100%",
     marginTop: 2,
     paddingHorizontal: 4,
     paddingVertical: 1,
+    alignSelf: "center",
   },
   label: {
     color: "#2B1A08",
