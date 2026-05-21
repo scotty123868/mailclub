@@ -646,7 +646,15 @@ function CityPin({
   const idSuffix = name.replace(/[^a-zA-Z0-9]/g, "");
 
   return (
-    <Animated.View style={[pinStyles.wrap, animStyle]}>
+    /* v0.7.0.56 BUGFIX (real one): Explicit width/height on the wrap so the
+       Marker's bbox is FORCED to pin-only dimensions. Without this, even
+       though labelWrap is position:absolute, react-native-maps' native
+       iOS marker measurement was still including the label in the bbox,
+       which pushed the (0.82, 0.92) anchor down to the bottom of the
+       label area — causing Polyline endpoints to land on the city name
+       text rather than the pin needle tip. Forcing W×H here pins the
+       bbox to exactly the pin SVG, so anchor maps correctly. */
+    <Animated.View style={[pinStyles.wrap, { width: HEAD_SVG_W, height: HEAD_SVG_H }, animStyle]}>
       <View style={{ width: HEAD_SVG_W, height: HEAD_SVG_H, alignItems: "center", justifyContent: "flex-end" }}>
         <Svg width={HEAD_SVG_W} height={HEAD_SVG_H} viewBox={`0 0 ${HEAD_SVG_W} ${HEAD_SVG_H}`}>
           <Defs>
@@ -860,7 +868,10 @@ function HomePin({
   const DISC_PX = 28;
 
   return (
-    <Animated.View style={[pinStyles.wrap, animStyle]}>
+    /* v0.7.0.56: same explicit width/height fix as CityPin — forces the
+       Marker bbox to be exactly the disc dimensions so anchor (0.5, 0.5)
+       lands at the center of the disc, not the center of disc+label. */
+    <Animated.View style={[pinStyles.wrap, { width: DISC_PX, height: DISC_PX }, animStyle]}>
       <View
         style={{
           width: DISC_PX,
