@@ -291,8 +291,10 @@ export function WelcomeSheet({
 
   // ----- Validators ---------------------------------------------------------
 
-  const canAdvanceEmail =
-    email.trim().includes("@") && password.length >= 8 && !saving;
+  // v1.0.4 (audit follow-up): canAdvanceEmail removed — Continue button
+  // is always tappable on the email step and the onSubmit handler runs
+  // its own validation, surfacing specific errors. Keeping the memo
+  // around was misleading dead code.
   // v0.7.0.49 (Codex audit): photo is OPTIONAL. The deny-Alert promises
   // "Continue without photo" but the Continue button stayed disabled —
   // dead UX. Now mirrors the Send-tab text-only flow: if the user has
@@ -341,14 +343,12 @@ export function WelcomeSheet({
       : true;
 
   // v1.0.2: full street address required for EVERY recipient path —
-  // friend, link, pen pal, and self. Reason: every postcard the user
-  // sends becomes a relationship that may want a reply. Without the
-  // sender's full return address printed on the back of the card, the
-  // recipient has no way to mail back. Previously only "self" sends
-  // required full address (because user IS the recipient); the others
-  // got away with city+state for a "from your city" caption. Now the
-  // whole point of the app — two-way mail — works on the first send.
-  const needsFullYourAddress = true;
+  // friend, link, pen pal, and self. Without the sender's full return
+  // address printed on the back of every Lob card, recipients have no
+  // way to mail back. The whole point of two-way mail.
+  // v1.0.4 (audit follow-up): dropped the now-vestigial
+  // `needsFullYourAddress` flag — its only consumer was the YourInfoStep
+  // prop, which was removed in the same pass.
   const canAdvanceYourInfo =
     yourFirstName.trim().length > 0 && isAddressComplete(yourAddress);
 
@@ -879,7 +879,16 @@ export function WelcomeSheet({
     setError(null);
     if (step === "auth-email") setStep("hero");
     else if (step === "explain") setStep(authed ? "hero" : "auth-email");
-    else if (step === "recipient") setStep("explain");
+    else if (step === "recipient") {
+      // v1.0.4 (audit follow-up): returning users (hasCompletedSignup)
+      // are auto-skipped from hero → recipient. For them, "back" from
+      // recipient should NOT show the first-time "Your first card is on
+      // us" explain screen — they've already done first-time. Route
+      // them back to hero instead (where the auto-skip effect will fire
+      // again and they can use the system back gesture / leave the modal).
+      // First-time users still see explain as the previous step.
+      setStep(hasCompletedSignup ? "hero" : "explain");
+    }
     else if (step === "photo") setStep("recipient");
     else if (step === "note") setStep("photo");
     else if (step === "their-info") setStep("note");
@@ -965,7 +974,6 @@ export function WelcomeSheet({
               onPasswordChange={setPassword}
               onSubmit={onSubmitEmailAuth}
               onForgot={onForgotPassword}
-              canSubmit={canAdvanceEmail}
               saving={saving}
               error={error}
               info={info}
@@ -1033,7 +1041,6 @@ export function WelcomeSheet({
               onContinue={commitSignupAndSend}
               saving={saving}
               error={error}
-              needsFullAddress={needsFullYourAddress}
             />
           ) : null}
 
@@ -1276,11 +1283,13 @@ function EmailAuthStep({
   onPasswordChange,
   onSubmit,
   onForgot,
-  canSubmit,
   saving,
   error,
   info,
 }: {
+  // v1.0.4: dropped `canSubmit` — Continue is always tappable and the
+  // submit handler does its own client-side validation, surfacing
+  // specific errors. Keeping the prop around was misleading dead code.
   mode: "signup" | "signin";
   onModeChange: (m: "signup" | "signin") => void;
   email: string;
@@ -1289,7 +1298,6 @@ function EmailAuthStep({
   onPasswordChange: (v: string) => void;
   onSubmit: () => void;
   onForgot: () => void;
-  canSubmit: boolean;
   saving: boolean;
   error: string | null;
   info: string | null;
@@ -1859,8 +1867,12 @@ function YourInfoStep({
   onContinue,
   saving,
   error,
-  needsFullAddress,
 }: {
+  // v1.0.4 (audit follow-up): dropped `needsFullAddress` prop. Every
+  // signup path now collects the full mailable address — the prop's
+  // false branch (city+state-only) was unreachable AND a footgun
+  // (link/penpal sends would lose their return label if the gate
+  // ever flipped back). Removed the dead else block entirely.
   firstName: string;
   onFirstNameChange: (v: string) => void;
   presetFirstName: string;
@@ -1870,11 +1882,6 @@ function YourInfoStep({
   onContinue: () => void;
   saving: boolean;
   error: string | null;
-  /** v1.0.2: now always true — we collect the full mailable address for
-   * every signup path so the recipient can write back. Kept as a prop
-   * for the existing branch logic below; consider removing in a future
-   * cleanup pass. */
-  needsFullAddress: boolean;
 }) {
   return (
     <View style={stepStyles.wrap} testID="welcome-step-your-info">
@@ -1898,48 +1905,12 @@ function YourInfoStep({
         testID="welcome-your-firstname"
       />
 
-      {needsFullAddress ? (
-        <AddressFields
-          address={address}
-          onChange={onAddressChange}
-          testIDPrefix="welcome-your"
-          label="Your address"
-        />
-      ) : (
-        // v0.7.0.17: minimal city/state pair for non-self sends. The full
-        // street address isn't used downstream (link/penpal sends use the
-        // Mailroom return address, the postcard back only shows the city).
-        // Keeping the same AddressDraft shape so commitSignupAndSend's
-        // existing read paths work without branching.
-        <View testID="welcome-your-citystate">
-          <FieldLabel>Your city &amp; state</FieldLabel>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <TextInput
-              value={address.city}
-              onChangeText={(v) => onAddressChange({ ...address, city: v })}
-              placeholder="Brooklyn"
-              placeholderTextColor={colors.mutedInk}
-              autoCapitalize="words"
-              autoCorrect={false}
-              textContentType="addressCity"
-              style={[fieldStyles.input, { flex: 2 }]}
-              testID="welcome-your-city"
-            />
-            <TextInput
-              value={address.state}
-              onChangeText={(v) => onAddressChange({ ...address, state: v.toUpperCase().slice(0, 2) })}
-              placeholder="NY"
-              placeholderTextColor={colors.mutedInk}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              maxLength={2}
-              textContentType="addressState"
-              style={[fieldStyles.input, { flex: 1 }]}
-              testID="welcome-your-state"
-            />
-          </View>
-        </View>
-      )}
+      <AddressFields
+        address={address}
+        onChange={onAddressChange}
+        testIDPrefix="welcome-your"
+        label="Your address"
+      />
 
       {error ? <Text style={fieldStyles.error}>{error}</Text> : null}
 
