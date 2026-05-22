@@ -62,14 +62,16 @@ import { fonts, type } from "@/src/theme/typography";
  * field we need (name, address, photo, message, recipient) gets
  * collected naturally because they&apos;re literally addressing one.
  *
- * Step machine:
+ * Step machine (v1.0.2 — recipient moved to step 2 so the user picks
+ * who they're mailing BEFORE composing photo+note for that person.
+ * Mirrors the in-app Send tab order: type → cover → inside.):
  *   1. hero        — Recraft brand art + Apple Sign In (primary) + email link
  *   1b. auth-email — Email + password fallback (sign-up or sign-in)
- *   2. photo       — Pick a photo from camera roll (3:2 crop)
- *   3. note        — Write a one-or-two-line message
- *   4. recipient   — Pick one: A friend / Send-link / Send to yourself / Pen pal
- *   5. their-info  — Their name + address (varies by recipient kind)
- *   6. your-info   — Your first name + address (sender side)
+ *   2. recipient   — Pick one: A friend / Send-link / Send to yourself / Pen pal
+ *   3. photo       — Pick a photo from camera roll (3:2 crop)
+ *   4. note        — Write a one-or-two-line message
+ *   5. their-info  — Their name + address (friend path only)
+ *   6. your-info   — Your full mailing address (every path — return-mail capable)
  *   7. mailed      — "MAILED" celebration → enter app
  *
  * Order of server-side calls on the final commit (step 7):
@@ -279,9 +281,11 @@ export function WelcomeSheet({
   useEffect(() => {
     if (hasCompletedSignup && step === "hero") {
       // Returning user with profile but no first card yet. Skip auth, send
-      // them straight to the photo step.
+      // them straight to the recipient picker (v1.0.2: was photo; recipient
+      // now comes first so the user picks who they're mailing before they
+      // compose).
       setAuthed(true);
-      setStep("photo");
+      setStep("recipient");
     }
   }, [hasCompletedSignup, step]);
 
@@ -336,17 +340,17 @@ export function WelcomeSheet({
       ? theirName.trim().length > 0 && isAddressComplete(theirAddress)
       : true;
 
-  // v0.7.0.17: only "self" sends need the user's full street address —
-  // they ARE the recipient, so we need the full mailable address. For
-  // friend / link / penpal, we just need a first name + city for the
-  // "from your city" caption on the postcard back. Less typing for the
-  // user; less data collected. Privacy by default.
-  const needsFullYourAddress = recipientKind === "self";
-  const canAdvanceYourInfo = needsFullYourAddress
-    ? yourFirstName.trim().length > 0 && isAddressComplete(yourAddress)
-    : yourFirstName.trim().length > 0 &&
-      yourAddress.city.trim().length > 0 &&
-      yourAddress.state.trim().length === 2;
+  // v1.0.2: full street address required for EVERY recipient path —
+  // friend, link, pen pal, and self. Reason: every postcard the user
+  // sends becomes a relationship that may want a reply. Without the
+  // sender's full return address printed on the back of the card, the
+  // recipient has no way to mail back. Previously only "self" sends
+  // required full address (because user IS the recipient); the others
+  // got away with city+state for a "from your city" caption. Now the
+  // whole point of the app — two-way mail — works on the first send.
+  const needsFullYourAddress = true;
+  const canAdvanceYourInfo =
+    yourFirstName.trim().length > 0 && isAddressComplete(yourAddress);
 
   // ----- Hero actions -------------------------------------------------------
 
@@ -612,6 +616,27 @@ export function WelcomeSheet({
         password: password || undefined,
       });
 
+      // v1.0.2: persist the user's full mailing address on EVERY signup
+      // path — not just "self" sends. Reasons:
+      //   1. Lob needs a real return address on the back of every card
+      //      we print (friend, link, pen pal — all of them).
+      //   2. The Send tab's "Yourself" flow now skips the address prompt
+      //      on every signup, not just self-sends during onboarding.
+      //   3. Settings → Mailing address has a value to display on day 1.
+      // Best-effort: AsyncStorage failures don't block the send.
+      try {
+        await setSelfAddress({
+          name: yourFirstName.trim(),
+          line1: yourAddress.line1.trim(),
+          line2: yourAddress.line2.trim() || "",
+          city: yourAddress.city.trim(),
+          state: yourAddress.state.trim().toUpperCase(),
+          zip: yourAddress.zip.trim(),
+        });
+      } catch {
+        // ignore
+      }
+
       // 2) Recipient creation + send. The action types don&apos;t carry
       //    structured error fields, so we surface generic messages and
       //    rely on the action itself to have logged + alerted the user
@@ -759,25 +784,8 @@ export function WelcomeSheet({
           addressZip: yourAddress.zip.trim(),
           addressCountry: "US",
         });
-        // v0.7.0.60: sync the welcome self-send address to the
-        // on-device selfAddress cache that the post-welcome Send tab
-        // reads from. Without this, the user would be prompted to
-        // re-enter their address the next time they pick "Yourself" on
-        // the Send screen, even though they already gave it to us 30
-        // seconds ago during onboarding.
-        try {
-          await setSelfAddress({
-            name: yourFirstName.trim(),
-            line1: yourAddress.line1.trim(),
-            line2: yourAddress.line2.trim() || "",
-            city: yourAddress.city.trim(),
-            state: yourAddress.state.trim().toUpperCase(),
-            zip: yourAddress.zip.trim(),
-          });
-        } catch {
-          // best-effort — if AsyncStorage write fails, user just sees
-          // the prompt once more later. Not worth blocking the send.
-        }
+        // v1.0.2: setSelfAddress moved up to be called for ALL paths,
+        // not just self. See the call right after completeSignup above.
         if (!result.ok || !result.friend) {
           throw new Error("Couldn't set up self-send.");
         }
@@ -845,29 +853,36 @@ export function WelcomeSheet({
 
   // ----- Linear nav --------------------------------------------------------
 
+  // v1.0.2: step order rewritten. Recipient picker moved BEFORE photo
+  // + note so the user picks who they're mailing first, then composes
+  // the content for that specific person. This mirrors the in-app
+  // Send tab flow (type → cover → inside) and matches the mental model
+  // of "I want to send a card to Alex" → "...so let me pick a photo
+  // and write a note for Alex."
+  //
+  //   hero → auth-email → explain → recipient → photo → note
+  //          → their-info (friend only) → your-info → mailed
   function back() {
     setError(null);
     if (step === "auth-email") setStep("hero");
     else if (step === "explain") setStep(authed ? "hero" : "auth-email");
-    else if (step === "photo") setStep("explain");
+    else if (step === "recipient") setStep("explain");
+    else if (step === "photo") setStep("recipient");
     else if (step === "note") setStep("photo");
-    else if (step === "recipient") setStep("note");
-    else if (step === "their-info") setStep("recipient");
+    else if (step === "their-info") setStep("note");
     else if (step === "your-info") {
-      // Only "friend" goes through their-info. Everything else skips
-      // straight from recipient → your-info, so back goes to recipient.
-      setStep(needsTheirInfo ? "their-info" : "recipient");
+      // Friend path: their-info sits between note and your-info.
+      // Other paths: jump straight from note to your-info, so back
+      // goes to note.
+      setStep(needsTheirInfo ? "their-info" : "note");
     } else if (step === "mailed") setStep("your-info");
   }
 
   function next() {
     setError(null);
-    if (step === "explain") setStep("photo");
-    else if (step === "recipient") {
-      setStep(needsTheirInfo ? "their-info" : "your-info");
-    } else if (step === "their-info") {
-      setStep("your-info");
-    }
+    if (step === "explain") setStep("recipient");
+    else if (step === "recipient") setStep("photo");
+    else if (step === "their-info") setStep("your-info");
   }
 
   // Fast-forward (dev / no-backend escape hatch).
@@ -936,7 +951,8 @@ export function WelcomeSheet({
           ) : null}
 
           {step === "explain" ? (
-            <ExplainStep onContinue={() => setStep("photo")} />
+            // v1.0.2: explain now leads into the recipient picker (was: photo).
+            <ExplainStep onContinue={() => setStep("recipient")} />
           ) : null}
 
           {step === "photo" ? (
@@ -953,7 +969,11 @@ export function WelcomeSheet({
               message={message}
               onMessageChange={setMessage}
               canContinue={canAdvanceNote}
-              onContinue={() => setStep("recipient")}
+              // v1.0.2: note → their-info for friends, your-info for everyone else
+              // (was: note → recipient). Recipient now comes before photo+note.
+              onContinue={() =>
+                setStep(needsTheirInfo ? "their-info" : "your-info")
+              }
             />
           ) : null}
 
@@ -1813,9 +1833,10 @@ function YourInfoStep({
   onContinue: () => void;
   saving: boolean;
   error: string | null;
-  /** True only for "self" sends — we need the full mailable address since
-   * the user IS the recipient. For friend/link/penpal, we only collect
-   * name + city + state for the postcard back caption. */
+  /** v1.0.2: now always true — we collect the full mailable address for
+   * every signup path so the recipient can write back. Kept as a prop
+   * for the existing branch logic below; consider removing in a future
+   * cleanup pass. */
   needsFullAddress: boolean;
 }) {
   return (
@@ -1823,9 +1844,8 @@ function YourInfoStep({
       <StepDots count={5} active={4} />
       <Text style={stepStyles.title}>From you.</Text>
       <Text style={stepStyles.subtitle}>
-        {needsFullAddress
-          ? "We need your address so we can mail the card to you. Stays private."
-          : "We print \"from your city\" on the back. Your full address stays private."}
+        Your return address goes on the back of every postcard so the
+        recipient can write you back. Stays private to you.
       </Text>
 
       <FieldLabel>Your first name</FieldLabel>
