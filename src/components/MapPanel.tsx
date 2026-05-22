@@ -464,15 +464,30 @@ export function MapPanel({
                 thicker so the user can see what they tapped.
                 Polylines are tappable; tapping invokes onRoutePress
                 with the same effect as tapping the destination pin. */}
-          {renderRoutes.map((r, i) => {
+          {renderRoutes.map((r) => {
             const selected = !!r.isNewest;
+            // v1.0.3: stable per-route key so Polylines reconcile by
+            // destination coord, not array index. Index-based keys
+            // caused Polylines to swap props with each other on rapid
+            // re-renders (selectedKey state churn when the user taps
+            // pins fast), occasionally rendering one line at width 0
+            // and making it look like it disappeared. The "Denver line
+            // disappeared" bug.
+            const routeKey = `route-${r.to.latitude},${r.to.longitude}`;
             return (
               <Polyline
-                key={`route-${i}`}
+                key={routeKey}
                 coordinates={[r.from, r.to]}
                 strokeColor={colors.postalRed}
                 strokeWidth={selected ? 3.2 : 1.8}
-                lineDashPattern={selected ? undefined : [6, 4]}
+                // v1.0.3: always pass an explicit lineDashPattern.
+                // Passing `undefined` for the solid case worked on some
+                // react-native-maps versions but other versions treated
+                // undefined as "use last value" mid-toggle, leaving the
+                // line invisible if the previous render's pattern had
+                // collapsed. [1, 0] is a no-gap dash pattern that all
+                // versions render as a solid line.
+                lineDashPattern={selected ? [1, 0] : [6, 4]}
                 geodesic
                 tappable={!!onRoutePress}
                 onPress={onRoutePress ? () => onRoutePress(r) : undefined}
@@ -546,17 +561,22 @@ function CityMarker({
   onCityPress?: (city: MapCity) => void;
 }) {
   const isHome = c.id === "home";
-  const coordKey = `${c.coord.latitude},${c.coord.longitude}`;
-  // Allow Apple/Google Maps to track this marker's view briefly on mount
-  // (or whenever the coord changes) so the pin lands at the right
-  // lat/lng. Then turn it off so steady-state re-renders don't cause
-  // the marker to re-rasterize at default origin.
+  // v1.0.3: re-arm tracksViewChanges whenever ANY visual prop changes,
+  // not just coord. Before this, isNewest flipping (selected pin) or
+  // reciprocated toggling on/off would change the CityPin's rendered
+  // SVG, but tracksViewChanges was already false — Apple Maps held the
+  // old snapshot. On rapid clicks (tap pin → close sheet → tap pin
+  // again) the marker's cached view drifted from its prop state,
+  // causing pins to appear in wrong positions and adjacent polylines
+  // to render against a stale anchor — the "Denver line disappeared"
+  // bug. renderKey hashes every prop that affects the marker's visual.
+  const renderKey = `${c.coord.latitude},${c.coord.longitude},${c.isNewest ? 1 : 0},${c.reciprocated ? 1 : 0}`;
   const [tracks, setTracks] = useState(true);
   useEffect(() => {
     setTracks(true);
     const t = setTimeout(() => setTracks(false), 900);
     return () => clearTimeout(t);
-  }, [coordKey]);
+  }, [renderKey]);
 
   // v0.7.0.58 marker geometry — comments preserved for the next person
   // who has to debug Apple-vs-Google pin offsets:

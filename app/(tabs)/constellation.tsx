@@ -512,6 +512,14 @@ export default function ConstellationScreen() {
           setActiveFriendId(null);
           router.push("/send");
         }}
+        // v1.0.3: tapping a postcard row in "Recent sends" closes this
+        // friend sheet and opens the postcard detail (photo + message +
+        // status). Build 94 wired this in friends.tsx; constellation
+        // uses the same component but I missed wiring the callback here.
+        onTapPostcard={(postcardId) => {
+          setActiveFriendId(null);
+          setTimeout(() => detailRef.current?.open(postcardId), 280);
+        }}
       />
 
       <CreditsSheet visible={creditsOpen} onClose={() => setCreditsOpen(false)} />
