@@ -112,17 +112,19 @@ async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
  *  where the header is a bare hex signature over just the body (older
  *  Lob webhooks or some Debugger configs). */
 async function verifySignature(rawBody: string, headerSig: string): Promise<boolean> {
-  if (LOB_WEBHOOK_SECRETS.length === 0) {
-    // v0.7.0.49: fail-closed in prod by default. Previously this returned
-    // true when no secret was configured — convenient for local dev but a
-    // real security hole if a prod deploy ever dropped LOB_WEBHOOK_SECRET
-    // (anyone could POST forged status updates and mutate postcard rows).
-    // Now you have to set LOB_WEBHOOK_SKIP_VERIFY=true explicitly to skip,
-    // which we only do on the local Supabase emulator.
-    if (Deno.env.get("LOB_WEBHOOK_SKIP_VERIFY") === "true") {
-      console.warn("[lob-webhook] LOB_WEBHOOK_SKIP_VERIFY=true — signature check bypassed (dev only)");
-      return true;
-    }
+  // v0.7.0.60: SKIP_VERIFY now checked FIRST, regardless of secret state.
+  // The previous gate (`length === 0`) never fired because the array is
+  // always initialized with two entries (`?? ""` fallbacks), so setting
+  // LOB_WEBHOOK_SKIP_VERIFY=true did nothing in any environment that
+  // had EVER set a secret. Use this temporarily to confirm Lob webhook
+  // wiring while diagnosing signature failures; remove before friends.
+  if (Deno.env.get("LOB_WEBHOOK_SKIP_VERIFY") === "true") {
+    console.warn("[lob-webhook] LOB_WEBHOOK_SKIP_VERIFY=true — signature check bypassed");
+    return true;
+  }
+  // Filter empty strings so the empty-secret check actually fires.
+  const validSecrets = LOB_WEBHOOK_SECRETS.filter((s) => s && s.length > 0);
+  if (validSecrets.length === 0) {
     console.error("[lob-webhook] no LOB_WEBHOOK_SECRET* env vars set in prod — rejecting request");
     return false;
   }
@@ -151,12 +153,32 @@ async function verifySignature(rawBody: string, headerSig: string): Promise<bool
 
   // Diagnostics — log the header shape (NOT the value, to avoid leaking
   // valid sigs) so we can see why it failed in Supabase logs.
-  console.warn("[lob-webhook] signature mismatch", {
+  // v0.7.0.60: when LOB_WEBHOOK_DEBUG=true we also stash diagnostic info
+  // on globalThis so the caller can return it in the response body. This
+  // is for live troubleshooting of signature mismatches — once we know
+  // why Lob's secret doesn't match what we're configured with, the
+  // env var gets removed.
+  const diag = {
     headerLen: headerSig.length,
     headerPrefix: headerSig.slice(0, 12),
     parsed: { hasT: !!t, v1Count: v1.length },
-    secretCount: LOB_WEBHOOK_SECRETS.length,
-  });
+    secretCount: validSecrets.length,
+    secretLengths: validSecrets.map((s) => s.length),
+    bodyLen: rawBody.length,
+    computedSamples: t
+      ? await Promise.all(
+          validSecrets.map(async (s, i) => ({
+            secretIdx: i,
+            computed: (await hmacSha256Hex(s, `${t}.${rawBody}`)).slice(0, 16) + "…",
+          })),
+        )
+      : [],
+    receivedV1Prefix: v1.length > 0 ? v1[0].slice(0, 16) + "…" : null,
+  };
+  console.warn("[lob-webhook] signature mismatch", diag);
+  if (Deno.env.get("LOB_WEBHOOK_DEBUG") === "true") {
+    (globalThis as any).__lobDiag = diag;
+  }
   return false;
 }
 

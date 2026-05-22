@@ -329,8 +329,8 @@ export default function ConstellationScreen() {
           testID="header-credits-pill"
           hitSlop={8}
         >
-          <Mail color={colors.ink} size={15} strokeWidth={1.8} />
-          <Text style={styles.creditsCount}>{credits}</Text>
+          <Mail color={colors.ink} size={16} strokeWidth={1.8} />
+          <Text style={styles.creditsCount} allowFontScaling={false}>{credits}</Text>
         </Pressable>
       </View>
 
@@ -568,12 +568,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   creditsCount: {
-    // v0.7.0.60: dropped lineHeight: 18 — it pushed the count text
-    // off-center from the 15px Mail icon. Letting iOS use the natural
-    // lineHeight (≈ fontSize) restores vertical alignment.
+    // v0.7.1.92b: serif digit against an SVG icon was the actual root
+    // cause (see CreditsPill.tsx — same lesson learned twice). Switched
+    // to sans-serif Inter. Tabular figures center cleanly against the
+    // geometric Mail icon in a flex row with alignItems:center. No
+    // lineHeight, no translateY, no glyphBox hack — the font does it.
     color: colors.ink,
-    fontFamily: fonts.serifSemi,
-    fontSize: 15,
+    fontFamily: fonts.sansBold,
+    fontSize: 14,
     includeFontPadding: false,
     minWidth: 10,
     textAlign: "center",
