@@ -344,6 +344,39 @@ export function MailClubProvider({ children }: PropsWithChildren) {
           setPrivacy(profile.privacy);
         }
         setFriends(fetchedFriends);
+        // v0.7.0.60: one-time backfill of the on-device self-address
+        // cache. Existing users who completed onboarding before the
+        // welcome-flow sync was added have a self-friend with an
+        // address row in the DB but an empty AsyncStorage cache, which
+        // means the Send tab still prompts them to re-enter their own
+        // address on the next self-send. Pull from the (me) friend if
+        // we find one and the local cache is empty.
+        (async () => {
+          try {
+            const { getSelfAddress, setSelfAddress } = await import("@/src/state/selfAddress");
+            const { isAddressComplete } = await import("@/src/types/address");
+            const existing = await getSelfAddress();
+            if (existing && isAddressComplete(existing)) return;
+            const selfFriend = fetchedFriends.find(
+              (f) => /\(me\)$/i.test(f.name) && f.addressLine1 && f.addressZip,
+            );
+            if (selfFriend && selfFriend.addressLine1 && selfFriend.addressZip) {
+              await setSelfAddress({
+                // Strip the "(me)" suffix that WelcomeSheet adds when
+                // it creates the self-friend so the address card shows
+                // the user's real name on print.
+                name: selfFriend.name.replace(/\s*\(me\)\s*$/i, "").trim(),
+                line1: selfFriend.addressLine1,
+                line2: selfFriend.addressLine2 ?? "",
+                city: selfFriend.addressCity ?? selfFriend.city ?? "",
+                state: selfFriend.addressState ?? selfFriend.state ?? "",
+                zip: selfFriend.addressZip,
+              });
+            }
+          } catch {
+            /* best-effort */
+          }
+        })();
         // v0.7.0.25 BUGFIX: never overwrite a non-empty local cache with
         // an empty server fetch.
         //

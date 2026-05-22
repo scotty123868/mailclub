@@ -568,11 +568,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   creditsCount: {
+    // v0.7.0.60: dropped lineHeight: 18 — it pushed the count text
+    // off-center from the 15px Mail icon. Letting iOS use the natural
+    // lineHeight (≈ fontSize) restores vertical alignment.
     color: colors.ink,
     fontFamily: fonts.serifSemi,
     fontSize: 15,
     includeFontPadding: false,
-    lineHeight: 18,
     minWidth: 10,
     textAlign: "center",
   },

@@ -8,6 +8,7 @@ import { AppShell } from "@/src/components/AppShell";
 import { uploadProfilePhoto } from "@/src/services/api";
 import { CreditsSheet } from "@/src/components/CreditsSheet";
 import { EditAboutMeSheet } from "@/src/components/EditAboutMeSheet";
+import { MailingAddressSheet } from "@/src/components/MailingAddressSheet";
 import { AboutAppSheet } from "@/src/components/AboutAppSheet";
 import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { Header } from "@/src/components/Header";
@@ -90,6 +91,7 @@ export default function MyMailCardScreen() {
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editAboutOpen, setEditAboutOpen] = useState(false);
+  const [mailingAddressOpen, setMailingAddressOpen] = useState(false);
   const [mailOpen, setMailOpen] = useState<null | "sent" | "replies">(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -263,12 +265,14 @@ export default function MyMailCardScreen() {
         onClose={() => setSettingsOpen(false)}
         onOpenCredits={() => setCreditsOpen(true)}
         onOpenEditAboutMe={() => setEditAboutOpen(true)}
+        onOpenMailingAddress={() => setMailingAddressOpen(true)}
         onOpenAddressBook={() => router.push("/friends")}
         onOpenNotifications={() => setNotificationsOpen(true)}
         onOpenPrivacy={() => setPrivacyOpen(true)}
         onOpenAbout={() => setAboutOpen(true)}
       />
       <EditAboutMeSheet visible={editAboutOpen} onClose={() => setEditAboutOpen(false)} />
+      <MailingAddressSheet visible={mailingAddressOpen} onClose={() => setMailingAddressOpen(false)} />
       <MailHistorySheet
         visible={mailOpen !== null}
         initialTab={mailOpen ?? "sent"}

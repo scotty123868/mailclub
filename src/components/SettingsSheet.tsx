@@ -11,6 +11,7 @@ export function SettingsSheet({
   onClose,
   onOpenCredits,
   onOpenEditAboutMe,
+  onOpenMailingAddress,
   onOpenAddressBook,
   onOpenNotifications,
   onOpenPrivacy,
@@ -20,6 +21,7 @@ export function SettingsSheet({
   onClose: () => void;
   onOpenCredits: () => void;
   onOpenEditAboutMe: () => void;
+  onOpenMailingAddress?: () => void;
   onOpenAddressBook?: () => void;
   onOpenNotifications?: () => void;
   onOpenPrivacy?: () => void;
@@ -141,6 +143,13 @@ export function SettingsSheet({
               detail="Update name, tagline, interests"
               onPress={() => { onClose(); onOpenEditAboutMe(); }}
               testID="settings-row-edit-card"
+            />
+            <Row
+              icon={Stamp}
+              label="Mailing address"
+              detail="Used when you send a card to yourself"
+              onPress={() => { onClose(); onOpenMailingAddress?.(); }}
+              testID="settings-row-mailing-address"
             />
           </Section>
 

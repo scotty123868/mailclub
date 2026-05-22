@@ -1,3 +1,4 @@
+import { setSelfAddress } from "@/src/state/selfAddress";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
@@ -758,6 +759,25 @@ export function WelcomeSheet({
           addressZip: yourAddress.zip.trim(),
           addressCountry: "US",
         });
+        // v0.7.0.60: sync the welcome self-send address to the
+        // on-device selfAddress cache that the post-welcome Send tab
+        // reads from. Without this, the user would be prompted to
+        // re-enter their address the next time they pick "Yourself" on
+        // the Send screen, even though they already gave it to us 30
+        // seconds ago during onboarding.
+        try {
+          await setSelfAddress({
+            name: yourFirstName.trim(),
+            line1: yourAddress.line1.trim(),
+            line2: yourAddress.line2.trim() || "",
+            city: yourAddress.city.trim(),
+            state: yourAddress.state.trim().toUpperCase(),
+            zip: yourAddress.zip.trim(),
+          });
+        } catch {
+          // best-effort — if AsyncStorage write fails, user just sees
+          // the prompt once more later. Not worth blocking the send.
+        }
         if (!result.ok || !result.friend) {
           throw new Error("Couldn't set up self-send.");
         }
