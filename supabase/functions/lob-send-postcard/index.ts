@@ -230,38 +230,49 @@ function buildBackHtml(opts: {
   }
   body > * { position: absolute; z-index: 2; }
 
-  /* TOP-LEFT QR cluster, matching the full-image back used by actuallysent.pdf. */
+  /* v0.7.0.58 QR cluster — locked-down geometry matching the
+     reference layout: QR on the left, italic "Respond to..." copy on
+     the right aligned to QR top, short URL beneath the copy.
+     All three elements live within a strict x-band of [0.25in, 2.55in]
+     so nothing leaks into the message area or the address mask. */
   .qr {
     position: absolute;
-    top: 0.187in; left: 0.25in;
-    width: 0.687in; height: 0.687in;
+    top: 0.20in; left: 0.25in;
+    width: 0.68in; height: 0.68in;
     background: #FBF4DE;
     border: 0.015in solid #17223B;
     padding: 0.03in; box-sizing: border-box;
   }
-  /* v0.7.0.43: image-rendering hint tells Chromium to prefer edge
-     crispness over smoothing when downscaling. Helps QR readability. */
   .qr img {
     width: 100%; height: 100%; display: block;
     image-rendering: -webkit-optimize-contrast;
   }
-  /* v0.7.0.49d: top aligned to QR top (was 0.25 vs QR 0.187 = misaligned).
-     Font bumped 7.2pt → 8pt because this is the primary product CTA, not
-     footer copy. Tighter line-height (1.18 → 1.15) keeps the block compact. */
+  /* Copy: anchored to QR top, capped width so it always wraps at the
+     "Respond to {Name} with a / postcard for free." breakpoint shown
+     in the reference. width (not max-width) ensures the wrap point is
+     deterministic regardless of name length. */
   .qr-copy {
     position: absolute;
-    top: 0.187in; left: 1.05in;
-    max-width: 1.50in;
+    top: 0.20in; left: 1.02in;
+    width: 1.50in;
     font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic;
-    font-size: 8pt; color: rgba(23, 34, 59, 0.92); line-height: 1.15;
+    font-size: 8pt; color: rgba(23, 34, 59, 0.92); line-height: 1.18;
     font-weight: 400; margin: 0;
   }
+  /* URL: sits ~0.06in below the second line of copy, locked to a width
+     that fits "themailroom.club/r/XXXXXXXXXXXX" at 6pt mono with the
+     declared letter-spacing. overflow:hidden + text-overflow:ellipsis
+     guarantees no overflow if the token format ever changes. */
   .qr-url {
     position: absolute;
-    top: 0.62in; left: 1.05in;
+    top: 0.60in; left: 1.02in;
+    width: 1.50in;
     font-family: 'JetBrains Mono', monospace; font-size: 6pt;
-    color: rgba(23, 34, 59, 0.6); letter-spacing: 0.05em;
+    color: rgba(23, 34, 59, 0.6); letter-spacing: 0.04em;
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* TOP-RIGHT stamp. Larger and partially off-bleed so it reads like a

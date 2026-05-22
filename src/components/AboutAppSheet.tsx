@@ -1,9 +1,20 @@
+import Constants from "expo-constants";
 import { FileText, HelpCircle, Mail } from "lucide-react-native";
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Stamp } from "@/src/components/Stamp";
 import { SheetHeader } from "@/src/components/system/SheetHeader";
 import { colors } from "@/src/theme/colors";
 import { fonts } from "@/src/theme/typography";
+
+// v0.7.0.58: surface the actual installed binary's version + build number
+// so TestFlight version drift is immediately visible to the user. Reads
+// from app.json via Constants so it always matches what was bundled —
+// no chance of going stale.
+const APP_VERSION = Constants.expoConfig?.version ?? "?";
+const APP_BUILD =
+  Constants.expoConfig?.ios?.buildNumber ??
+  Constants.expoConfig?.android?.versionCode ??
+  "?";
 
 export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   function openMail() {
@@ -77,7 +88,10 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
             </Pressable>
           </Section>
 
-          <Text style={styles.version}>Mailroom · beta · made with paper, ink, and code.</Text>
+          <Text style={styles.version}>
+            Mailroom · beta · made with paper, ink, and code.{"\n"}
+            <Text style={styles.buildBadge}>v{APP_VERSION} ({APP_BUILD})</Text>
+          </Text>
         </ScrollView>
       </View>
     </Modal>
@@ -111,6 +125,7 @@ const styles = StyleSheet.create({
   mailBtn: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.ink, borderRadius: 8, flexDirection: "row", gap: 8, marginTop: 8, paddingHorizontal: 14, paddingVertical: 10 },
   mailBtnText: { color: colors.white, fontFamily: fonts.serifSemi, fontSize: 14, letterSpacing: 0.3 },
   version: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, marginTop: 12, textAlign: "center" },
+  buildBadge: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1, color: colors.postalRed },
 });
 
 const sectionStyles = StyleSheet.create({

@@ -42,7 +42,7 @@ export type PostcardDetailSheetRef = {
 
 export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
   (_, ref) => {
-    const { postcards, friends, currentUser, authedUserId } = useMailClub();
+    const { postcards, friends, currentUser, authedUserId, refreshPostcards } = useMailClub();
     const sheetRef = useRef<BottomSheet>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -53,17 +53,21 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
       () => ({
         open: (postcardId) => {
           setActiveId(postcardId);
+          // v0.7.0.58: fire a background refetch of the postcard list the
+          // moment the user opens a card. Realtime + AppState foreground
+          // refresh should already keep the cache hot, but Realtime can
+          // drop silently and the user's intent (tapping into a specific
+          // card) is the perfect moment to guarantee fresh state. Bug
+          // this closes: claim card stuck on "WAITING FOR THEIR ADDRESS"
+          // long after the recipient redeemed, because Realtime missed
+          // the event.
+          refreshPostcards();
           // v0.7.0.25 BUGFIX: defer the snap until the next animation
           // frame. setActiveId() triggers a re-render; calling
           // snapToIndex(0) synchronously after the setState call fired
           // BEFORE the re-render, on the current BottomSheet (which was
           // the placeholder, see early-return removal below). The snap
           // got dropped on the floor — taps on journal tiles did nothing.
-          //
-          // The cleaner fix was also to drop the conditional placeholder
-          // BottomSheet (the if(!postcard) branch below was returning a
-          // separate element, so the ref pointed at a stale instance for
-          // exactly one render). Both changes ship together.
           requestAnimationFrame(() => {
             sheetRef.current?.snapToIndex(0);
           });
@@ -72,7 +76,7 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
           sheetRef.current?.close();
         },
       }),
-      [],
+      [refreshPostcards],
     );
 
     const postcard = useMemo<Postcard | null>(
@@ -80,7 +84,17 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
       [postcards, activeId],
     );
 
-    const isPending = !!postcard && postcard.toFriendId === "";
+    // v0.7.0.58: "pending" means the claim hasn't been redeemed yet —
+    // recipient hasn't filled in their address. Previously this was
+    // toFriendId === "" alone, which is true for ALL claim cards
+    // (claim cards never have a friend id), so even AFTER the recipient
+    // claimed their card the sender's app kept saying "WAITING FOR
+    // THEIR ADDRESS" forever. Status === "awaiting_address" flips to
+    // something else as soon as redeem_postcard_claim runs.
+    const isPending =
+      !!postcard
+      && postcard.toFriendId === ""
+      && postcard.status === "awaiting_address";
     // v0.7.0.28: detect inbound (we received this) vs outbound (we sent
     // this). For Postcrossing-matched stranger cards the user receives,
     // the header should read "From [city]" rather than "To Pen pal
@@ -173,7 +187,7 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
         // present and surface only the URL. Baking the URL into the
         // message guarantees the full text pre-fills everywhere.
         await Share.share({
-          message: `I'm sending you a postcard. Drop your address in here so it gets to you:\n\n${postcard.claimUrl}`,
+          message: `Hey, I want to send you a postcard but don't have your address. Share it securely here so you can receive the photo!\n\n${postcard.claimUrl}`,
         });
       } catch {
         /* user dismissed share sheet — no-op */
@@ -251,6 +265,15 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
                 {headerPrefix} {recipientLabel}
               </Text>
               <Text style={styles.subtitle}>{formatDate(postcard.sentAt)}</Text>
+              {/* v0.7.0.58 DIAGNOSTIC: visible raw status field so we can
+                  tell whether a stuck "WAITING FOR THEIR ADDRESS" header
+                  is a data-layer staleness bug (status would read
+                  "awaiting_address" when DB has "queued") or a UI logic
+                  bug (status reads correctly but kicker is wrong). Remove
+                  once the stale-claim flow is confirmed solid. */}
+              <Text style={[styles.subtitle, { fontSize: 10, opacity: 0.6 }]}>
+                [debug status: {String(postcard.status)} · lob_id: {postcard.lobId ? "set" : "null"}]
+              </Text>
             </View>
             <Pressable
               onPress={() => sheetRef.current?.close()}
@@ -292,18 +315,16 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
             </View>
           </View>
 
-          {/* Share-again block — only for send-link cards */}
-          {postcard.claimUrl ? (
+          {/* Share-again block — only for send-link cards that haven't
+              been claimed yet. v0.7.0.58: once the recipient submits
+              their address the claim_token is dead — re-sharing the
+              link only shows "already claimed" to anyone else who taps
+              it, so hide the share block entirely after redemption. */}
+          {postcard.claimUrl && isPending ? (
             <View style={styles.shareBlock}>
-              <Text style={styles.shareKicker}>
-                {/* v0.7.0.49 (Codex P2 #8): warmer voice. "SOLICIT THEIR
-                    ADDRESS" reads like a debt collector. */}
-                {isPending ? "SHARE THE ADDRESS LINK" : "SHARE LINK AGAIN"}
-              </Text>
+              <Text style={styles.shareKicker}>SHARE THE ADDRESS LINK</Text>
               <Text style={styles.shareBlurb}>
-                {isPending
-                  ? "Send this link to your recipient. When they add their address, we drop the card in the post."
-                  : "Here's the link you sent — share it again if they lost it."}
+                Send this link to your recipient. When they add their address, we drop the card in the post.
               </Text>
               {/* v0.7.0.49: expiry hint on unclaimed cards. Claims expire
                   30 days after creation; sender had no warning before. */}

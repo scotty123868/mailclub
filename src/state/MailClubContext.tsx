@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Alert } from "react-native";
+import { Alert, AppState, type AppStateStatus } from "react-native";
 import { CARD_COSTS, CREDIT_PACKS, FREE_CREDITS } from "@/src/data/credits";
 import { currentUser as defaultCurrentUser, friends as initialFriends, milestones, postcards as initialPostcards, routes } from "@/src/data/mock";
 import * as api from "@/src/services/api";
@@ -118,6 +118,7 @@ type MailClubState = {
   // Stripe SDK directly and is settled by the stripe-webhook +
   // apply_stripe_credit_purchase pipeline.
   refreshProfile: () => Promise<void>;
+  refreshPostcards: () => Promise<void>;
   markFreeCreditsIntroSeen: () => Promise<void>;
   updateAboutMe: (patch: Partial<CurrentUser>) => Promise<void>;
   removeFriend: (id: string) => Promise<void>;
@@ -160,6 +161,33 @@ const MailClubContext = createContext<MailClubState | null>(null);
 
 function costForCategory(category: CardCategory): number {
   return CARD_COSTS[category];
+}
+
+/**
+ * v0.7.0.58: merge a raw postcards-table row from a Realtime UPDATE
+ * payload into an existing client-side Postcard object. Preserves
+ * fields that don't exist on the DB row (signedphotoUrl, claimUrl from
+ * the JOINed postcard_claims row), narrows DB status into the client's
+ * 4-state enum, and bubbles up lob_id / lob_error / status changes —
+ * the columns that actually drive UI state.
+ *
+ * Why this exists: the prior Realtime handler called api.fetchPostcards()
+ * to get the new state, which hit iOS URLCache and kept returning stale
+ * rows. Direct payload merge skips HTTP entirely.
+ */
+function applyRealtimeRow(prev: Postcard, row: any): Postcard {
+  const rawStatus = row?.status;
+  const narrowStatus: Postcard["status"] =
+    rawStatus === "delivered" ? "delivered"
+    : rawStatus === "draft" ? "draft"
+    : rawStatus === "awaiting_address" ? "awaiting_address"
+    : "sent";
+  return {
+    ...prev,
+    status: narrowStatus,
+    lobId: row?.lob_id ?? prev.lobId ?? null,
+    lobError: row?.lob_error ?? prev.lobError ?? null,
+  };
 }
 
 type CacheShape = {
@@ -374,21 +402,45 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       .on(
         "postgres_changes" as any,
         { event: "*", schema: "public", table: "postcards" },
-        async () => {
-          // Re-fetch on any change. Cheaper than reconciling row-by-row,
-          // and the postcards list is small (<100 rows for most users).
+        async (payload: any) => {
+          // v0.7.0.58 STALE-DATA FIX (FINAL): the prior fix path called
+          // api.fetchPostcards() inside this handler, which hit iOS's
+          // NSURLSession URLCache. Neither `cache: "no-store"` (silently
+          // dropped by React Native's fetch polyfill) nor explicit
+          // Cache-Control request headers reliably busted the cache, so
+          // the refetch kept returning stale rows.
+          //
+          // New strategy: apply the Realtime payload DIRECTLY to React
+          // state. The payload arrives via WebSocket — it's never touched
+          // by URLCache. REPLICA IDENTITY FULL on the postcards table
+          // (migration 2026052200) ensures the payload carries the
+          // entire new row, so we can narrow status / lob_id / lob_error
+          // and merge into the existing Postcard object without losing
+          // signed photo URLs or claim metadata.
           try {
-            const fresh = await api.fetchPostcards();
-            // v0.7.0.25: same guard as the initial fetch — never blow
-            // away a non-empty cache with an empty result. Realtime
-            // events can fire with stale auth context, especially right
-            // after sign-in or after a token refresh, returning [] until
-            // the RLS session catches up.
-            setPostcards((prev) =>
-              fresh.length === 0 && prev.length > 0 ? prev : fresh,
-            );
+            const ev = payload?.eventType ?? payload?.event;
+            const newRow = payload?.new;
+            if (ev === "UPDATE" && newRow?.id) {
+              setPostcards((prev) =>
+                prev.map((p) => (p.id === newRow.id ? applyRealtimeRow(p, newRow) : p))
+              );
+              return;
+            }
+            if (ev === "INSERT" || ev === "DELETE") {
+              // INSERT/DELETE still need a full refetch — we don't have
+              // the signed photo URLs / joined claim row from a raw
+              // payload. Refetch via the HTTP path; the cache might
+              // hand us stale data on the first try, but Realtime
+              // INSERT/DELETE for the sender's own postcards is a
+              // less-common path (initial send happens before this
+              // subscription is open).
+              const fresh = await api.fetchPostcards();
+              setPostcards((prev) =>
+                fresh.length === 0 && prev.length > 0 ? prev : fresh,
+              );
+            }
           } catch {
-            // ignore — next fetch on tab focus picks it up
+            // ignore — next fetch on tab focus / sheet open picks it up
           }
         },
       )
@@ -400,6 +452,43 @@ export function MailClubProvider({ children }: PropsWithChildren) {
       } catch {
         // ignore
       }
+    };
+  }, [authedUserId]);
+
+  // ---- 4c. Refetch on app foreground -----------------------------------
+  // v0.7.0.58: the Realtime subscription above is the primary update path
+  // for postcard status flips (Lob webhook → in_transit/delivered;
+  // claim redeem → queued). It works while the app is foregrounded.
+  //
+  // Bug it doesn't cover: user shares a claim link, switches to desktop
+  // Chrome to submit the recipient's address themselves OR friend submits
+  // and DMs them when done. Meanwhile the app is backgrounded. By the
+  // time the user opens the app again, the Realtime websocket may have
+  // dropped or the event was emitted to a stale channel and missed.
+  // Result: the postcard sheet keeps saying "WAITING FOR THEIR ADDRESS"
+  // for that one card forever — until the user kills + reopens the app
+  // and triggers the on-mount fetch above.
+  //
+  // Fix: re-fetch the user's postcards every time the app comes back to
+  // foreground. Cheap (one query, <50 rows for most users), and makes the
+  // UI self-heal after any missed event.
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED) return;
+    if (!authedUserId) return;
+    const handleAppStateChange = async (next: AppStateStatus) => {
+      if (next !== "active") return;
+      try {
+        const fresh = await api.fetchPostcards();
+        setPostcards((prev) =>
+          fresh.length === 0 && prev.length > 0 ? prev : fresh,
+        );
+      } catch {
+        // Network blip — next state change or Realtime event picks it up.
+      }
+    };
+    const sub = AppState.addEventListener("change", handleAppStateChange);
+    return () => {
+      try { sub.remove(); } catch { /* ignore */ }
     };
   }, [authedUserId]);
 
@@ -859,6 +948,26 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     }
   }, [authedUserId]);
 
+  // v0.7.0.58: manual refresh entry point for the postcard list. Used by
+  // PostcardDetailSheet.open() so opening a card always pulls the latest
+  // status (claim redeemed yet? Lob shipped yet?). Belt-and-suspenders on
+  // top of Realtime + AppState foreground refetch — those should already
+  // keep the cache hot, but Realtime can drop the connection silently
+  // and a manual refresh on the user's intent point (tapping into a card)
+  // closes any remaining staleness window.
+  const refreshPostcardsAction = useCallback(async () => {
+    if (!SUPABASE_CONFIGURED || !authedUserId) return;
+    try {
+      const fresh = await api.fetchPostcards();
+      setPostcards((prev) =>
+        fresh.length === 0 && prev.length > 0 ? prev : fresh,
+      );
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("refreshPostcards failed", err);
+    }
+  }, [authedUserId]);
+
   const markFreeCreditsIntroSeenAction = useCallback(async () => {
     setHasSeenFreeCreditsIntro(true);
     if (SUPABASE_CONFIGURED && authedUserId) {
@@ -1313,6 +1422,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
     sendPostcardViaLink: sendPostcardViaLinkAction,
     sendIntoVoid: sendIntoVoidAction,
     refreshProfile: refreshProfileAction,
+    refreshPostcards: refreshPostcardsAction,
     markFreeCreditsIntroSeen: markFreeCreditsIntroSeenAction,
     updateAboutMe: updateAboutMeAction,
     removeFriend: removeFriendAction,
@@ -1334,7 +1444,7 @@ export function MailClubProvider({ children }: PropsWithChildren) {
   }), [
     userInfo, visibleFriends, postcards, credits, freeCreditsRemaining, hasSeenFreeCreditsIntro, hasCompletedSignup, hasSentFirstCard,
     hydrated, authedUserId, voidReplies, notifications, privacy, celebration,
-    sendPostcardAction, sendPostcardViaLinkAction, sendIntoVoidAction, refreshProfileAction, markFreeCreditsIntroSeenAction,
+    sendPostcardAction, sendPostcardViaLinkAction, sendIntoVoidAction, refreshProfileAction, refreshPostcardsAction, markFreeCreditsIntroSeenAction,
     updateAboutMeAction, removeFriendAction, addFriendByAddressAction, queueInvitationAction,
     addMayaConnectionAction, updateNotificationsAction, updatePrivacyAction, signOutAction,
     completeSignupAction, signInWithEmailAction, signUpWithEmailAction, signInWithAppleAction,

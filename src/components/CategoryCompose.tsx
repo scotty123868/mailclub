@@ -1,3 +1,4 @@
+import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { Feather, Image as ImageIcon } from "lucide-react-native";
 import { useState } from "react";
@@ -54,13 +55,68 @@ export function CategoryCompose({
       );
       return;
     }
+    // v0.7.0.58 PHOTO QUALITY: pick the original at full resolution (no
+    // system crop UI, no quality-knob downsample), THEN resize ourselves
+    // via expo-image-manipulator to target Lob's 300dpi print size. Why
+    // explicit resize instead of just sending the original:
+    //   • Originals are 4032x3024 → ~4MB uploads on cellular. Resizing to
+    //     1875 wide cuts file size ~3-5x and total upload time ~3x.
+    //   • Some Photos library entries are already small (saved from
+    //     iMessage, screenshots, etc). The picker returns whatever was
+    //     stored, which can be 1100x800 — too small for Lob to print
+    //     without upscaling. Manipulator can't invent pixels for these,
+    //     but at least we don't pay 4MB uploads on the ones that ARE big.
+    //   • The original "iOS allowsEditing: true downscales to ~1080" bug
+    //     is already addressed by allowsEditing:false; this step is the
+    //     OUTPUT side of the same problem — guarantee Lob gets a known
+    //     resolution that matches its 300dpi print spec.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.82,
+      allowsEditing: false,
+      quality: 1,
+      exif: false,
     });
-    if (!result.canceled) onChange({ imageUri: result.assets[0].uri });
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+
+    const picked = result.assets[0];
+    let finalUri = picked.uri;
+
+    // Resize only if the image is bigger than our 1875 print target.
+    // Smaller images stay as-is — manipulator upscaling would just blur
+    // them more than Lob's renderer already does. We pass quality 0.92
+    // (~10% smaller files than 1.0, no visible quality loss).
+    const TARGET_WIDTH = 1875;
+    try {
+      const w = picked.width ?? 0;
+      const h = picked.height ?? 0;
+      if (w > TARGET_WIDTH) {
+        // Preserve aspect ratio: provide only the width, manipulator
+        // calculates the height proportionally.
+        const manipulated = await ImageManipulator.manipulateAsync(
+          picked.uri,
+          [{ resize: { width: TARGET_WIDTH } }],
+          { compress: 0.92, format: ImageManipulator.SaveFormat.JPEG },
+        );
+        finalUri = manipulated.uri;
+      } else if (w > 0 && h > 0) {
+        // Re-encode small originals to JPEG without resizing so the
+        // upload pipeline always sees a consistent format. quality 0.95
+        // is essentially lossless for small images.
+        const manipulated = await ImageManipulator.manipulateAsync(
+          picked.uri,
+          [],
+          { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG },
+        );
+        finalUri = manipulated.uri;
+      }
+    } catch (err) {
+      // If manipulator fails (out of memory, unsupported format), fall
+      // back to the original — uploading something is better than
+      // blocking the send.
+      // eslint-disable-next-line no-console
+      console.warn("[CategoryCompose] image manipulator failed:", err);
+    }
+    onChange({ imageUri: finalUri });
   }
 
   if (category === "custom") {

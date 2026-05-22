@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mailrooms.app",
-      "buildNumber": "72",
+      "buildNumber": "87",
       "usesAppleSignIn": true,
       "config": {
         "googleMapsApiKey": ""
@@ -52,7 +52,7 @@
     "extra": {
       "supabaseUrl": "https://nlwnmgwylmmnaemdnzlq.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sd25tZ3d5bG1tbmFlbWRuemxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDI1NjksImV4cCI6MjA5NDA3ODU2OX0.rZlWORqFLfFCBQQ4RPUOBtrqAX_Tc0Gf_sI5hPPENxM",
-      "stripePublishableKey": "pk_test_51TW13IAU9h7DBHxiS64s7cUteWS1MBoebEvFCSUClNr8NL6UqSK4ujKLzW7JPnZPHXXPCLabOI3yXO2GrVr7IIWX00vLpBWamf",
+      "stripePublishableKey": "pk_live_51TW13IAU9h7DBHxivZp2UHwcEhnFY0GCajhML2HivPlrk9FAEGP7L5VFe5ZnK8vXWvJbwOSntpNPQsjPkLBxdd3G00wZtSwAXY",
       "googlePlacesApiKey": "AIzaSyCHeEI7jSErR4tdtCzaZfkCcy_2F43c9Ak"
     }
   }

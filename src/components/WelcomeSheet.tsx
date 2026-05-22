@@ -1,4 +1,5 @@
 import * as AppleAuthentication from "expo-apple-authentication";
+import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { ArrowLeft, ArrowRight, Image as ImageIcon, Link as LinkIcon, User as UserIcon, Users as UsersIcon } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
@@ -494,15 +495,41 @@ export function WelcomeSheet({
       );
       return;
     }
+    // v0.7.0.58 PHOTO QUALITY: same fix as CategoryCompose — drop the
+    // iOS system crop UI (which downscales to ~1080) and resize via
+    // expo-image-manipulator to Lob's 1875-wide print target instead.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [3, 2],
-      quality: 0.92,
+      allowsEditing: false,
+      quality: 1,
+      exif: false,
     });
-    if (!result.canceled && result.assets[0]?.uri) {
-      setPhotoUri(result.assets[0].uri);
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+    const picked = result.assets[0];
+    let finalUri = picked.uri;
+    const TARGET_WIDTH = 1875;
+    try {
+      const w = picked.width ?? 0;
+      if (w > TARGET_WIDTH) {
+        const m = await ImageManipulator.manipulateAsync(
+          picked.uri,
+          [{ resize: { width: TARGET_WIDTH } }],
+          { compress: 0.92, format: ImageManipulator.SaveFormat.JPEG },
+        );
+        finalUri = m.uri;
+      } else if (w > 0) {
+        const m = await ImageManipulator.manipulateAsync(
+          picked.uri,
+          [],
+          { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG },
+        );
+        finalUri = m.uri;
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[WelcomeSheet] image manipulator failed:", err);
     }
+    setPhotoUri(finalUri);
   }
 
   // ----- v0.7.0.8 Lob submission helper -----------------------------------
@@ -692,7 +719,7 @@ export function WelcomeSheet({
         onComplete();
         setTimeout(() => {
           Share.share({
-            message: `I'm sending you a postcard. Drop your address in here so it gets to you:\n\n${claimUrl}`,
+            message: `Hey, I want to send you a postcard but don't have your address. Share it securely here so you can receive the photo!\n\n${claimUrl}`,
           })
             .then((result) => {
               // Only celebrate on actual share completion. iOS share
@@ -964,7 +991,7 @@ export function WelcomeSheet({
                 if (pendingUrl) {
                   setTimeout(() => {
                     Share.share({
-                      message: `I'm sending you a postcard. Drop your address in here so it gets to you:\n\n${pendingUrl}`,
+                      message: `Hey, I want to send you a postcard but don't have your address. Share it securely here so you can receive the photo!\n\n${pendingUrl}`,
                       url: pendingUrl,
                     }).catch(() => {
                       // share dismissed — URL is still visible on the

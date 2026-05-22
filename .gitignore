@@ -45,3 +45,9 @@ expo-start.log
 # supabase CLI transient cache (project linkage, version pins)
 supabase/.temp/
 build/
+
+# build logs (large, ephemeral)
+logs/
+
+# stale icon backups
+assets/backup-icons-build67/

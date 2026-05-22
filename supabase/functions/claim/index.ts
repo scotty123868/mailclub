@@ -39,7 +39,7 @@ serve(async (req) => {
   const tokenFromQuery = url.searchParams.get("t") ?? url.searchParams.get("token");
 
   if (req.method === "GET") {
-    return handleGet(tokenFromQuery ?? "");
+    return handleGet(tokenFromQuery ?? "", req);
   }
   if (req.method === "POST") {
     return handlePost(req, tokenFromQuery);
@@ -47,13 +47,28 @@ serve(async (req) => {
   return new Response("Method not allowed", { status: 405 });
 });
 
-async function handleGet(token: string): Promise<Response> {
-  if (!token) return htmlResponse(errorPage("Missing claim token in URL."), 400);
+async function handleGet(token: string, req?: Request): Promise<Response> {
+  // v0.7.0.57: support JSON response on GET when the caller asks for it
+  // via Accept: application/json. The static web page at
+  // app.themailroom.club/claim wants to know token state BEFORE showing
+  // its form (so it can render the "already claimed" / "expired" UI
+  // itself instead of just submitting + failing). HTML fallback path is
+  // unchanged for browsers that hit this Edge Function URL directly.
+  const wantsJson = req?.headers.get("accept")?.toLowerCase().includes("application/json") ?? false;
+
+  if (!token) {
+    if (wantsJson) return jsonResponse({ ok: false, reason: "MISSING_TOKEN" }, 400);
+    return htmlResponse(errorPage("Missing claim token in URL."), 400);
+  }
 
   const { data, error } = await admin.rpc("claim_lookup", { p_claim_token: token });
-  if (error) return htmlResponse(errorPage(`Server error: ${error.message}`), 500);
+  if (error) {
+    if (wantsJson) return jsonResponse({ ok: false, reason: "SERVER_ERROR", error: error.message }, 500);
+    return htmlResponse(errorPage(`Server error: ${error.message}`), 500);
+  }
 
   if (!data?.ok) {
+    if (wantsJson) return jsonResponse(data ?? { ok: false, reason: "NOT_FOUND" }, 200);
     if (data?.reason === "ALREADY_CLAIMED") {
       return htmlResponse(alreadyClaimedPage(), 200);
     }
@@ -63,7 +78,16 @@ async function handleGet(token: string): Promise<Response> {
     return htmlResponse(errorPage("That link doesn't look right."), 404);
   }
 
-  return htmlResponse(claimFormPage(token, data), 200);
+  // v0.7.0.58: strip message_preview from the JSON + HTML responses.
+  // The note + photo are meant to be a SURPRISE for the recipient —
+  // they shouldn't see the content on the claim page; the postcard
+  // arriving in the mail is the reveal. The claim_lookup RPC still
+  // returns message_preview for back-compat, but we drop it here so
+  // no client surface ever shows it.
+  const safeData = { ...data };
+  delete (safeData as Record<string, unknown>).message_preview;
+  if (wantsJson) return jsonResponse(safeData, 200);
+  return htmlResponse(claimFormPage(token, safeData), 200);
 }
 
 async function handlePost(req: Request, tokenFromQuery: string | null): Promise<Response> {
@@ -306,7 +330,10 @@ function claimFormPage(
       <p class="sub">From ${senderLine}</p>
     </div>
 
-    ${message ? `<div class="preview">${message}</div>` : ""}
+    <!-- v0.7.0.58: removed the message preview. The note + photo are
+         meant to be a surprise — the postcard arriving in the mail is
+         the reveal. Sender name + city stays so the recipient knows
+         who's mailing them something. -->
 
     <p class="sub" style="text-align:center; font-size:15px;">
       Tell us where to send it. Your address stays private to Mailroom — ${fromTag} will never see it.

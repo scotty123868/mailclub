@@ -699,7 +699,7 @@ export default function SendScreen() {
         // the sender's identity is already obvious. Dropped the brand
         // mention + the corporate "we'll print and ship it for you"
         // tail. Three sentences, no exclamation, ends with the link.
-        const shareMsg = `I'm sending you a postcard. Drop your address in here so it gets to you:\n\n${result.claimUrl}`;
+        const shareMsg = `Hey, I want to send you a postcard but don't have your address. Share it securely here so you can receive the photo!\n\n${result.claimUrl}`;
         let shared = false;
         try {
           const shareResult = await Share.share({ message: shareMsg });

@@ -136,12 +136,16 @@ export default function ConstellationScreen() {
       // Pen-pal cards (void) stay out of the graph.
       if (p.toFriendId === "void") continue;
       // Pending send-link cards: recipientId: null synthesizes a placeholder.
+      // v0.7.0.58: pass claimedName through so the graph can label the node
+      // with the recipient's actual name once they've submitted their
+      // address (instead of the generic "Awaiting friend" placeholder).
       if (p.toFriendId === "") {
         rows.push({
           id: p.id,
           senderId: p.senderId ?? selfId,
           recipientId: null,
           status: p.status,
+          claimedName: p.claimedName,
         });
         continue;
       }

@@ -87,6 +87,10 @@ export interface PostcardForGraph {
   senderId: string;
   recipientId: string | null;
   status: "draft" | "sent" | "delivered" | "queued" | "awaiting_address" | "in_transit" | "returned";
+  /** v0.7.0.58: recipient name from postcard_claims.claimed_name. Used to
+   *  label claim-mode nodes once the recipient has submitted their
+   *  address. Undefined for unclaimed claim cards (placeholder label). */
+  claimedName?: string;
 }
 
 export interface BuildGraphOpts {
@@ -141,22 +145,37 @@ export function buildSocialGraph(
     // Skip drafts.
     if (p.status === "draft") continue;
 
-    // v0.7.0.7: pending-claim postcards arrive with recipientId === null
-    // (the recipient hasn't claimed the link yet, so we don't know who
-    // they are). Synthesize a placeholder node + edge so the graph
-    // SHOWS the outbound card visually — the user just sent their first
-    // postcard, the constellation should be populated, not empty.
+    // v0.7.0.7: claim-mode postcards have recipientId === null (the
+    // postcards table doesn't track the recipient through a friend id;
+    // it lives on postcard_claims.claimed_name after redemption).
+    //
+    // v0.7.0.58: split this branch into "claimed" vs "still awaiting":
+    //   - If claimed_name exists (recipient already submitted their
+    //     address), label the node with the claimed name and treat the
+    //     edge as a real send, not a pending one. The card is en route
+    //     to a known person; the graph should say so.
+    //   - Otherwise, fall back to the "Awaiting friend" placeholder
+    //     with the dashed-edge pending treatment.
     if (!p.recipientId) {
-      if (p.senderId !== selfId) continue; // only self-outbound pending
+      if (p.senderId !== selfId) continue; // only self-outbound claim cards
+      const hasName = !!p.claimedName && p.claimedName.trim().length > 0;
       const pendingId = `pending:${p.id}`;
+      const display = hasName
+        ? p.claimedName!.trim()
+        : "Awaiting friend";
       nodes.set(pendingId, {
         id: pendingId,
-        name: "Awaiting friend",
-        color: "rgba(255,255,255,0.42)",
+        name: display,
+        // Claimed-but-no-friend-id recipients get the same warm color as
+        // known friends; still-awaiting get the dim placeholder color.
+        color: hasName ? "#D6B068" : "rgba(255,255,255,0.42)",
         isSelf: false,
         isFoF: false,
         momentCount: 1,
-        pending: true,
+        // Only flag pending when we genuinely don't know the recipient
+        // yet. Once claimed_name is set, the edge solidifies in the UI
+        // (dashed → solid) per the constellation render logic.
+        pending: !hasName,
       });
       nodes.get(selfId)!.momentCount += 1;
       const key = pairKey(selfId, pendingId);
@@ -167,7 +186,7 @@ export function buildSocialGraph(
         momentIds: [p.id],
         hasOutbound: true,
         hasInbound: false,
-        pending: true,
+        pending: !hasName,
       });
       continue;
     }

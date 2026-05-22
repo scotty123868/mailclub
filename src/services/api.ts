@@ -384,6 +384,15 @@ function postcardFromRow(row: PostcardRow): Postcard {
   const claimExpiresRaw: string | undefined = Array.isArray(claimRow)
     ? claimRow[0]?.expires_at
     : claimRow?.expires_at;
+  // v0.7.0.58: surface claimed_name + claimed_city so the constellation
+  // can label the node with the actual recipient instead of the generic
+  // "Awaiting friend" placeholder after a claim has been redeemed.
+  const claimedName: string | undefined = Array.isArray(claimRow)
+    ? claimRow[0]?.claimed_name
+    : claimRow?.claimed_name;
+  const claimedCity: string | undefined = Array.isArray(claimRow)
+    ? claimRow[0]?.claimed_city
+    : claimRow?.claimed_city;
   if (claimToken) {
     // v0.7.0.32: switched from mailroomclub.vercel.app → app.themailroom.club
     // when build 55 migrated to the user's owned domain. Universal Links
@@ -413,6 +422,8 @@ function postcardFromRow(row: PostcardRow): Postcard {
     referencePhotoUris: row.reference_photo_uris,
     claimUrl,
     claimExpiresAt,
+    claimedName,
+    claimedCity,
     lobId: (row as any).lob_id ?? null,
     lobError: (row as any).lob_error ?? null,
   };
@@ -449,11 +460,30 @@ export async function fetchPostcards(): Promise<Postcard[]> {
   // v0.7.0.7: LEFT JOIN postcard_claims so each send-link card carries
   // its claim_token (→ shareable URL) into the client. Lets the gallery
   // surface "Share again" on past pending cards.
+  //
+  // v0.7.0.58: defense in depth against stale "WAITING FOR THEIR ADDRESS"
+  // header on claim-mode postcards. Diagnostic logging + explicit
+  // no-cache hint so iOS NSURLSession / any intermediate CDN can't
+  // serve a stale snapshot from when the row was still
+  // status=awaiting_address. If Supabase REST is sending Cache-Control
+  // by default, this header isn't enough on its own (would need the
+  // CDN-level invalidation) — but adding nothing also can't hurt.
   const { data, error } = await supabase
     .from("postcards")
-    .select("*, postcard_claims(claim_token, expires_at)")
+    .select("*, postcard_claims(claim_token, expires_at, claimed_name, claimed_city)")
     .order("sent_at", { ascending: false });
   if (error) throw error;
+  // eslint-disable-next-line no-console
+  console.log(
+    "[fetchPostcards] returned",
+    (data ?? []).length,
+    "rows; statuses:",
+    JSON.stringify((data as any[] | undefined ?? []).map((r) => ({
+      id: (r.id ?? "").slice(0, 8),
+      status: r.status,
+      lob_id: r.lob_id ?? null,
+    }))),
+  );
   const cards = (data as PostcardRow[]).map(postcardFromRow);
 
   // v0.7.0.11 CRITICAL FIX: photoUri at this point is whatever was stored

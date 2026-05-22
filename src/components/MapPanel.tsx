@@ -491,16 +491,34 @@ export function MapPanel({
               bug the user saw. */}
           {!compact &&
             renderCities.map((c, idx) => {
-              // v0.7.0.52: Codex pin's needle tip is at bottom-RIGHT of
-              // the SVG (around x=23/28 ≈ 0.82), not bottom-center.
-              // Anchor moves accordingly so the needle tip lands exactly
-              // on the lat/lng. Home disc stays centered.
+              // v0.7.0.58: widened the marker wrap to 80×50 so city
+              // names don't truncate ("De..." / "Tu..."). iOS clips
+              // marker rendering to the wrap's bbox, so a 28-wide wrap
+              // capped labels at 28px wide. New layout puts the pin SVG
+              // top-centered inside an 80×50 region and the label
+              // beneath it; centerOffset adjusts for the larger view.
+              //
+              // Math for centerOffset (fixed pixels, immune to iOS bbox
+              // measurement quirks):
+              //   CityPin view = 80w × 50h. View center at (40, 25).
+              //   Pin SVG 28×36 sits top-centered → occupies x=26..54, y=0..36.
+              //   Needle tip in pin SVG: (23, 33).
+              //   Needle tip in wrap coords: (26+23, 0+33) = (49, 33).
+              //   Offset from view center to needle tip: (9, 8).
+              //   centerOffset = -(9, 8) = (-9, -8).
+              //
+              //   HomePin view = 80w × 50h. View center at (40, 25).
+              //   Disc 28×28 sits top-centered → x=26..54, y=0..28.
+              //   Disc center in wrap coords: (40, 14).
+              //   Offset from view center: (0, -11).
+              //   centerOffset = -(0, -11) = (0, 11).
               const isHome = c.id === "home";
               return (
                 <Marker
                   key={c.id}
                   coordinate={c.coord}
-                  anchor={isHome ? { x: 0.5, y: 0.5 } : { x: 0.82, y: 0.92 }}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  centerOffset={isHome ? { x: 0, y: 11 } : { x: -9, y: -8 }}
                   onPress={onCityPress ? () => onCityPress(c) : undefined}
                   // Allow tracksViewChanges only during the drop-in animation
                   // (first ~700ms). After that, freeze the marker — re-renders
@@ -645,17 +663,16 @@ function CityPin({
   // (RN-SVG re-uses the global URL namespace across all Svg instances).
   const idSuffix = name.replace(/[^a-zA-Z0-9]/g, "");
 
+  // v0.7.0.58: wrap is now 80×50. Pin SVG sits top-centered (28×36 in the
+  // upper region), label sits below in normal flex flow with 80px of
+  // horizontal room so city names like "VANCOUVER" / "CLEVELAND" no
+  // longer truncate. centerOffset on the Marker compensates for the
+  // larger wrap (math in the Marker's call site above).
+  const WRAP_W = 80;
+  const WRAP_H = 50;
   return (
-    /* v0.7.0.56 BUGFIX (real one): Explicit width/height on the wrap so the
-       Marker's bbox is FORCED to pin-only dimensions. Without this, even
-       though labelWrap is position:absolute, react-native-maps' native
-       iOS marker measurement was still including the label in the bbox,
-       which pushed the (0.82, 0.92) anchor down to the bottom of the
-       label area — causing Polyline endpoints to land on the city name
-       text rather than the pin needle tip. Forcing W×H here pins the
-       bbox to exactly the pin SVG, so anchor maps correctly. */
-    <Animated.View style={[pinStyles.wrap, { width: HEAD_SVG_W, height: HEAD_SVG_H }, animStyle]}>
-      <View style={{ width: HEAD_SVG_W, height: HEAD_SVG_H, alignItems: "center", justifyContent: "flex-end" }}>
+    <Animated.View style={[pinStyles.wrap, { width: WRAP_W, height: WRAP_H }, animStyle]}>
+      <View style={{ width: HEAD_SVG_W, height: HEAD_SVG_H }}>
         <Svg width={HEAD_SVG_W} height={HEAD_SVG_H} viewBox={`0 0 ${HEAD_SVG_W} ${HEAD_SVG_H}`}>
           <Defs>
             {/* Red plastic head — 5-stop radial gradient gives believable
@@ -866,12 +883,15 @@ function HomePin({
   }));
 
   const DISC_PX = 28;
+  // v0.7.0.58: same 80×50 wrap treatment as CityPin so the "Home" label
+  // doesn't get clipped by iOS marker bbox. centerOffset on the Marker
+  // call site moves the view center down 11px so the disc lands on
+  // the coord exactly.
+  const WRAP_W = 80;
+  const WRAP_H = 50;
 
   return (
-    /* v0.7.0.56: same explicit width/height fix as CityPin — forces the
-       Marker bbox to be exactly the disc dimensions so anchor (0.5, 0.5)
-       lands at the center of the disc, not the center of disc+label. */
-    <Animated.View style={[pinStyles.wrap, { width: DISC_PX, height: DISC_PX }, animStyle]}>
+    <Animated.View style={[pinStyles.wrap, { width: WRAP_W, height: WRAP_H }, animStyle]}>
       <View
         style={{
           width: DISC_PX,
@@ -1006,13 +1026,16 @@ const pinStyles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   labelWrap: {
-    // Absolute so the label doesn't expand the Marker bbox — see wrap comment
-    position: "absolute",
-    top: "100%",
+    // v0.7.0.58: was position:absolute,top:100% — paired with the 28×36
+    // wrap that's now 80×50. With the wider wrap, the label fits in the
+    // bottom region in normal flex flow (wrap has alignItems:center, so
+    // children stack centered vertically). Normal flow means iOS won't
+    // clip the label anymore.
     marginTop: 2,
     paddingHorizontal: 4,
     paddingVertical: 1,
     alignSelf: "center",
+    maxWidth: 80,
   },
   label: {
     color: "#2B1A08",

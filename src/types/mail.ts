@@ -93,6 +93,19 @@ export type Postcard = {
    */
   claimExpiresAt?: string;
   /**
+   * v0.7.0.58: recipient name from postcard_claims.claimed_name. Populated
+   * after the recipient submits their address via the claim link. Used by
+   * the Constellation graph to label the node with the actual recipient
+   * instead of the "Awaiting friend" placeholder, and by the postcard
+   * detail sheet to surface "To {claimedName}" after redemption.
+   */
+  claimedName?: string;
+  /**
+   * v0.7.0.58: recipient city from postcard_claims.claimed_city. Used to
+   * surface "To Maya in Denver" once the claim has been redeemed.
+   */
+  claimedCity?: string;
+  /**
    * Lob postcard id, populated only after the Lob handoff succeeds.
    * Null/undefined while the card is in flight to Lob OR if the handoff
    * failed silently (the orphan state we built `retry-orphan` to fix).
