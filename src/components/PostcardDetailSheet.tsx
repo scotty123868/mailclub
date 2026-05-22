@@ -470,6 +470,8 @@ function statusKicker(status: Postcard["status"]): string {
     case "awaiting_address":
       // v0.7.0.49 (Codex P2 #8): warmer voice (was "WAITING ON ADDRESS").
       return "WAITING FOR THEIR ADDRESS";
+    case "expired":
+      return "ADDRESS LINK EXPIRED";
   }
 }
 

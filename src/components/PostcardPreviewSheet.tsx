@@ -324,6 +324,10 @@ function statusLabel(status: Postcard["status"]): string {
       return "delivered";
     case "draft":
       return "draft";
+    case "awaiting_address":
+      return "waiting for address";
+    case "expired":
+      return "expired";
     default:
       return status;
   }

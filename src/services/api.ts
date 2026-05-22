@@ -320,9 +320,9 @@ type PostcardRow = {
   category: CardCategory;
   credit_cost: number;
   // codex Phase 6 P2: status union was missing the runtime values added by
-  // migrations 1208/1209 ('queued', 'awaiting_address', 'in_transit',
-  // 'returned'). TS was lying about the row shape.
-  status: "draft" | "sent" | "delivered" | "queued" | "awaiting_address" | "in_transit" | "returned";
+  // migrations 1208/1209/2100 ('queued', 'awaiting_address', 'in_transit',
+  // 'returned', 'expired'). TS was lying about the row shape.
+  status: "draft" | "sent" | "delivered" | "queued" | "awaiting_address" | "in_transit" | "returned" | "expired";
   message: string;
   place_name: string | null;
   // codex Phase 6 P2: column renamed from photo_uri → photo_path in
@@ -343,22 +343,23 @@ type PostcardRow = {
 };
 
 function postcardFromRow(row: PostcardRow): Postcard {
-  // Status narrowing — preserves the four states the UI cares about.
+  // Status narrowing — preserves the states the UI cares about.
   // v0.7.0.48 FIX (Codex P1.4b): preserve "awaiting_address" instead of
   // collapsing it into "sent". Without this, PostcardDetailSheet can't
   // tell unclaimed claim cards (nothing to retry — recipient hasn't
   // filled in the address yet) from claimed-but-Lob-failed orphans
   // (sender SHOULD see a retry button). Both showed up as "sent" before,
   // and the orphan-retry UI was hidden for all claim cards.
-  const narrowStatus: "draft" | "sent" | "delivered" | "awaiting_address" =
+  const narrowStatus: "draft" | "sent" | "delivered" | "awaiting_address" | "expired" =
     row.status === "delivered" ? "delivered"
     : row.status === "draft" ? "draft"
     : row.status === "awaiting_address" ? "awaiting_address"
+    : row.status === "expired" ? "expired"
     : "sent";
-  // v0.7.0.7: build the claim URL from the embedded postcard_claims row,
-  // if any. fetchPostcards LEFT JOINs postcard_claims so send-link cards
-  // (to_kind === "claim") expose their share URL on the Postcard type.
-  // Past cards in the gallery can then surface the URL for re-share.
+  // v0.7.0.7: build the claim URL for send-link cards. Current fetches use
+  // fetch_postcards_for_sender(), which returns sender-safe top-level claim
+  // fields; the embedded postcard_claims fallback is kept for older row
+  // shapes during local/dev migrations.
   //
   // v0.7.0.26: claim URLs now point at the Mailroom marketing domain
   // (mailroomclub.vercel.app/claim) instead of the raw Supabase Edge

@@ -64,12 +64,10 @@ export type Postcard = {
   toCity: string;
   category: CardCategory;
   creditCost: number;
-  // v0.7.0.19: added "awaiting_address" — the status assigned by
-  // send_postcard_via_claim when the sender creates a shareable link but
-  // the recipient hasn't filled in their address yet. The client treats
-  // this as "queued" / "outbound but pending claim" for journal and
-  // Sent-count purposes.
-  status: "draft" | "sent" | "delivered" | "awaiting_address";
+  // v0.7.0.19: "awaiting_address" is assigned to shareable-link cards
+  // before the recipient fills in their address. v0.7.0.61+: "expired"
+  // is assigned after the unclaimed link expires and the credit is refunded.
+  status: "draft" | "sent" | "delivered" | "awaiting_address" | "expired";
   message: string;
   sentAt: string;
   placeName?: string;
@@ -78,9 +76,9 @@ export type Postcard = {
   customTone?: CustomTone;
   referencePhotoUris?: string[];
   /**
-   * Claim URL for send-by-link cards. Populated by fetchPostcards via a
-   * LEFT JOIN against postcard_claims. Present whenever the card was sent
-   * with `to_kind === "claim"`. The card may still be unclaimed
+   * Claim URL for send-by-link cards. Populated by fetchPostcards via the
+   * sender-safe claim RPC fields. Present whenever the card was sent with
+   * `to_kind === "claim"`. The card may still be unclaimed
    * (`toFriendId === ""`) or claimed (toFriendId populated) — both cases
    * surface the URL so the sender can re-share it forever.
    */

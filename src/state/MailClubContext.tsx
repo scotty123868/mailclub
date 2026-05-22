@@ -166,9 +166,9 @@ function costForCategory(category: CardCategory): number {
 /**
  * v0.7.0.58: merge a raw postcards-table row from a Realtime UPDATE
  * payload into an existing client-side Postcard object. Preserves
- * fields that don't exist on the DB row (signedphotoUrl, claimUrl from
- * the JOINed postcard_claims row), narrows DB status into the client's
- * 4-state enum, and bubbles up lob_id / lob_error / status changes —
+ * fields that don't exist on the DB row (signedPhotoUrl, claimUrl from
+ * the sender-safe claim RPC), narrows DB status into the client's
+ * status enum, and bubbles up lob_id / lob_error / status changes —
  * the columns that actually drive UI state.
  *
  * Why this exists: the prior Realtime handler called api.fetchPostcards()
@@ -181,6 +181,7 @@ function applyRealtimeRow(prev: Postcard, row: any): Postcard {
     rawStatus === "delivered" ? "delivered"
     : rawStatus === "draft" ? "draft"
     : rawStatus === "awaiting_address" ? "awaiting_address"
+    : rawStatus === "expired" ? "expired"
     : "sent";
   return {
     ...prev,
