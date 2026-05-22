@@ -182,6 +182,7 @@ function applyRealtimeRow(prev: Postcard, row: any): Postcard {
     : rawStatus === "draft" ? "draft"
     : rawStatus === "awaiting_address" ? "awaiting_address"
     : rawStatus === "expired" ? "expired"
+    : rawStatus === "cancelled" ? "cancelled"
     : "sent";
   return {
     ...prev,
@@ -189,6 +190,11 @@ function applyRealtimeRow(prev: Postcard, row: any): Postcard {
     status: narrowStatus,
     lobId: row?.lob_id ?? prev.lobId ?? null,
     lobError: row?.lob_error ?? prev.lobError ?? null,
+    // v0.7.0.59: bubble Lob's granular delivery state so the postcard
+    // sheet kicker can flip from "ON ITS WAY" → "PRINTING" → "MAILED" →
+    // "IN TRANSIT" → "DELIVERED" as the Lob webhook lands on each phase.
+    lobStatus: row?.lob_status ?? prev.lobStatus ?? null,
+    lobExpectedDelivery: row?.lob_expected_delivery ?? prev.lobExpectedDelivery ?? null,
   };
 }
 

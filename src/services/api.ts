@@ -322,7 +322,7 @@ type PostcardRow = {
   // codex Phase 6 P2: status union was missing the runtime values added by
   // migrations 1208/1209/2100 ('queued', 'awaiting_address', 'in_transit',
   // 'returned', 'expired'). TS was lying about the row shape.
-  status: "draft" | "sent" | "delivered" | "queued" | "awaiting_address" | "in_transit" | "returned" | "expired";
+  status: "draft" | "sent" | "delivered" | "queued" | "awaiting_address" | "in_transit" | "returned" | "expired" | "cancelled";
   message: string;
   place_name: string | null;
   // codex Phase 6 P2: column renamed from photo_uri → photo_path in
@@ -350,11 +350,12 @@ function postcardFromRow(row: PostcardRow): Postcard {
   // filled in the address yet) from claimed-but-Lob-failed orphans
   // (sender SHOULD see a retry button). Both showed up as "sent" before,
   // and the orphan-retry UI was hidden for all claim cards.
-  const narrowStatus: "draft" | "sent" | "delivered" | "awaiting_address" | "expired" =
+  const narrowStatus: "draft" | "sent" | "delivered" | "awaiting_address" | "expired" | "cancelled" =
     row.status === "delivered" ? "delivered"
     : row.status === "draft" ? "draft"
     : row.status === "awaiting_address" ? "awaiting_address"
     : row.status === "expired" ? "expired"
+    : row.status === "cancelled" ? "cancelled"
     : "sent";
   // v0.7.0.7: build the claim URL for send-link cards. Current fetches use
   // fetch_postcards_for_sender(), which returns sender-safe top-level claim
@@ -433,6 +434,8 @@ function postcardFromRow(row: PostcardRow): Postcard {
     claimedCity,
     lobId: (row as any).lob_id ?? null,
     lobError: (row as any).lob_error ?? null,
+    lobStatus: (row as any).lob_status ?? null,
+    lobExpectedDelivery: (row as any).lob_expected_delivery ?? null,
   };
 }
 
@@ -1013,6 +1016,28 @@ export async function retryOrphanShipping(postcardId: string): Promise<{ ok: boo
     return { ok: true, lobId: data.lob_id };
   } catch (err: any) {
     return { ok: false, error: err?.message ?? "Retry threw" };
+  }
+}
+
+/**
+ * v0.7.0.59: cancel a postcard within Lob's cancellation window. Calls
+ * the cancel-postcard Edge Function which DELETEs the Lob postcard,
+ * refunds the credit, and flips status to 'cancelled' if Lob accepts.
+ * If Lob rejects (card already in production), no refund and the error
+ * is surfaced so the user knows why.
+ */
+export async function cancelPostcard(postcardId: string): Promise<{ ok: boolean; error?: string; refunded?: number }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("cancel-postcard", {
+      body: { postcard_id: postcardId },
+    });
+    if (error) return { ok: false, error: error.message };
+    if (!data || data.ok !== true) {
+      return { ok: false, error: data?.error ?? data?.reason ?? "Cancel failed" };
+    }
+    return { ok: true, refunded: data.refunded };
+  } catch (err: any) {
+    return { ok: false, error: err?.message ?? "Cancel threw" };
   }
 }
 

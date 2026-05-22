@@ -67,7 +67,7 @@ export type Postcard = {
   // v0.7.0.19: "awaiting_address" is assigned to shareable-link cards
   // before the recipient fills in their address. v0.7.0.61+: "expired"
   // is assigned after the unclaimed link expires and the credit is refunded.
-  status: "draft" | "sent" | "delivered" | "awaiting_address" | "expired";
+  status: "draft" | "sent" | "delivered" | "awaiting_address" | "expired" | "cancelled";
   message: string;
   sentAt: string;
   placeName?: string;
@@ -103,6 +103,18 @@ export type Postcard = {
    * surface "To Maya in Denver" once the claim has been redeemed.
    */
   claimedCity?: string;
+  /**
+   * v0.7.0.59: granular Lob delivery status. Webhook keeps this fresh as the
+   * postcard moves through the print pipeline:
+   *   "received" → "in_production" → "mailed" → "in_transit"
+   *   → "processed_for_delivery" → "delivered"
+   * Used by the postcard sheet to show "PRINTING" / "MAILED" / etc.
+   * instead of a single "ON ITS WAY" for everything pre-delivery.
+   */
+  lobStatus?: string | null;
+  /** v0.7.0.59: expected delivery date from Lob, surfaced on the card as
+   *  "Arrives by Jun 2". */
+  lobExpectedDelivery?: string | null;
   /**
    * Lob postcard id, populated only after the Lob handoff succeeds.
    * Null/undefined while the card is in flight to Lob OR if the handoff

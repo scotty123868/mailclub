@@ -86,7 +86,7 @@ export interface PostcardForGraph {
   id: string;
   senderId: string;
   recipientId: string | null;
-  status: "draft" | "sent" | "delivered" | "queued" | "awaiting_address" | "in_transit" | "returned" | "expired";
+  status: "draft" | "sent" | "delivered" | "queued" | "awaiting_address" | "in_transit" | "returned" | "expired" | "cancelled";
   /** v0.7.0.58: recipient name from postcard_claims.claimed_name. Used to
    *  label claim-mode nodes once the recipient has submitted their
    *  address. Undefined for unclaimed claim cards (placeholder label). */

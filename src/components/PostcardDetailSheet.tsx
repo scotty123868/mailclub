@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, Share, StyleSheet, Text, View } from "react-native";
-import { retryOrphanShipping } from "@/src/services/api";
+import { cancelPostcard, retryOrphanShipping } from "@/src/services/api";
 import { humanizeLobError } from "@/src/services/lob";
 import { useMailClub } from "@/src/state/MailClubContext";
 import type { Postcard } from "@/src/types/mail";
@@ -164,6 +164,65 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
     // the recipient redeemed and we tried to ship). Unclaimed cards
     // stay non-retryable — there's nothing to retry yet.
     const [retrying, setRetrying] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+
+    // v0.7.0.59: cancel window. Lob lets us pull a card until it enters
+    // production. Real-world that's typically a few hours after send, but
+    // Lob's "batch print cutoff" varies by mail class and time of day, so
+    // we surface the Cancel button only while lob_status is null/received
+    // AND the card was sent in the last 30 min — that's a safe envelope
+    // where Lob will almost always accept the cancellation. If Lob
+    // rejects (already in production), the Edge Function returns a clear
+    // error and no refund happens.
+    const isCancellable = useMemo(() => {
+      if (!postcard) return false;
+      if (postcard.toFriendId === "" && !postcard.claimUrl) return false; // no claim, no friend
+      if (postcard.status === "cancelled" || postcard.status === "delivered" || postcard.status === "expired") return false;
+      const earlyLob = !postcard.lobStatus || postcard.lobStatus === "received";
+      if (!earlyLob) return false;
+      const sentMs = Date.parse(postcard.sentAt);
+      if (Number.isNaN(sentMs)) return false;
+      const elapsed = Date.now() - sentMs;
+      return elapsed >= 0 && elapsed < 30 * 60 * 1000;
+    }, [postcard]);
+
+    const onCancel = useCallback(async () => {
+      if (!postcard) return;
+      Alert.alert(
+        "Cancel this card?",
+        "We'll ask the printer to pull it from the queue. If they've already started printing, we can't undo the send. If we catch it in time, your credit comes back.",
+        [
+          { text: "Keep sending", style: "cancel" },
+          {
+            text: "Cancel send",
+            style: "destructive",
+            onPress: async () => {
+              setCancelling(true);
+              try {
+                const result = await cancelPostcard(postcard.id);
+                if (result.ok) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                  Alert.alert("Cancelled", result.refunded ? `Your ${result.refunded} credit is back in your wallet.` : "Postcard cancelled.");
+                  // refreshPostcards will pull the new status; Realtime
+                  // event from the row update should also flip the UI.
+                  refreshPostcards();
+                } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+                  Alert.alert(
+                    "Couldn't cancel",
+                    result.error?.includes("production") || result.error?.includes("422")
+                      ? "The printer's already started on this one. It's on its way."
+                      : result.error ?? "Try again in a moment.",
+                  );
+                }
+              } finally {
+                setCancelling(false);
+              }
+            },
+          },
+        ],
+      );
+    }, [postcard, refreshPostcards]);
     const isClaimCardRedeemedAndOrphan =
       !!postcard
       && postcard.toFriendId === ""
@@ -267,7 +326,7 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
               <Text style={styles.kicker}>
                 {/* v0.7.0.49 (Codex P2 #8): warm copy. Cold "AWAITING ADDRESS"
                     label felt like admin software; this app is emotional. */}
-                {isPending ? "WAITING FOR THEIR ADDRESS" : statusKicker(postcard.status)}
+                {isPending ? "WAITING FOR THEIR ADDRESS" : statusKicker(postcard)}
               </Text>
               <Text style={styles.title} numberOfLines={1}>
                 {headerPrefix} {recipientLabel}
@@ -398,6 +457,34 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
               </Pressable>
             </View>
           ) : null}
+
+          {/* v0.7.0.59: cancel-within-window control. Shows up for the
+              first ~30 minutes after send while Lob's batch printer
+              hasn't taken the job yet. After that the button hides and
+              the card lives out its delivery cycle. */}
+          {isCancellable ? (
+            <Pressable
+              onPress={onCancel}
+              disabled={cancelling}
+              style={({ pressed }) => [
+                styles.cancelBtn,
+                cancelling && { opacity: 0.6 },
+                pressed && { opacity: 0.75 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel postcard"
+              testID="postcard-detail-cancel"
+            >
+              {cancelling ? (
+                <ActivityIndicator color={colors.postalRed} size="small" />
+              ) : (
+                <X color={colors.postalRed} size={14} strokeWidth={1.6} />
+              )}
+              <Text style={styles.cancelBtnText}>
+                {cancelling ? "Cancelling…" : "Cancel send (refund credit)"}
+              </Text>
+            </Pressable>
+          ) : null}
             </>
           )}
         </BottomSheetScrollView>
@@ -459,19 +546,44 @@ const expiryStyles = StyleSheet.create({
   expiredText: { color: "#7B2D24" },
 });
 
-function statusKicker(status: Postcard["status"]): string {
-  switch (status) {
+function statusKicker(postcard: Postcard): string {
+  // v0.7.0.59: granular Lob state when the narrowed status is "sent".
+  // Lob's webhook flips lob_status through several phases between accept
+  // and delivery; surfacing them gives users live visibility instead of
+  // a single "ON ITS WAY" for the entire week.
+  if (postcard.status === "sent") {
+    switch (postcard.lobStatus) {
+      case "in_production":
+        return "PRINTING";
+      case "mailed":
+        return "MAILED";
+      case "in_transit":
+        return "IN TRANSIT";
+      case "processed_for_delivery":
+        return "AT THEIR POST OFFICE";
+      case "re-routed":
+        return "RE-ROUTING";
+      case "returned_to_sender":
+        return "RETURNED TO SENDER";
+      case "received":
+      default:
+        // null lob_status = pre-Lob queue. Anything else = "ON ITS WAY".
+        return postcard.lobId ? "ON ITS WAY" : "QUEUED FOR PRINT";
+    }
+  }
+  switch (postcard.status) {
     case "delivered":
       return "DELIVERED";
-    case "sent":
-      return "ON ITS WAY";
     case "draft":
       return "DRAFT";
     case "awaiting_address":
-      // v0.7.0.49 (Codex P2 #8): warmer voice (was "WAITING ON ADDRESS").
       return "WAITING FOR THEIR ADDRESS";
     case "expired":
       return "ADDRESS LINK EXPIRED";
+    case "cancelled":
+      return "CANCELLED — CREDIT REFUNDED";
+    default:
+      return "";
   }
 }
 
@@ -663,6 +775,20 @@ const styles = StyleSheet.create({
     color: colors.paper,
     fontFamily: fonts.serifSemi,
     fontSize: 14,
+  },
+  cancelBtn: {
+    alignItems: "center",
+    alignSelf: "center",
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  cancelBtnText: {
+    color: colors.postalRed,
+    fontFamily: fonts.serifSemi,
+    fontSize: 13,
   },
   secondaryBtn: {
     flexDirection: "row",
