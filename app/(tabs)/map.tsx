@@ -18,6 +18,10 @@ import {
   groupByArea,
 } from "@/src/lib/mapStats";
 import {
+  PostcardDetailSheet,
+  type PostcardDetailSheetRef,
+} from "@/src/components/PostcardDetailSheet";
+import {
   PostcardPreviewSheet,
   type PostcardPreviewSheetRef,
 } from "@/src/components/PostcardPreviewSheet";
@@ -53,6 +57,9 @@ import { useMailClub } from "@/src/state/MailClubContext";
  */
 export default function MapScreen() {
   const sheetRef = useRef<PostcardPreviewSheetRef>(null);
+  // v1.0.1: tapping a row in the city preview sheet now opens the
+  // postcard detail sheet (photo + message + status), not /send.
+  const detailRef = useRef<PostcardDetailSheetRef>(null);
   const { postcards, friends, currentUser, authedUserId } = useMailClub();
 
   // v0.7.0.50 Simplified Atlas:
@@ -190,7 +197,11 @@ export default function MapScreen() {
         // v0.7.0.50: clear the selected-area state when the sheet
         // closes so the line goes back to dotted.
         onDismiss={() => setSelectedKey(null)}
+        // v1.0.1: hand postcard taps up so we can open the detail sheet
+        // instead of routing to /send.
+        onTapPostcard={(postcardId) => detailRef.current?.open(postcardId)}
       />
+      <PostcardDetailSheet ref={detailRef} />
     </BottomSheetModalProvider>
   );
 }

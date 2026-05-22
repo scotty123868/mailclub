@@ -1,12 +1,17 @@
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
 import { QrCode, Search, UserPlus, X } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { AddFriendSheet } from "@/src/components/AddFriendSheet";
 import { AppShell } from "@/src/components/AppShell";
 import { FriendDetailSheet } from "@/src/components/FriendDetailSheet";
 import { IdentityAvatar } from "@/src/components/IdentityAvatar";
 import { Header } from "@/src/components/Header";
+import {
+  PostcardDetailSheet,
+  type PostcardDetailSheetRef,
+} from "@/src/components/PostcardDetailSheet";
 import { PostalCard } from "@/src/components/PostalCard";
 import { PrivacyCard } from "@/src/components/PrivacyCard";
 import { QRCodeModal } from "@/src/components/QRCodeModal";
@@ -52,6 +57,11 @@ export default function FriendsScreen() {
     });
   }, [friends, postcards, searchQuery]);
 
+  // v1.0.1: detail sheet for tapping a postcard inside the friend
+  // detail modal's "Recent sends" list. Lives at the friends-tab root
+  // (not inside the Modal) so the BottomSheet can render full-screen
+  // after the Modal closes.
+  const detailRef = useRef<PostcardDetailSheetRef>(null);
   function openFriend(id: string) {
     setActiveFriendId(id);
   }
@@ -62,8 +72,19 @@ export default function FriendsScreen() {
     closeFriend();
     router.push({ pathname: "/send", params: { friendId: id } });
   }
+  // v1.0.1: close the friend Modal first, then open the postcard detail
+  // sheet. iOS Modal close takes ~280ms; we defer the detail-sheet open
+  // with a setTimeout that matches so the BottomSheet rises into a
+  // clean window. Without the delay, the sheet's snapToIndex fires
+  // against a still-attached Modal and either gets covered by it or
+  // gets its snap dropped.
+  function tapPostcardFromFriend(postcardId: string) {
+    closeFriend();
+    setTimeout(() => detailRef.current?.open(postcardId), 280);
+  }
 
   return (
+    <BottomSheetModalProvider>
     <AppShell>
       <Header title="Friends" />
 
@@ -187,6 +208,9 @@ export default function FriendsScreen() {
         visible={activeFriendId !== null}
         onClose={closeFriend}
         onSend={sendToFriend}
+        // v1.0.1: tapping a row in "Recent sends" closes this sheet and
+        // opens the postcard detail sheet (photo + message + status).
+        onTapPostcard={tapPostcardFromFriend}
       />
 
       <AddFriendSheet
@@ -195,6 +219,10 @@ export default function FriendsScreen() {
         onAdded={(id) => setActiveFriendId(id)}
       />
     </AppShell>
+    {/* v1.0.1: lives at root, outside AppShell, so it can render over
+        the floating tab bar when a postcard tap surfaces it. */}
+    <PostcardDetailSheet ref={detailRef} />
+    </BottomSheetModalProvider>
   );
 }
 

@@ -518,7 +518,13 @@ export default function ConstellationScreen() {
 
       {/* v0.7.0.4: tap an edge → bottom sheet of postcards exchanged
           on that line. Same component the Map uses for pin taps. */}
-      <PostcardPreviewSheet ref={sheetRef} />
+      <PostcardPreviewSheet
+        ref={sheetRef}
+        // v1.0.1: tapping a postcard row in the friend-scoped preview
+        // sheet now opens the PostcardDetailSheet (photo + message +
+        // status), not /send.
+        onTapPostcard={(postcardId) => detailRef.current?.open(postcardId)}
+      />
 
       {/* v0.7.0.7: tap a pending node or pending edge → postcard detail
           sheet with the claim URL + Share Again button. */}

@@ -41,12 +41,18 @@ export type PostcardPreviewSheetRef = {
 // v0.7.0.49: onDismiss surfaces close events to the parent so callers
 // can clean up coupled state (e.g. the Map screen's highlightRoute,
 // which used to stay drawn after the sheet closed).
+//
+// v1.0.1: onTapPostcard hands a postcard tap up to the parent so the
+// parent can open the PostcardDetailSheet (photo + message + status).
+// Before this, tapping a row inside the preview sheet routed to /send,
+// which was the "v0.7.1 future" placeholder. That future is now.
 export type PostcardPreviewSheetProps = {
   onDismiss?: () => void;
+  onTapPostcard?: (postcardId: string) => void;
 };
 
 export const PostcardPreviewSheet = forwardRef<PostcardPreviewSheetRef, PostcardPreviewSheetProps>(
-  ({ onDismiss }, ref) => {
+  ({ onDismiss, onTapPostcard }, ref) => {
     const router = useRouter();
     const sheetRef = useRef<BottomSheet>(null);
     const { postcards, authedUserId } = useMailClub();
@@ -149,10 +155,21 @@ export const PostcardPreviewSheet = forwardRef<PostcardPreviewSheetRef, Postcard
       [],
     );
 
-    function onTapCard(_postcardId: string) {
-      // For v0.7.0.4 the card row routes to the send tab, pre-seeded
-      // with the recipient (existing flow). Postcard detail screen
-      // is a v0.7.1 future.
+    function onTapCard(postcardId: string) {
+      // v1.0.1: tap a row → hand the postcard id up to the parent
+      // (Map or Constellation), which closes the preview sheet and
+      // opens the PostcardDetailSheet (photo + message + status).
+      // Fallback to the send-tab route only if no parent handler is
+      // wired, so older callers keep working.
+      if (onTapPostcard) {
+        sheetRef.current?.close();
+        // Defer to the next frame so the close animation can start
+        // before the detail sheet rises. Without this, iOS occasionally
+        // drops the detail-sheet snap as it fires against a stale
+        // sheet ref while this preview is still tearing down.
+        requestAnimationFrame(() => onTapPostcard(postcardId));
+        return;
+      }
       sheetRef.current?.close();
       router.push("/send");
     }

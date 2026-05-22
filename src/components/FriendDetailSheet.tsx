@@ -13,11 +13,19 @@ export function FriendDetailSheet({
   visible,
   onClose,
   onSend,
+  onTapPostcard,
 }: {
   friend: Friend | null;
   visible: boolean;
   onClose: () => void;
   onSend: (friendId: string) => void;
+  /**
+   * v1.0.1: emit the postcard id when a "recent sends" row is tapped.
+   * Parent should close this sheet then open the PostcardDetailSheet
+   * (photo + message + status). Before this prop, tapping a row in
+   * the friend detail did nothing at all.
+   */
+  onTapPostcard?: (postcardId: string) => void;
 }) {
   const { postcards, removeFriend } = useMailClub();
   if (!friend) return null;
@@ -76,7 +84,13 @@ export function FriendDetailSheet({
             {recentSends.length === 0 ? (
               <Text style={styles.empty}>No cards yet. Send your first one.</Text>
             ) : (
-              recentSends.map((card) => <PostcardRow key={card.id} card={card} />)
+              recentSends.map((card) => (
+                <PostcardRow
+                  key={card.id}
+                  card={card}
+                  onPress={onTapPostcard ? () => onTapPostcard(card.id) : undefined}
+                />
+              ))
             )}
           </View>
 
@@ -105,16 +119,22 @@ function StatCell({ value, label, tone }: { value: number; label: string; tone?:
   );
 }
 
-function PostcardRow({ card }: { card: Postcard }) {
+function PostcardRow({ card, onPress }: { card: Postcard; onPress?: () => void }) {
   // v0.7.0.55: rolodex rows used to be "PHOTO   —   1c" — the category enum
   // and credit cost are internal accounting, not what the user wants to see
   // about a card they sent to a friend. Now: photo thumbnail + handwritten-
   // message preview + relative date. If no photo, render a small paper-color
   // placeholder square so the row layout stays consistent.
+  //
+  // v1.0.1: wrap in Pressable so taps open the PostcardDetailSheet via the
+  // parent's onTapPostcard callback. Before this, tapping a row was a
+  // no-op — the user reported "clicking the postcard doesn't do anything"
+  // on the friend detail page. Fallback to a plain View when no onPress
+  // is provided (defensive, but parents now always pass it).
   const photoSrc = card.photoUri || undefined;
   const dateLabel = formatRelativeSentAt(card.sentAt);
-  return (
-    <View style={postcardStyles.row}>
+  const body = (
+    <>
       {photoSrc ? (
         <Image source={{ uri: photoSrc }} style={postcardStyles.thumb} resizeMode="cover" />
       ) : (
@@ -126,7 +146,21 @@ function PostcardRow({ card }: { card: Postcard }) {
         </Text>
         <Text style={postcardStyles.date}>{dateLabel}</Text>
       </View>
-    </View>
+    </>
+  );
+  if (!onPress) {
+    return <View style={postcardStyles.row}>{body}</View>;
+  }
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [postcardStyles.row, pressed && { opacity: 0.6 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open postcard sent ${dateLabel || "recently"}`}
+      testID={`friend-detail-postcard-row-${card.id}`}
+    >
+      {body}
+    </Pressable>
   );
 }
 

@@ -1,5 +1,5 @@
 import Constants from "expo-constants";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from "react-native-maps";
 import Animated, {
@@ -490,56 +490,9 @@ export function MapPanel({
               snapping back — that's the "Denver teleport to top-left"
               bug the user saw. */}
           {!compact &&
-            renderCities.map((c, idx) => {
-              // v0.7.0.58: widened the marker wrap to 80×50 so city
-              // names don't truncate ("De..." / "Tu..."). iOS clips
-              // marker rendering to the wrap's bbox, so a 28-wide wrap
-              // capped labels at 28px wide. New layout puts the pin SVG
-              // top-centered inside an 80×50 region and the label
-              // beneath it; centerOffset adjusts for the larger view.
-              //
-              // Math for centerOffset (fixed pixels, immune to iOS bbox
-              // measurement quirks):
-              //   CityPin view = 80w × 50h. View center at (40, 25).
-              //   Pin SVG 28×36 sits top-centered → occupies x=26..54, y=0..36.
-              //   Needle tip in pin SVG: (23, 33).
-              //   Needle tip in wrap coords: (26+23, 0+33) = (49, 33).
-              //   Offset from view center to needle tip: (9, 8).
-              //   centerOffset = -(9, 8) = (-9, -8).
-              //
-              //   HomePin view = 80w × 50h. View center at (40, 25).
-              //   Disc 28×28 sits top-centered → x=26..54, y=0..28.
-              //   Disc center in wrap coords: (40, 14).
-              //   Offset from view center: (0, -11).
-              //   centerOffset = -(0, -11) = (0, 11).
-              const isHome = c.id === "home";
-              return (
-                <Marker
-                  key={c.id}
-                  coordinate={c.coord}
-                  anchor={{ x: 0.5, y: 0.5 }}
-                  centerOffset={isHome ? { x: 0, y: 11 } : { x: -9, y: -8 }}
-                  onPress={onCityPress ? () => onCityPress(c) : undefined}
-                  // Allow tracksViewChanges only during the drop-in animation
-                  // (first ~700ms). After that, freeze the marker — re-renders
-                  // upstream no longer cause it to re-rasterize. The pin
-                  // animations use Reanimated on a separate thread so they
-                  // still work even with tracksViewChanges=false.
-                  tracksViewChanges={false}
-                >
-                  {isHome ? (
-                    <HomePin name={c.name} staggerIndex={idx} />
-                  ) : (
-                    <CityPin
-                      name={c.name}
-                      staggerIndex={idx}
-                      reciprocated={!!c.reciprocated}
-                      isNewest={!!c.isNewest}
-                    />
-                  )}
-                </Marker>
-              );
-            })}
+            renderCities.map((c, idx) => (
+              <CityMarker key={c.id} city={c} idx={idx} onCityPress={onCityPress} />
+            ))}
 
           {compact &&
             renderCities.filter((c) => c.accent).map((c) => (
@@ -562,6 +515,79 @@ export function MapPanel({
         ) : null}
       </View>
     </Wrapper>
+  );
+}
+
+/**
+ * CityMarker — one Apple/Google Marker per city pin.
+ *
+ * v1.0.1: extracted from MapPanel so we can own per-marker render state.
+ * The "Atlanta in Canada" bug was caused by `tracksViewChanges={false}`
+ * being set permanently from first mount. react-native-maps needs at
+ * least one tick of view-tracking after the marker mounts so the
+ * Marker's coordinate prop and the rendered visual sync up. Without it,
+ * the first render snapshot is taken before the lat/lng has actually
+ * been applied — the pin gets frozen at iOS's default origin (~upper
+ * left of map = Canada) and never recovers.
+ *
+ * Fix: allow tracksViewChanges=true for ~900ms on mount, then flip it
+ * to false (the perf reason it was disabled — re-rasterizing on every
+ * upstream re-render — still matters for steady-state). Also re-arm
+ * tracking briefly any time the coord changes, which catches city
+ * data reloads after a postcard arrives via Realtime.
+ */
+function CityMarker({
+  city: c,
+  idx,
+  onCityPress,
+}: {
+  city: MapCity;
+  idx: number;
+  onCityPress?: (city: MapCity) => void;
+}) {
+  const isHome = c.id === "home";
+  const coordKey = `${c.coord.latitude},${c.coord.longitude}`;
+  // Allow Apple/Google Maps to track this marker's view briefly on mount
+  // (or whenever the coord changes) so the pin lands at the right
+  // lat/lng. Then turn it off so steady-state re-renders don't cause
+  // the marker to re-rasterize at default origin.
+  const [tracks, setTracks] = useState(true);
+  useEffect(() => {
+    setTracks(true);
+    const t = setTimeout(() => setTracks(false), 900);
+    return () => clearTimeout(t);
+  }, [coordKey]);
+
+  // v0.7.0.58 marker geometry — comments preserved for the next person
+  // who has to debug Apple-vs-Google pin offsets:
+  //   Wrap = 80×50. View center at (40, 25).
+  //   Pin SVG 28×36 sits top-centered → occupies x=26..54, y=0..36.
+  //   Needle tip in pin SVG: (23, 33).
+  //   Needle tip in wrap coords: (26+23, 0+33) = (49, 33).
+  //   Offset from view center to needle tip: (9, 8).
+  //   centerOffset = -(9, 8) = (-9, -8).
+  //
+  //   HomePin: disc center in wrap = (40, 14). Offset from view center
+  //   = (0, -11). centerOffset = (0, 11).
+  return (
+    <Marker
+      coordinate={c.coord}
+      anchor={{ x: 0.5, y: 0.5 }}
+      centerOffset={isHome ? { x: 0, y: 11 } : { x: -9, y: -8 }}
+      onPress={onCityPress ? () => onCityPress(c) : undefined}
+      tracksViewChanges={tracks}
+    >
+      {isHome ? (
+        <HomePin name={c.name} staggerIndex={idx} />
+      ) : (
+        <CityPin
+          name={c.name}
+          staggerIndex={idx}
+          reciprocated={!!c.reciprocated}
+          isNewest={!!c.isNewest}
+        />
+      )}
+    </Marker>
   );
 }
 
