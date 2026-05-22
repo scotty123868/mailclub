@@ -37,9 +37,13 @@ export function SettingsSheet({
       : "Paused";
 
   function confirmSignOut() {
+    // v1.0.3: dropped the "clears your local Mailroom data" line. It was
+    // technically true (AsyncStorage cache gets wiped) but read as
+    // "you'll lose your cards" — which is wrong. Account + postcards
+    // live on the server; signing back in re-hydrates everything.
     Alert.alert(
       "Sign out?",
-      "This clears your local Mailroom data and returns you to the welcome screen. Your in-flight cards remain queued.",
+      "You'll return to the welcome screen. Your account and postcards stay safe in the cloud — sign back in to pick up where you left off.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -68,7 +72,7 @@ export function SettingsSheet({
             } catch (err: any) {
               Alert.alert(
                 "Couldn't sign out cleanly",
-                err?.message ?? "Your local data was cleared, but the server session may still be active. Try again or relaunch the app.",
+                err?.message ?? "Something went wrong signing out. Try again, or relaunch the app and sign in fresh.",
               );
             }
           },

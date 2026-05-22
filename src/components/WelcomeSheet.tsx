@@ -427,9 +427,22 @@ export function WelcomeSheet({
   }
 
   async function onSubmitEmailAuth() {
-    if (!canAdvanceEmail) return;
+    // v1.0.3: surface validation reasons instead of silently no-op-ing
+    // when the form isn't valid. Previously the Continue button was
+    // disabled and a tap did nothing — users had no idea WHY it was
+    // disabled. Now Continue is always tappable; if the form's bad we
+    // tell them which field needs fixing.
     setError(null);
     setInfo(null);
+    if (saving) return;
+    if (!email.trim().includes("@")) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password needs to be at least 8 characters.");
+      return;
+    }
     setSaving(true);
     try {
       if (emailMode === "signin") {
@@ -923,7 +936,16 @@ export function WelcomeSheet({
           {step === "hero" ? (
             <HeroStep
               onAppleSignIn={onAppleSignIn}
-              onSwitchToEmail={() => setStep("auth-email")}
+              onSwitchToEmail={() => {
+                // v1.0.3: clear any stale info hint from the Apple flow
+                // (e.g. "Tap Sign in with Apple again to continue.") so
+                // it doesn't bleed onto the email screen, where it's
+                // misleading. The auth-email step has its own helper
+                // text for password requirements.
+                setInfo(null);
+                setError(null);
+                setStep("auth-email");
+              }}
               appleAvailable={appleAvailable}
               saving={saving}
               error={error}
@@ -1313,6 +1335,13 @@ function EmailAuthStep({
           style={emailStyles.input}
           testID="welcome-password"
         />
+        {/* v1.0.3: persistent helper line below the password input so
+            the requirement is visible BEFORE the user taps Continue.
+            Only shown for signup — the signin path doesn't enforce
+            length here (server is the source of truth). */}
+        {mode === "signup" ? (
+          <Text style={emailStyles.helper}>Use at least 8 characters.</Text>
+        ) : null}
       </View>
 
       {error ? <Text style={emailStyles.error}>{error}</Text> : null}
@@ -1330,7 +1359,10 @@ function EmailAuthStep({
         }
         icon={ArrowRight}
         onPress={onSubmit}
-        disabled={!canSubmit || saving}
+        // v1.0.3: only disabled while in-flight. Validation happens in
+        // the handler so users see WHY their tap didn't work instead
+        // of staring at a grey button with no feedback.
+        disabled={saving}
         style={emailStyles.submitBtn}
       />
 
@@ -1369,6 +1401,11 @@ const emailStyles = StyleSheet.create({
   },
   error: { color: colors.postalRed, fontFamily: fonts.serifSemi, fontSize: 13, marginTop: 8 },
   info: { color: colors.postalBlue, fontFamily: fonts.serifItalic, fontSize: 13, marginTop: 8 },
+  // v1.0.3: tiny italic hint under the password input so the 8-char
+  // requirement is visible before the user taps Continue. Same color
+  // as `info` but slightly smaller — it's a persistent hint, not an
+  // event-driven message.
+  helper: { color: colors.mutedInk, fontFamily: fonts.serifItalic, fontSize: 12, marginTop: 2 },
   submitBtn: { marginTop: 18 },
   swapRow: { alignItems: "center", gap: 10, marginTop: 16 },
   swapText: {
