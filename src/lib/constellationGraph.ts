@@ -158,24 +158,24 @@ export function buildSocialGraph(
     //     with the dashed-edge pending treatment.
     if (!p.recipientId) {
       if (p.senderId !== selfId) continue; // only self-outbound claim cards
+      // v0.7.0.60: only render a node once the recipient submits their
+      // address (claimedName populated). The previous "Awaiting friend"
+      // placeholder cluttered the graph with anonymous dashed circles
+      // that the user couldn't act on — and since we don't yet collect a
+      // friend name at send-link time, the placeholder was unactionable.
+      // Skipping unclaimed claim cards keeps the constellation clean and
+      // truthful: each node is a real human with a real address.
       const hasName = !!p.claimedName && p.claimedName.trim().length > 0;
+      if (!hasName) continue;
       const pendingId = `pending:${p.id}`;
-      const display = hasName
-        ? p.claimedName!.trim()
-        : "Awaiting friend";
       nodes.set(pendingId, {
         id: pendingId,
-        name: display,
-        // Claimed-but-no-friend-id recipients get the same warm color as
-        // known friends; still-awaiting get the dim placeholder color.
-        color: hasName ? "#D6B068" : "rgba(255,255,255,0.42)",
+        name: p.claimedName!.trim(),
+        color: "#D6B068",
         isSelf: false,
         isFoF: false,
         momentCount: 1,
-        // Only flag pending when we genuinely don't know the recipient
-        // yet. Once claimed_name is set, the edge solidifies in the UI
-        // (dashed → solid) per the constellation render logic.
-        pending: !hasName,
+        pending: false,
       });
       nodes.get(selfId)!.momentCount += 1;
       const key = pairKey(selfId, pendingId);
@@ -186,7 +186,7 @@ export function buildSocialGraph(
         momentIds: [p.id],
         hasOutbound: true,
         hasInbound: false,
-        pending: !hasName,
+        pending: false,
       });
       continue;
     }

@@ -332,15 +332,32 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
                 {headerPrefix} {recipientLabel}
               </Text>
               <Text style={styles.subtitle}>{formatDate(postcard.sentAt)}</Text>
-              {/* v0.7.0.58 DIAGNOSTIC: visible raw status field so we can
-                  tell whether a stuck "WAITING FOR THEIR ADDRESS" header
-                  is a data-layer staleness bug (status would read
-                  "awaiting_address" when DB has "queued") or a UI logic
-                  bug (status reads correctly but kicker is wrong). Remove
-                  once the stale-claim flow is confirmed solid. */}
-              <Text style={[styles.subtitle, { fontSize: 10, opacity: 0.6 }]}>
-                [debug status: {String(postcard.status)} · lob_id: {postcard.lobId ? "set" : "null"}]
-              </Text>
+              {/* v0.7.0.60: cancel button moved into the header subtitle
+                  row so it's always visible without scrolling past the
+                  photo. Was previously buried below the image where users
+                  weren't finding it. Renders only while Lob's
+                  cancellation window is open (lob_status null/"received"
+                  AND sent_at within last 30 min). */}
+              {isCancellable ? (
+                <Pressable
+                  onPress={onCancel}
+                  disabled={cancelling}
+                  style={({ pressed }) => [
+                    styles.headerCancelBtn,
+                    (cancelling || pressed) && { opacity: 0.6 },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel postcard"
+                  testID="postcard-detail-cancel"
+                >
+                  {cancelling ? (
+                    <ActivityIndicator color={colors.postalRed} size="small" />
+                  ) : null}
+                  <Text style={styles.headerCancelBtnText}>
+                    {cancelling ? "Cancelling…" : "Cancel send · refund credit"}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
             <Pressable
               onPress={() => sheetRef.current?.close()}
@@ -458,33 +475,8 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
             </View>
           ) : null}
 
-          {/* v0.7.0.59: cancel-within-window control. Shows up for the
-              first ~30 minutes after send while Lob's batch printer
-              hasn't taken the job yet. After that the button hides and
-              the card lives out its delivery cycle. */}
-          {isCancellable ? (
-            <Pressable
-              onPress={onCancel}
-              disabled={cancelling}
-              style={({ pressed }) => [
-                styles.cancelBtn,
-                cancelling && { opacity: 0.6 },
-                pressed && { opacity: 0.75 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel postcard"
-              testID="postcard-detail-cancel"
-            >
-              {cancelling ? (
-                <ActivityIndicator color={colors.postalRed} size="small" />
-              ) : (
-                <X color={colors.postalRed} size={14} strokeWidth={1.6} />
-              )}
-              <Text style={styles.cancelBtnText}>
-                {cancelling ? "Cancelling…" : "Cancel send (refund credit)"}
-              </Text>
-            </Pressable>
-          ) : null}
+          {/* v0.7.0.60: cancel button moved to the header row above;
+              this slot intentionally left blank to keep diff small. */}
             </>
           )}
         </BottomSheetScrollView>
@@ -776,19 +768,20 @@ const styles = StyleSheet.create({
     fontFamily: fonts.serifSemi,
     fontSize: 14,
   },
-  cancelBtn: {
+  headerCancelBtn: {
     alignItems: "center",
-    alignSelf: "center",
+    alignSelf: "flex-start",
     flexDirection: "row",
     gap: 6,
-    marginTop: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    marginTop: 6,
+    paddingVertical: 2,
   },
-  cancelBtnText: {
+  headerCancelBtnText: {
     color: colors.postalRed,
-    fontFamily: fonts.serifSemi,
-    fontSize: 13,
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
   },
   secondaryBtn: {
     flexDirection: "row",
