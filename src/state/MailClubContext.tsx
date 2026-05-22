@@ -184,6 +184,7 @@ function applyRealtimeRow(prev: Postcard, row: any): Postcard {
     : "sent";
   return {
     ...prev,
+    toCity: row?.to_city ?? prev.toCity,
     status: narrowStatus,
     lobId: row?.lob_id ?? prev.lobId ?? null,
     lobError: row?.lob_error ?? prev.lobError ?? null,

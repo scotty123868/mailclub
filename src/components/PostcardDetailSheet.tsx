@@ -124,6 +124,14 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
       if (postcard.toFriendId === "void") {
         return postcard.toCity ? "Pen pal (anonymous)" : "Finding a pen pal…";
       }
+      if (postcard.toFriendId === "" && postcard.claimUrl) {
+        if (postcard.claimedName) {
+          return postcard.claimedCity
+            ? `${postcard.claimedName} · ${postcard.claimedCity}`
+            : postcard.claimedName;
+        }
+        return postcard.toCity ? `Recipient · ${postcard.toCity}` : "Recipient";
+      }
       const friend = friends.find((f) => f.id === postcard.toFriendId);
       return friend?.name ?? postcard.toCity ?? "Recipient";
     }, [postcard, isPending, isInbound, friends]);

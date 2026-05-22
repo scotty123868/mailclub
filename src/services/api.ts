@@ -334,6 +334,12 @@ type PostcardRow = {
   custom_tone: CustomTone | null;
   reference_photo_uris: string[];
   sent_at: string;
+  lob_id?: string | null;
+  lob_error?: string | null;
+  claim_token?: string | null;
+  claim_expires_at?: string | null;
+  claimed_name?: string | null;
+  claimed_city?: string | null;
 };
 
 function postcardFromRow(row: PostcardRow): Postcard {
@@ -376,23 +382,23 @@ function postcardFromRow(row: PostcardRow): Postcard {
   const claimRow = (row as any).postcard_claims;
   const claimToken: string | undefined = Array.isArray(claimRow)
     ? claimRow[0]?.claim_token
-    : claimRow?.claim_token;
+    : claimRow?.claim_token ?? (row as any).claim_token ?? undefined;
   // v0.7.0.49: expose expires_at on the client Postcard so the journal
   // can show an "expires in N days" indicator on unclaimed cards. The
   // claim_token comes through the existing LEFT JOIN; we just need the
   // companion column.
   const claimExpiresRaw: string | undefined = Array.isArray(claimRow)
     ? claimRow[0]?.expires_at
-    : claimRow?.expires_at;
+    : claimRow?.expires_at ?? (row as any).claim_expires_at ?? undefined;
   // v0.7.0.58: surface claimed_name + claimed_city so the constellation
   // can label the node with the actual recipient instead of the generic
   // "Awaiting friend" placeholder after a claim has been redeemed.
   const claimedName: string | undefined = Array.isArray(claimRow)
     ? claimRow[0]?.claimed_name
-    : claimRow?.claimed_name;
+    : claimRow?.claimed_name ?? (row as any).claimed_name ?? undefined;
   const claimedCity: string | undefined = Array.isArray(claimRow)
     ? claimRow[0]?.claimed_city
-    : claimRow?.claimed_city;
+    : claimRow?.claimed_city ?? (row as any).claimed_city ?? undefined;
   if (claimToken) {
     // v0.7.0.32: switched from mailroomclub.vercel.app → app.themailroom.club
     // when build 55 migrated to the user's owned domain. Universal Links
@@ -457,21 +463,17 @@ function setCachedSignedUrl(path: string, url: string): void {
 }
 
 export async function fetchPostcards(): Promise<Postcard[]> {
-  // v0.7.0.7: LEFT JOIN postcard_claims so each send-link card carries
-  // its claim_token (→ shareable URL) into the client. Lets the gallery
-  // surface "Share again" on past pending cards.
+  // v0.7.0.59: use a sender-safe RPC instead of a PostgREST GET with an
+  // embedded postcard_claims join. The old path had two failure modes:
+  //   1. iOS could serve stale GET responses, leaving optimistic
+  //      awaiting_address rows visible after the recipient claimed.
+  //   2. privacy migrations revoked sender SELECT on raw postcard_claims;
+  //      the sender must read claim metadata through a redacted server
+  //      surface, not a direct table embed.
   //
-  // v0.7.0.58: defense in depth against stale "WAITING FOR THEIR ADDRESS"
-  // header on claim-mode postcards. Diagnostic logging + explicit
-  // no-cache hint so iOS NSURLSession / any intermediate CDN can't
-  // serve a stale snapshot from when the row was still
-  // status=awaiting_address. If Supabase REST is sending Cache-Control
-  // by default, this header isn't enough on its own (would need the
-  // CDN-level invalidation) — but adding nothing also can't hurt.
-  const { data, error } = await supabase
-    .from("postcards")
-    .select("*, postcard_claims(claim_token, expires_at, claimed_name, claimed_city)")
-    .order("sent_at", { ascending: false });
+  // RPC calls are POST-backed and the function returns only redacted claim
+  // fields (token, expires_at, claimed_at/name/city), never street address.
+  const { data, error } = await supabase.rpc("fetch_postcards_for_sender");
   if (error) throw error;
   // eslint-disable-next-line no-console
   console.log(

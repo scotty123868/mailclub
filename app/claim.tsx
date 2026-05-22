@@ -13,9 +13,11 @@
  *
  * v0.7.0.57: added self-link detection. Before, tapping your own sent link
  * would open the web form and let you fill in your own address — which is
- * not what the link is for and burned the one-shot claim. Now we check the
- * postcard_claims table for `sender_id = auth.uid()` and show a friendly
- * "this is your own card — share with someone else" UI when it matches.
+ * not what the link is for and burned the one-shot claim.
+ *
+ * v0.7.0.59: self-link detection now uses a sender-safe RPC. The privacy
+ * hardening migration revoked direct client SELECT on postcard_claims, so
+ * querying that table here silently broke the self-link guard.
  *
  * Implementation: route non-self claims to the canonical web form via
  * Safari. Self claims show an in-app message + reshare CTA.
@@ -67,19 +69,18 @@ export default function ClaimRouteHandler() {
       const claimUrl = `https://app.themailroom.club/claim?t=${encodeURIComponent(t)}`;
 
       // Self-link check: if the signed-in user is the sender of this
-      // claim, RLS lets us see the row. Otherwise we get no row + we
-      // treat the link as belonging to someone else and open Safari.
+      // claim, show the share-again UI instead of letting them burn their
+      // one-shot recipient claim on themselves. Use an RPC because raw
+      // postcard_claims SELECT is intentionally unavailable to clients.
       try {
         const { data: session } = await supabase.auth.getSession();
         const myUserId = session?.session?.user?.id;
         if (myUserId) {
-          const { data: claimRow } = await supabase
-            .from("postcard_claims")
-            .select("id, claimed_at")
-            .eq("claim_token", t)
-            .eq("sender_id", myUserId)
-            .maybeSingle();
-          if (claimRow) {
+          const { data: isSelfClaim } = await supabase.rpc(
+            "claim_belongs_to_current_user",
+            { p_claim_token: t },
+          );
+          if (isSelfClaim === true) {
             // This is the user's own outbound claim. Don't let them
             // burn it on themselves.
             setState({ kind: "self", claimUrl });
