@@ -2,7 +2,7 @@ import { setSelfAddress } from "@/src/state/selfAddress";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { ArrowLeft, ArrowRight, Image as ImageIcon, Link as LinkIcon, User as UserIcon, Users as UsersIcon } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, Globe2, Image as ImageIcon, Link as LinkIcon, User as UserIcon, Users as UsersIcon } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -1680,7 +1680,12 @@ function RecipientStep({
         selected={kind === "penpal"}
         title="A pen pal"
         sub="Send one, get one from a stranger"
-        Icon={UsersIcon}
+        // v1.0.5: pen pal was sharing the UsersIcon with "Someone I know"
+        // — visually identical even though they mean very different things.
+        // Globe2 reads as "someone out there in the world I haven't met,"
+        // which matches the sendIntoVoid mechanic (anonymous match with a
+        // stranger in the network).
+        Icon={Globe2}
         onPress={() => onPick("penpal")}
         testID="welcome-recipient-penpal"
       />
