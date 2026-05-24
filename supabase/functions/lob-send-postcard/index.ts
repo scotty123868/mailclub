@@ -589,21 +589,40 @@ serve(async (req: Request) => {
   }
   if (winningAttempt !== attemptId) {
     // Another submission is in flight (or already succeeded). Re-fetch
-    // the postcard to see if the winner finished; if so, return that
-    // lob_id. If still in flight, return a 200 with a "queued" marker
-    // so the caller doesn't retry.
+    // the postcard to see if the winner finished.
     const { data: latest } = await supabase
       .from("postcards")
       .select("lob_id, lob_expected_delivery")
       .eq("id", postcard.id)
       .single();
+    // v1.0.6 production-audit fix: differentiate "winner finished" from
+    // "still in flight". Previously this returned ok:true with a null
+    // lob_id when the winner hadn't finished yet — and the client treated
+    // ok:true as success regardless of lob_id. That produced silent
+    // orphans (status=sent, lob_id=null, lob_error=null) under any
+    // concurrent-submission scenario (app foregrounded mid-send, double
+    // taps on Mail-it, retry-orphan firing while signup commit was still
+    // running). Now we ONLY return ok:true when there's an actual lob_id
+    // from the winning attempt; otherwise return ok:false so the client
+    // hits the refund-or-retry path.
+    if ((latest as any)?.lob_id) {
+      return json({
+        ok: true,
+        lob_id: (latest as any).lob_id,
+        expected_delivery_date: (latest as any)?.lob_expected_delivery ?? null,
+        idempotent: true,
+        lease_held_by_other: true,
+      });
+    }
     return json({
-      ok: true,
-      lob_id: (latest as any)?.lob_id ?? null,
-      expected_delivery_date: (latest as any)?.lob_expected_delivery ?? null,
-      idempotent: true,
+      ok: false,
+      error: "Another submission is in flight. Retry in a few seconds.",
       lease_held_by_other: true,
-    });
+      // Hint to the client UI: don't refund yet, just retry. The
+      // in-flight winner will resolve and write lob_id; if it fails,
+      // its own error path will write lob_error and we can retry then.
+      retry_after_ms: 5000,
+    }, 409);
   }
 
   const toKind = (postcard as any).to_kind;

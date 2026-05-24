@@ -200,6 +200,21 @@ export async function submitToLob(input: LobSubmitInput): Promise<LobSubmitResul
     if (!data || !data.ok) {
       return { ok: false, error: (data && data.error) || "Edge function reported failure." };
     }
+    // v1.0.6 (production audit fix): treat a missing lob_id as a failure
+    // even when the Edge Function returns ok:true. The lease-loser branch
+    // of lob-send-postcard can return `{ok:true, idempotent:true, lob_id:null}`
+    // when another concurrent attempt holds the lease and hasn't yet
+    // written its lob_id. Without this guard the client treats it as
+    // success, never refunds, and creates the exact "lob_id:null AND
+    // lob_error:null AND status=sent" orphan the user hit on App Store
+    // build 86. Returning ok:false here triggers the refund + orphan-retry
+    // path, which is the correct behavior under lease contention.
+    if (!data.lob_id) {
+      return {
+        ok: false,
+        error: "Print queue is busy. Tap Retry to send again.",
+      };
+    }
     return {
       ok: true,
       lobId: data.lob_id,

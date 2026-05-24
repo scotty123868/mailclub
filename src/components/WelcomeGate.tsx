@@ -82,6 +82,18 @@ export function WelcomeGate() {
     if (!hydrated) return false;
     if (dismissedLocal) return false;
 
+    // v1.0.6 (production audit): once the flow has started, keep
+    // showing the WelcomeSheet until it explicitly completes (via
+    // onComplete → setDismissedLocal(true)) OR the user signs out
+    // (the reset effect above clears the latch). Without this gate,
+    // hasSentFirstCard flipping to true mid-send (because sendPostcard
+    // succeeded, Realtime pushed the row back, hasSentFirstCard memo
+    // recomputed) caused WelcomeSheet to unmount BEFORE the Lob
+    // handoff completed — orphaning the postcard with status=sent and
+    // lob_id=null. The orphan-retry UI then appeared the moment the
+    // user opened the app, ruining the first-postcard experience.
+    if (hasStartedFlowRef.current) return true;
+
     const fullyOnboarded =
       hasSeenFreeCreditsIntro && hasCompletedSignup && hasSentFirstCard;
     if (fullyOnboarded) return false;
