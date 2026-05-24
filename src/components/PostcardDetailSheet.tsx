@@ -332,6 +332,18 @@ export const PostcardDetailSheet = forwardRef<PostcardDetailSheetRef>(
                 {headerPrefix} {recipientLabel}
               </Text>
               <Text style={styles.subtitle}>{formatDate(postcard.sentAt)}</Text>
+              {/* v1.0.6: surface Lob's estimated delivery date when we
+                  have one + the card is still in flight. Hidden after
+                  delivery (the actual sentAt already tells the story)
+                  and for cancelled / awaiting-address / expired cards
+                  where the ETA doesn't apply. */}
+              {postcard.lobExpectedDelivery &&
+              postcard.status === "sent" &&
+              !isPending ? (
+                <Text style={styles.subtitle}>
+                  Expected by {formatDate(postcard.lobExpectedDelivery)}
+                </Text>
+              ) : null}
               {/* v0.7.0.60: cancel button moved into the header subtitle
                   row so it's always visible without scrolling past the
                   photo. Was previously buried below the image where users
