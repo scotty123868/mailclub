@@ -43,9 +43,8 @@ import type { Friend } from "@/src/types/mail";
  *     from Settings (My Card → Address) — build 38+. No delivery step at
  *     all — we already know the destination (your mailbox).
  *
- *   • Pen pal: Type → Cover → Inside                           (3 steps)
- *     Card goes to a random stranger in the Mailroom network via
- *     sendIntoVoid. No delivery step — the network picks the recipient.
+ *   • Pen pal: currently disabled. The matching table can pair users, but
+ *     physical stranger mail needs opt-in recipient mailing addresses first.
  *
  * The dynamic `stepsForKind` array is the source of truth; `step` is a
  * 1-based index into it. `currentStepName` derives from there. canAdvance,
@@ -130,7 +129,6 @@ export default function SendScreen() {
     currentUser,
     sendPostcard,
     sendPostcardViaLink,
-    sendIntoVoid,
     addFriendByAddress,
     showCelebration,
     refreshProfile,
@@ -511,6 +509,14 @@ export default function SendScreen() {
       );
       return;
     }
+    if (recipientKind === "penpal") {
+      sendingLockRef.current = false;
+      Alert.alert(
+        "Pen pals are coming soon",
+        "The stranger network can match people, but it cannot physically mail cards yet because recipients have not opted into sharing mailing addresses. Pick a friend, yourself, or a magic link for now.",
+      );
+      return;
+    }
 
     setSending(true);
     // v0.7.0.30: resolve the pre-uploaded photo path ONCE up front so
@@ -520,34 +526,6 @@ export default function SendScreen() {
     // ~10+ seconds before tapping Send.
     const resolvedPhotoPath = photoUri ? await resolveUploadedPath(photoUri) : null;
     try {
-      // Penpal: card goes to a random user in our network. No delivery
-      // step ever runs. sendIntoVoid handles recipient selection server-
-      // side via the void claim queue.
-      if (recipientKind === "penpal") {
-        // v0.7.0.31 PHOTO BUGFIX: pass the LOCAL URI as photoUri (so the
-        // optimistic insert in MailClubContext renders the photo
-        // immediately, before fetchPostcards signs a working URL). Pass
-        // the resolved Storage path as preUploadedPath so the api call
-        // skips re-uploading.
-        const result = await sendIntoVoid(
-          message.trim(),
-          photoUri ?? undefined,
-          resolvedPhotoPath ?? undefined,
-        );
-        if (!result.ok) {
-          Alert.alert("Couldn't send to pen pal", "Try again in a moment.");
-          return;
-        }
-        // v0.7.0.30: fire the global envelope-balloon celebration
-        // instead of the plain SuccessModal. Same animation the welcome
-        // flow plays on first-card-sent. User feedback: "there should
-        // also be a sent celebration after sending it normally in the
-        // app, only a celebration at the end of the sign up flow."
-        showCelebration({ kind: "penpal" });
-        resetCompose();
-        return;
-      }
-
       // Self: address came from the cached self-address (or the just-
       // saved draft from the selfAddress step). We create-or-update the
       // "(me)" friend record with this address and send via the friend
@@ -617,7 +595,6 @@ export default function SendScreen() {
             console.warn("Couldn't mint reciprocation token for self-send (printing without QR):", err);
           }
         }
-        showCelebration({ kind: "self", recipientName: currentUser.name?.split(" ")[0] });
         setPrintSnapshot({
           photoUri: photoUri ?? "",
           message,
@@ -636,32 +613,36 @@ export default function SendScreen() {
           },
           reciprocationUrl: selfReciprocationUrl,
         });
-        if (result.postcardId) {
-          const selfPostcardId = result.postcardId;
-          submitPostcardToLob(selfPostcardId)
-            .catch(async (err) => {
-              // Same refund + alert pattern as the friend-send branch
-              // (v0.7.0.32 Codex P1.5). Don't leave orphan rows behind.
-              const errMessage = err?.message ?? String(err);
-              // eslint-disable-next-line no-console
-              console.warn("Self-send Lob submission failed:", errMessage);
-              try {
-                await refundPostcardCredit(selfPostcardId);
-                await refreshProfile();
-              } catch (refundErr) {
-                // eslint-disable-next-line no-console
-                console.warn("Refund failed:", refundErr);
-              }
-              Alert.alert(
-                "Couldn't print your card",
-                humanizeLobError(errMessage) + "\n\nYour credit was returned. Try again when you're ready.",
-              );
-            })
-            .finally(() => {
-              setPrintSnapshot(null);
-            });
+        if (!result.postcardId) {
+          setPrintSnapshot(null);
+          Alert.alert("Couldn't print your card", "The card was saved without a print id. Your credit was not charged again; try sending one more time.");
+          return;
         }
-        resetCompose();
+        const selfPostcardId = result.postcardId;
+        try {
+          await submitPostcardToLob(selfPostcardId);
+          showCelebration({ kind: "self", recipientName: currentUser.name?.split(" ")[0] });
+          resetCompose();
+        } catch (err: any) {
+          // Same refund + alert pattern as the friend-send branch
+          // (v0.7.0.32 Codex P1.5). Don't leave orphan rows behind.
+          const errMessage = err?.message ?? String(err);
+          // eslint-disable-next-line no-console
+          console.warn("Self-send Lob submission failed:", errMessage);
+          try {
+            await refundPostcardCredit(selfPostcardId);
+            await refreshProfile();
+          } catch (refundErr) {
+            // eslint-disable-next-line no-console
+            console.warn("Refund failed:", refundErr);
+          }
+          Alert.alert(
+            "Couldn't print your card",
+            humanizeLobError(errMessage) + "\n\nYour credit was returned. Try again when you're ready.",
+          );
+        } finally {
+          setPrintSnapshot(null);
+        }
         return;
       }
 
@@ -799,9 +780,6 @@ export default function SendScreen() {
         }
       }
 
-      // v0.7.0.30: fire the global envelope-balloon celebration.
-      showCelebration({ kind: "friend", recipientName: targetName?.split(" ")[0] });
-
       setPrintSnapshot({
         photoUri: photoUri ?? "",
         message,
@@ -814,37 +792,44 @@ export default function SendScreen() {
         reciprocationUrl,
       });
 
-      if (result.postcardId) {
-        const postcardIdForLob = result.postcardId;
-        submitPostcardToLob(postcardIdForLob)
-          .catch(async (err) => {
-            // v0.7.0.32 codex P1.5: previously this was console.warn only,
-            // leaving orphan postcards (status=queued, no Lob ID) with the
-            // user's credit gone and no feedback. Now refund the credit
-            // via the RPC + alert the user with a humanized error. The
-            // refund RPC also deletes the orphan row, so the user can
-            // retry from scratch.
-            const message = err?.message ?? String(err);
-            // eslint-disable-next-line no-console
-            console.warn("Lob submission failed:", message);
-            try {
-              await refundPostcardCredit(postcardIdForLob);
-              await refreshProfile();
-            } catch (refundErr) {
-              // eslint-disable-next-line no-console
-              console.warn("Refund failed:", refundErr);
-            }
-            Alert.alert(
-              "Couldn't print your card",
-              humanizeLobError(message) + "\n\nYour credit was returned. Try again when you're ready.",
-            );
-          })
-          .finally(() => {
-            setPrintSnapshot(null);
-          });
+      if (!result.postcardId) {
+        setPrintSnapshot(null);
+        Alert.alert("Couldn't print your card", "The card was saved without a print id. Your credit was not charged again; try sending one more time.");
+        return;
       }
-
-      resetCompose();
+      const postcardIdForLob = result.postcardId;
+      try {
+        await submitPostcardToLob(postcardIdForLob);
+        // v0.7.1: only celebrate after Lob accepts the physical postcard.
+        // Earlier builds fired this before the print handoff completed,
+        // which let users see a success moment for rows that later became
+        // refunded/orphaned failures.
+        showCelebration({ kind: "friend", recipientName: targetName?.split(" ")[0] });
+        resetCompose();
+      } catch (err: any) {
+        // v0.7.0.32 codex P1.5: previously this was console.warn only,
+        // leaving orphan postcards (status=queued, no Lob ID) with the
+        // user's credit gone and no feedback. Now refund the credit
+        // via the RPC + alert the user with a humanized error. The
+        // refund RPC also deletes the orphan row, so the user can
+        // retry from scratch.
+        const errMessage = err?.message ?? String(err);
+        // eslint-disable-next-line no-console
+        console.warn("Lob submission failed:", errMessage);
+        try {
+          await refundPostcardCredit(postcardIdForLob);
+          await refreshProfile();
+        } catch (refundErr) {
+          // eslint-disable-next-line no-console
+          console.warn("Refund failed:", refundErr);
+        }
+        Alert.alert(
+          "Couldn't print your card",
+          humanizeLobError(errMessage) + "\n\nYour credit was returned. Try again when you're ready.",
+        );
+      } finally {
+        setPrintSnapshot(null);
+      }
     } finally {
       setSending(false);
       sendingLockRef.current = false;
@@ -1304,8 +1289,9 @@ function RecipientStep({
           selected={recipientKind === "penpal"}
           icon={Mail}
           title="A pen pal"
-          body="Send anonymously to a stranger in our network"
+          body="Coming soon — physical stranger mail needs opt-in addresses"
           onSelect={() => onPickKind("penpal")}
+          disabled
           testID="send-kind-penpal"
         />
       </View>
@@ -1319,6 +1305,7 @@ function RecipientTile({
   title,
   body,
   onSelect,
+  disabled,
   testID,
 }: {
   kind: RecipientKind;
@@ -1327,15 +1314,16 @@ function RecipientTile({
   title: string;
   body: string;
   onSelect: () => void;
+  disabled?: boolean;
   testID?: string;
 }) {
   return (
     <Pressable
-      onPress={onSelect}
-      style={[typePickerStyles.tile, selected && typePickerStyles.tileSelected]}
+      onPress={disabled ? undefined : onSelect}
+      style={[typePickerStyles.tile, selected && typePickerStyles.tileSelected, disabled && typePickerStyles.tileDisabled]}
       testID={testID}
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
     >
       <View style={[typePickerStyles.tileIcon, selected && typePickerStyles.tileIconSelected]}>
         <Icon
@@ -1372,6 +1360,7 @@ const typePickerStyles = StyleSheet.create({
     borderColor: colors.postalBlue,
     borderWidth: 1.6,
   },
+  tileDisabled: { opacity: 0.55 },
   tileIcon: {
     alignItems: "center",
     backgroundColor: colors.paper,

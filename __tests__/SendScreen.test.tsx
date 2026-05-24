@@ -49,8 +49,8 @@ function pickFriendThenName(getByTestId: any, name = "Tati") {
  *   • Friend flow: type → NAME → cover → inside → delivery   (5 steps)
  *   • Self flow:   type → [selfAddress*] → cover → inside     (3-4 steps)
  *       (*selfAddress only on first-time self sends; cached after.)
- *   • Penpal flow: type → cover → inside                       (3 steps)
- *       (no delivery — card goes to a random network user.)
+ *   • Penpal flow: disabled until stranger recipients opt into
+ *       complete mailing addresses.
  */
 describe("SendScreen — multi-step flow", () => {
   it("renders step 1 (Recipient type picker) on first render", () => {
@@ -113,14 +113,18 @@ describe("SendScreen — multi-step flow", () => {
     expect(queryByTestId("send-name-input")).toBeNull();
   });
 
-  it("penpal flow: advances type → cover directly (no name step, no delivery)", () => {
+  it("keeps the penpal tile disabled until stranger mail can physically ship", () => {
     const { getByTestId, queryByTestId } = renderSend();
-    fireEvent.press(getByTestId("send-kind-penpal"));
+    const penpalTile = getByTestId("send-kind-penpal");
+    expect(penpalTile.props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: true, selected: false }),
+    );
+    fireEvent.press(penpalTile);
     advance(getByTestId);
-    expect(getByTestId("send-step-2")).toBeTruthy();
-    expect(getByTestId("send-photo-target")).toBeTruthy();
-    // No friend name step, no delivery step in penpal flow.
+    expect(getByTestId("send-step-1")).toBeTruthy();
+    expect(queryByTestId("send-step-2")).toBeNull();
     expect(queryByTestId("send-name-input")).toBeNull();
+    expect(ALERT_SPY).toHaveBeenCalledWith("Not quite ready", expect.stringContaining("who"));
   });
 
   it("opens the photo library when the Cover target is pressed", async () => {

@@ -87,9 +87,8 @@ import { fonts, type } from "@/src/theme/typography";
  * intent — if it fails, we don&apos;t partial-commit a half-signed-up
  * user (matches codex audit finding Q1: atomicity-or-roll-back).
  *
- * Pen pal (Phase 7+): currently a disabled option on the recipient
- * picker. The matching backend ships in v0.7.5; the UI placeholder
- * lives here so users know the path exists.
+ * Pen pal (Phase 7+): disabled until stranger recipients can opt into
+ * complete mailing addresses for physical delivery.
  */
 
 type Step =
@@ -143,7 +142,6 @@ export function WelcomeSheet({
     addFriendByAddress,
     sendPostcard,
     sendPostcardViaLink,
-    sendIntoVoid,
     refreshProfile,
     hasCompletedSignup,
     showCelebration,
@@ -302,11 +300,10 @@ export function WelcomeSheet({
   // front and the handwritten note carrying the card.
   const canAdvancePhoto = true;
   const canAdvanceNote = message.trim().length > 0;
-  // v0.7.0.1: pen pal is unblocked. It wires to `sendIntoVoid` (the
-  // existing anonymous "send to a stranger" backend), so users can
-  // actually mail one — no matching backend needed in MVP. The card
-  // queues, eventually a Mailroom-side moderator/match assigns it.
-  const canAdvanceRecipient = recipientKind !== null;
+  // Pen pal is intentionally disabled for launch. The matching table can
+  // pair users socially, but recipient profiles do not contain complete
+  // mailing addresses, so this path cannot print a physical postcard yet.
+  const canAdvanceRecipient = recipientKind !== null && recipientKind !== "penpal";
 
   function isAddressComplete(a: AddressDraft): boolean {
     return (
@@ -325,7 +322,7 @@ export function WelcomeSheet({
   //     friction on the sender side — the iOS Share sheet during the
   //     mailed step delivers the claim URL with a pre-filled message.
   //   - self: uses the user's own address (collected on your-info).
-  //   - penpal: anonymous, no recipient info. Routed through sendIntoVoid.
+  //   - penpal: disabled until the physical stranger-mail address flow ships.
   //
   // v0.7.0.25 follow-up: an earlier build 38 attempt routed "link"
   // through their-info too, on the (wrong) theory that the bug "Send a
@@ -840,17 +837,7 @@ export function WelcomeSheet({
           }
         }
       } else if (recipientKind === "penpal") {
-        // v0.7.0.1: pen pal is wired through sendIntoVoid — the existing
-        // anonymous "send to a stranger" backend. The card queues; a
-        // Mailroom-curated recipient is assigned later. From the
-        // sender&apos;s POV: card is mailed, app opens, they&apos;re in.
-        const note = message.trim();
-        // v0.7.0.25: pass photoUri so penpal sends carry a real photo
-        // (was hardcoded null before, blank tiles in the journal).
-        const voidRes = await sendIntoVoid(note, photoUri ?? undefined);
-        if (!voidRes.ok) {
-          throw new Error("Couldn't send to a pen pal. Try again in a moment.");
-        }
+        throw new Error("Pen pals are coming soon. Pick a friend, yourself, or a magic link for real mailed postcards right now.");
       } else {
         // Unknown recipient kind — defensive.
         throw new Error("Pick a recipient first.");
@@ -1679,14 +1666,15 @@ function RecipientStep({
         kind="penpal"
         selected={kind === "penpal"}
         title="A pen pal"
-        sub="Send one, get one from a stranger"
+        sub="Coming soon — needs opt-in mailing addresses"
         // v1.0.5: pen pal was sharing the UsersIcon with "Someone I know"
         // — visually identical even though they mean very different things.
         // Globe2 reads as "someone out there in the world I haven't met,"
-        // which matches the sendIntoVoid mechanic (anonymous match with a
-        // stranger in the network).
+        // without making the disabled launch option visually identical to
+        // "Someone I know."
         Icon={Globe2}
         onPress={() => onPick("penpal")}
+        disabled
         testID="welcome-recipient-penpal"
       />
 
