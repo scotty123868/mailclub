@@ -382,9 +382,21 @@ serve(async (req) => {
   // ---- Step 6: hand off to Lob ----
   const lobResult = await handoffToLob(postcardId as string, photoFetchUrl);
   if (!lobResult.ok) {
-    // Refund the credit + delete the orphan postcard so user can retry.
-    await admin.rpc("refund_postcard_credit", { p_postcard_id: postcardId });
-    console.error("[sms-submit] Lob handoff failed", lobResult.error);
+    // v1.1: refund_postcard_credit RPC checks auth.uid() which is null
+    // in service-role context, so it always raises "Not authenticated"
+    // when sms-submit calls it. Do the refund + orphan delete inline
+    // with the admin client.
+    const { data: cur } = await admin
+      .from("profiles").select("credits").eq("id", userId).maybeSingle();
+    await admin
+      .from("profiles")
+      .update({ credits: (cur?.credits ?? 0) + 1 })
+      .eq("id", userId);
+    await admin.from("postcards").delete().eq("id", postcardId);
+    console.error(
+      "[sms-submit] Lob handoff failed, refunded credit + deleted orphan",
+      lobResult.error,
+    );
     return json({ ok: false, reason: "lob_failed", message: lobResult.error }, 502);
   }
 
