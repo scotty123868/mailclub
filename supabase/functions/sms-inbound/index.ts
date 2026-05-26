@@ -614,6 +614,21 @@ async function doMail(phone: string, state: any): Promise<Response> {
     console.error("[sms-inbound] user create failed", e);
     return twiml("Couldn't set up your account. Try again in a minute.");
   }
+
+  // 1a. Persist sender city/state to the profile if we collected it
+  //     in this conversation. handleSenderLocation already tries to
+  //     update, but for NEW users that update matches 0 rows because
+  //     the profile doesn't exist until findOrCreateUserByPhone runs
+  //     here. So re-write it after we know we have a profile row.
+  const senderCityFromData = (data.sender_city as string) || "";
+  const senderStateFromData = (data.sender_state as string) || "";
+  if (senderCityFromData && senderStateFromData) {
+    await admin
+      .from("profiles")
+      .update({ city: senderCityFromData, state: senderStateFromData })
+      .eq("id", userId);
+  }
+
   let friendId: string;
   try {
     friendId = await findOrCreateFriend(userId, { ...recipient, name: recipientName, confidence: 1, formatted: "" });
