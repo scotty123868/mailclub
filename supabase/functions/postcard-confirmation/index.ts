@@ -86,7 +86,8 @@ serve(async (req) => {
     .from("postcards")
     .select(`
       id, message, from_city, to_city, status, lob_id, lob_status,
-      lob_expected_delivery, sent_at, sender_id, to_friend_id, photo_path
+      lob_expected_delivery, sent_at, scheduled_send_at,
+      sender_id, to_friend_id, photo_path
     `)
     .eq("id", draft.postcard_id)
     .maybeSingle();
@@ -162,6 +163,11 @@ serve(async (req) => {
     lob_status: lobStatus,
     expected_delivery: postcard.lob_expected_delivery,
     sent_at: postcard.sent_at,
+    // v1.2 scheduled sending — when the card is queued for future mailing
+    // (status='scheduled'), the page shows "Mailing on [send_date]" instead
+    // of the live Lob timeline. The cron job flips status → 'sent' when the
+    // window arrives, at which point the normal timeline kicks in.
+    scheduled_send_at: postcard.scheduled_send_at,
     timeline,
   });
 });

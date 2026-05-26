@@ -52,8 +52,16 @@ const FREE_CREDITS_NEW_USER = 1;
 // Twilio helpers
 // =============================================================================
 
-function twiml(body: string): Response {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(body)}</Message></Response>`;
+// Accepts one or more SMS bubbles. Twilio renders each <Message> as a
+// separate SMS in the conversation thread (Twilio doc: "Multiple Message
+// nouns are sent in the same TwiML"). We use this to split long prompts
+// into two bubbles — more conversational, easier to scan on a phone.
+function twiml(...bodies: string[]): Response {
+  const messages = bodies
+    .filter((b) => b && b.trim().length > 0)
+    .map((b) => `<Message>${escapeXml(b)}</Message>`)
+    .join("");
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><Response>${messages}</Response>`;
   return new Response(xml, {
     status: 200,
     headers: { "Content-Type": "text/xml; charset=utf-8" },
@@ -147,6 +155,18 @@ interface ParsedLocation {
   confidence: number;     // 0-1
 }
 
+// v1.2 scheduled sending. At the SEND step the user can say "send", "cancel",
+// or pick a future date ("send June 15", "mail it for her birthday Aug 14",
+// "send in 3 days", "next Tuesday"). parseSendConfirm normalizes all of those
+// into a single intent. arrival_iso is the date the postcard should ARRIVE
+// (not the date we hand off to Lob). We subtract 7 days for Lob first-class
+// transit when computing scheduled_send_at downstream.
+interface ParsedSendConfirm {
+  intent: "send_now" | "schedule" | "cancel" | "unclear";
+  arrival_iso?: string;   // YYYY-MM-DD, only when intent === "schedule"
+  formatted?: string;     // human-readable arrival date, only when scheduled
+}
+
 // Generic chat-completion call returning parsed JSON.
 async function openaiJson(messages: Array<{ role: string; content: string }>): Promise<any | null> {
   const key = Deno.env.get("OPENAI_API_KEY") ?? "";
@@ -222,10 +242,13 @@ async function parseLocation(input: string): Promise<ParsedLocation | null> {
 async function parseConfirmation(input: string): Promise<ParsedConfirm> {
   const trimmed = input.trim().toLowerCase();
   // Fast-path obvious cases without calling the LLM (saves money + latency).
-  if (/^(y|yes|yep|yeah|yas|sure|ok|okay|confirm|confirmed|send|ship|do it|go|👍|✅|🚀)$/i.test(trimmed)) {
+  // Multi-word affirmatives ("yeah sure", "sounds good") added per QA finding —
+  // common conversational replies were falling through to LLM and getting
+  // misclassified as "unclear".
+  if (/^(y|yes|yep|yeah|yas|sure|ok|okay|confirm|confirmed|send|ship|do it|go|👍|✅|🚀|yeah sure|yes please|sounds good|looks good|go ahead|sure thing|that's right|thats right)$/i.test(trimmed)) {
     return { intent: "yes" };
   }
-  if (/^(n|no|nope|nah|cancel|stop|wait)$/i.test(trimmed)) {
+  if (/^(n|no|nope|nah|cancel|stop|wait|hold on|not yet|no thanks)$/i.test(trimmed)) {
     return { intent: "no" };
   }
   // Ambiguous → ask the LLM.
@@ -243,6 +266,57 @@ async function parseConfirmation(input: string): Promise<ParsedConfirm> {
     return { intent: "unclear" };
   }
   return result as ParsedConfirm;
+}
+
+// Schedule-aware send confirmation. Used at the awaiting_send_confirm step only.
+// Fast-paths obvious send/cancel without an LLM call; otherwise asks the model
+// to also extract a future arrival date if the user is scheduling.
+async function parseSendConfirm(input: string): Promise<ParsedSendConfirm> {
+  const trimmed = input.trim().toLowerCase();
+  // Fast paths — bare "send" / "yes" / "go" etc. → send now.
+  if (/^(y|yes|yep|yeah|yas|sure|ok|okay|confirm|confirmed|send|ship|do it|go|👍|✅|🚀|yeah sure|yes please|sounds good|looks good|go ahead|sure thing|let's go|lets go)$/i.test(trimmed)) {
+    return { intent: "send_now" };
+  }
+  if (/^(n|no|nope|nah|cancel|stop|wait|hold on|not yet|no thanks)$/i.test(trimmed)) {
+    return { intent: "cancel" };
+  }
+
+  // Anything else → LLM. We give the model today's date so relative
+  // expressions like "in 3 days" or "next Tuesday" resolve correctly.
+  const today = new Date().toISOString().slice(0, 10);
+  const result = await openaiJson([
+    {
+      role: "system",
+      content:
+        `You classify an SMS reply at the SEND step of a postcard flow. Today is ${today}.` +
+        ` The user can:\n` +
+        ` - Confirm to mail NOW: "send", "yes", "go", "ship it"\n` +
+        ` - Schedule for a future date: "schedule June 15", "for her birthday Aug 14",` +
+        ` "send in 3 days", "mail it next Tuesday", "send it on the 15th",` +
+        ` "send tomorrow", "asap" (asap = send_now)\n` +
+        ` - Cancel: "no", "cancel", "nevermind"\n` +
+        ` - Unclear: anything else\n\n` +
+        `Return JSON: { "intent": "send_now" | "schedule" | "cancel" | "unclear",` +
+        ` "arrival_iso": "YYYY-MM-DD" | null, "formatted": string | null }.\n\n` +
+        `arrival_iso is the date the postcard should ARRIVE at the recipient.` +
+        ` Set this whenever the user named a future date, EVEN IF the date is` +
+        ` too close (sub-7-day) — the calling code checks lead time and gives` +
+        ` a specific reply. Only leave arrival_iso null when intent is not "schedule".\n` +
+        ` - "send in 3 days" → arrival_iso = today + 3 days (still set it; lead-time check follows)\n` +
+        ` - "for June 15" → arrival_iso = next June 15 strictly in the future\n` +
+        ` - "next Tuesday" → arrival_iso = the Tuesday of next week from today\n` +
+        ` - "send tomorrow" → arrival_iso = today + 1 day (still set it; too-close handled downstream)\n` +
+        ` - "for halloween" → arrival_iso = next October 31\n\n` +
+        `formatted is human-readable like "June 15, 2026". Only set when scheduling.\n\n` +
+        `Only return intent: "unclear" if you genuinely can't tell what the user means` +
+        ` or if the input is garbage. Do NOT use "unclear" just because a date is close.`,
+    },
+    { role: "user", content: input },
+  ]);
+  if (!result || !["send_now", "schedule", "cancel", "unclear"].includes(result.intent)) {
+    return { intent: "unclear" };
+  }
+  return result as ParsedSendConfirm;
 }
 
 // =============================================================================
@@ -316,6 +390,27 @@ async function submitToLob(
 // User + friend creation (same pattern as sms-submit)
 // =============================================================================
 
+// Returns the SEND-prompt parenthetical for this user:
+//   - new user (no profile or zero prior sends) → " (First one's free.)"
+//   - repeat user with credits                  → " (Uses 1 of N cards.)"
+//   - repeat user with 0 credits                → ""  (insufficient_credits
+//     will get raised by send_postcard_sms RPC and handled in doMail)
+// One DB round-trip — profile + postcard count via a single PostgREST call.
+async function balanceParenthetical(phone: string): Promise<string> {
+  const { data: prof } = await admin
+    .from("profiles").select("id, credits").eq("phone", phone).maybeSingle();
+  if (!prof?.id) return " (First one's free.)";  // brand-new phone
+  const { count } = await admin
+    .from("postcards")
+    .select("id", { count: "exact", head: true })
+    .eq("sender_id", prof.id)
+    .in("status", ["sent", "delivered", "in_transit", "scheduled", "queued"]);
+  if ((count ?? 0) === 0) return " (First one's free.)";
+  const credits = prof.credits ?? 0;
+  if (credits <= 0) return "";  // out — doMail will catch + show BUY
+  return ` (Uses 1 of ${credits} card${credits === 1 ? "" : "s"}.)`;
+}
+
 async function findOrCreateUserByPhone(phone: string): Promise<string> {
   const { data: existing } = await admin
     .from("profiles").select("id").eq("phone", phone).maybeSingle();
@@ -365,8 +460,58 @@ interface InboundContext {
 }
 
 // Detect "start over" intent — single source of truth for restart commands.
+// NOTE: "cancel" here means "abandon the in-progress draft", NOT "cancel a
+// scheduled card". A scheduled-card cancel flow doesn't exist yet (would
+// need a follow-up step asking which card).
 function isRestartCommand(body: string): boolean {
   return /^(cancel|stop|restart|reset|start over|nevermind|never mind)$/i.test(body.trim());
+}
+
+// v1.2 BUY keyword — repeat senders text BUY (optionally with a pack size)
+// to get a Stripe Checkout URL for more credits. Matches:
+//   BUY            → default pack (p25 — best per-stamp value at sub-USPS)
+//   BUY 5 / BUY5   → p5
+//   BUY 25 / BUY25 → p25
+//   BUY 50 / BUY50 → p50
+// Anything else → falls through (LLM parse handles ambiguous "BUY MORE" etc.
+// via the state machine — we can promote this later if needed).
+function parseBuyKeyword(body: string): { matched: true; pack_id: string } | { matched: false } {
+  const m = body.trim().toUpperCase().match(/^BUY\s*(5|25|50)?$/);
+  if (!m) return { matched: false };
+  const size = m[1];
+  if (size === "5") return { matched: true, pack_id: "p5" };
+  if (size === "50") return { matched: true, pack_id: "p50" };
+  // Default (BUY alone, or BUY 25) → p25, the featured 80¢/stamp pack.
+  return { matched: true, pack_id: "p25" };
+}
+
+async function createBuyCheckout(
+  phone: string,
+  packId: string,
+): Promise<{ ok: true; url: string; pack_label: string } | { ok: false; error: string }> {
+  const internalSecret = Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "";
+  if (!internalSecret) return { ok: false, error: "internal secret not set" };
+  const anonKey =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sd25tZ3d5bG1tbmFlbWRuemxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDI1NjksImV4cCI6MjA5NDA3ODU2OX0.rZlWORqFLfFCBQQ4RPUOBtrqAX_Tc0Gf_sI5hPPENxM";
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/sms-buy-checkout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+        "x-mailroom-internal": internalSecret,
+      },
+      body: JSON.stringify({ phone, pack_id: packId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!data?.ok || !data?.url) {
+      return { ok: false, error: data?.error ?? `HTTP ${res.status}` };
+    }
+    return { ok: true, url: data.url, pack_label: data.pack_label };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "network error" };
+  }
 }
 
 async function handleInbound(ctx: InboundContext): Promise<Response> {
@@ -383,14 +528,98 @@ async function handleInbound(ctx: InboundContext): Promise<Response> {
     return twiml("Cancelled. Text a new photo when you're ready to start over.");
   }
 
+  // Global short-circuit: BUY (optionally with pack size) — repeat senders
+  // top up via Stripe Checkout without leaving Messages. This intercepts
+  // BEFORE the per-step state machine so the user can buy from any step
+  // including idle and awaiting_send_confirm.
+  const buy = parseBuyKeyword(body);
+  if (buy.matched) {
+    const checkout = await createBuyCheckout(from, buy.pack_id);
+    if (!checkout.ok) {
+      console.error("[sms-inbound] BUY checkout failed", checkout.error);
+      return twiml(
+        "Couldn't open checkout right now. Try again in a minute, or " +
+        "email hello@mailroomclub.io if it keeps failing."
+      );
+    }
+    return twiml(
+      `${checkout.pack_label}: ${checkout.url}\n\n` +
+      `Link expires in 1 hour. Other packs: BUY 5 or BUY 50.`
+    );
+  }
+
+  // BUY-with-unknown-size fallback — catches "BUY 100", "BUY MORE", "BUY10",
+  // "BUY 5 PACK" etc. The strict regex above only accepts exactly 5/25/50.
+  // Without this branch, "BUY 100" falls through to the idle prompt which
+  // tells a high-intent user to "send a photo." Per QA finding.
+  if (/^buy\b/i.test(body.trim())) {
+    return twiml(
+      "Pack sizes: BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35). " +
+      "Or just text BUY for the 25-pack (our best per-stamp value)."
+    );
+  }
+
   // Pull current state.
   const state = await getConversationState(from);
 
   switch (state.step) {
-    case "idle":
-      return twiml(
-        "Please send a photo to get started. We'll turn it into a real paper postcard — first one's free."
-      );
+    case "idle": {
+      // Spam guard: track how many idle-state prompts we've sent this hour.
+      // 1st non-photo text → full friendly prompt.
+      // 2nd → shorter nudge (acknowledges they texted but redirects to photo).
+      // 3rd+ within 1 hour → empty TwiML (silence) so spammers can't burn
+      // our SMS budget. The hour resets via idle_reply_first_at — after a
+      // quiet hour, a new "idle session" begins.
+      const dataState = state.conversation_data ?? {};
+      const idleCount = (dataState.idle_reply_count ?? 0) as number;
+      const idleFirstAt = dataState.idle_reply_first_at
+        ? new Date(dataState.idle_reply_first_at as string).getTime()
+        : 0;
+      const nowMs = Date.now();
+      const sessionExpired = (nowMs - idleFirstAt) > 60 * 60 * 1000;
+      const effectiveCount = sessionExpired ? 0 : idleCount;
+
+      // After 2 replies in same hour → silent.
+      if (effectiveCount >= 2) {
+        console.log(`[sms-inbound] idle silenced: ${from} (count=${effectiveCount})`);
+        return emptyTwiml();
+      }
+
+      // Branch on credit balance so repeat senders aren't told "first card
+      // free" again. We check the profile lazily so brand-new users don't
+      // trigger a DB lookup.
+      const { data: prof } = await admin
+        .from("profiles").select("credits").eq("phone", from).maybeSingle();
+
+      let replyText: string;
+      if (!prof) {
+        replyText = effectiveCount === 0
+          ? "Send a photo to get started. We'll turn it into a real paper postcard. First one's free."
+          : "Just send any photo. We'll do the rest.";
+      } else {
+        const credits = prof.credits ?? 0;
+        if (credits <= 0) {
+          replyText = effectiveCount === 0
+            ? "You're out of cards. Top up: BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35). Then text a photo."
+            : "Reply BUY 5 / BUY 25 / BUY 50 to top up. Then text a photo.";
+        } else {
+          replyText = effectiveCount === 0
+            ? `You have ${credits} card${credits === 1 ? "" : "s"} left. Text a photo to start a new one.`
+            : "Text a photo to start a new card.";
+        }
+      }
+
+      // Bump the counter. First reply sets idle_reply_first_at; later
+      // replies leave it alone so the session-window clock keeps ticking.
+      await advanceState(from, "idle", state.draft_token, {
+        idle_reply_count: effectiveCount + 1,
+        idle_reply_first_at: effectiveCount === 0
+          ? new Date(nowMs).toISOString()
+          : (dataState.idle_reply_first_at ?? new Date(nowMs).toISOString()),
+      });
+
+      return twiml(replyText);
+    }
 
     case "awaiting_recipient_name":
       return await handleRecipientName(from, body, state);
@@ -438,10 +667,13 @@ async function startNewConversation(
     verified_phone: phone,
   });
   // Reset conversation state + advance to awaiting_recipient_name.
-  await advanceState(phone, "awaiting_recipient_name", token, {});
-  return twiml(
-    "Got your photo! Who's this postcard for? Reply with their name."
-  );
+  // Explicitly clear the idle spam counters — a photo is a successful
+  // re-engagement, so they get a fresh budget of idle prompts later.
+  await advanceState(phone, "awaiting_recipient_name", token, {
+    idle_reply_count: 0,
+    idle_reply_first_at: null,
+  });
+  return twiml("Got the photo. Who's it for? Reply with their name.");
 }
 
 async function handleRecipientName(
@@ -455,8 +687,8 @@ async function handleRecipientName(
     recipient_name: name,
   });
   return twiml(
-    `Got it — to ${name}. What's their full address? You can send it one line ` +
-    `like "123 Main St, Naples FL 34101" — we'll figure it out.`
+    `Got it, to ${name}. What's their full address? One line works: ` +
+    `"123 Main St, Naples FL 34101". We'll figure it out.`
   );
 }
 
@@ -482,7 +714,7 @@ async function handleRecipientAddress(
   const recipientName = (state.conversation_data?.recipient_name ?? "your friend") as string;
   return twiml(
     `Mailing to ${recipientName} at ${parsed.formatted}. ` +
-    `Reply Y to confirm or send the correct address.`
+    `Reply Y to confirm, or send the right address.`
   );
 }
 
@@ -492,13 +724,13 @@ async function handleAddressConfirm(
   const confirm = await parseConfirmation(body);
   if (confirm.intent === "yes") {
     await advanceState(phone, "awaiting_message", state.draft_token, {});
-    return twiml("What should the postcard say? Reply with your note (240 characters max).");
+    return twiml("What should the card say? Reply with your note. (Up to 240 chars.)");
   }
   if (confirm.intent === "no") {
     await advanceState(phone, "awaiting_recipient_address", state.draft_token, {});
-    return twiml("OK — send me the correct address.");
+    return twiml("OK, send me the right address.");
   }
-  return twiml("Reply Y to confirm the address, or send the correct one.");
+  return twiml("Reply Y to confirm, or send the right address.");
 }
 
 async function handleMessage(
@@ -525,9 +757,12 @@ async function handleMessage(
       message: truncated,
     });
     const recipientName = (state.conversation_data?.recipient_name ?? "your friend") as string;
+    const recipient = (state.conversation_data?.recipient ?? {}) as { city?: string; state?: string };
+    const recipLoc = [recipient.city, recipient.state].filter(Boolean).join(", ") || "their address";
+    const balanceTag = await balanceParenthetical(phone);
     return twiml(
-      `Ready to mail. Your note to ${recipientName}: "${truncated}". ` +
-      `Reply SEND to mail it (first card free) or CANCEL.`
+      `From ${knownCity}, ${knownState} to ${recipientName} in ${recipLoc}.`,
+      `Note: "${truncated}" Reply SEND, schedule ("June 15" or "in 3 days"), or CANCEL.${balanceTag}`,
     );
   }
 
@@ -535,8 +770,8 @@ async function handleMessage(
     message: truncated,
   });
   return twiml(
-    `Last thing: where are you texting from? Just your city + state (e.g. ` +
-    `"Bethesda, MD"). Goes on the back as your return address.`
+    `Last thing: city + state? Like "Bethesda, MD". ` +
+    `Goes on the back, and powers your live delivery map.`
   );
 }
 
@@ -571,27 +806,39 @@ async function handleSenderLocation(
   });
 
   const recipientName = (state.conversation_data?.recipient_name ?? "your friend") as string;
+  const recipient = (state.conversation_data?.recipient ?? {}) as { city?: string; state?: string };
+  const recipLoc = [recipient.city, recipient.state].filter(Boolean).join(", ") || "their address";
   const note = (state.conversation_data?.message ?? "") as string;
+  const balanceTag = await balanceParenthetical(phone);
   return twiml(
-    `Got it — from ${parsed.city}, ${parsed.state}. Ready to mail to ${recipientName}: ` +
-    `"${note}". Reply SEND to mail it (first card free) or CANCEL.`
+    `From ${parsed.city}, ${parsed.state} to ${recipientName} in ${recipLoc}.`,
+    `Note: "${note}" Reply SEND, schedule ("June 15" or "in 3 days"), or CANCEL.${balanceTag}`,
   );
 }
 
 async function handleSendConfirm(
   phone: string, body: string, state: any,
 ): Promise<Response> {
-  const confirm = await parseConfirmation(body);
-  if (confirm.intent === "no") {
+  const confirm = await parseSendConfirm(body);
+
+  if (confirm.intent === "cancel") {
     await resetState(phone);
     return twiml("Cancelled. Send a new photo when you're ready.");
   }
-  if (confirm.intent !== "yes") {
-    return twiml("Reply SEND to mail your postcard, or CANCEL to drop it.");
+
+  if (confirm.intent === "send_now") {
+    return await doMail(phone, state);
   }
 
-  // Confirmed. Run the actual mail flow.
-  return await doMail(phone, state);
+  if (confirm.intent === "schedule" && confirm.arrival_iso) {
+    return await doSchedule(phone, state, confirm);
+  }
+
+  // unclear / no date / past date
+  return twiml(
+    "Your card's ready. Reply SEND to mail now, schedule it " +
+    "(\"June 15\", \"in 3 days\", \"for her birthday Aug 14\"), or CANCEL."
+  );
 }
 
 async function doMail(phone: string, state: any): Promise<Response> {
@@ -674,8 +921,9 @@ async function doMail(phone: string, state: any): Promise<Response> {
     console.error("[sms-inbound] send_postcard_sms failed", rpcErr);
     const oom = rpcErr.message?.includes("insufficient_credits");
     return twiml(oom
-      ? "You're out of free credits. Card packs are coming soon."
-      : "Couldn't mail your card. Try SEND again or text a new photo to start over.");
+      ? "You're out of cards. Top up: BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35). " +
+        "Then SEND to mail this one."
+      : "Couldn't mail your card. Try SEND again, or text a new photo to start over.");
   }
 
   // 4. Lob handoff
@@ -709,9 +957,148 @@ async function doMail(phone: string, state: any): Promise<Response> {
   // — the /c/<token> page reads the draft → postcard_id → renders.
   const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
 
+  // v1.2 BUY nudge — peek at remaining balance and add a top-up reminder
+  // when the user just spent their last credit. Single source of conversion
+  // for repeat senders: "I just sent my free one, what next?"
+  const { data: balRow } = await admin
+    .from("profiles").select("credits").eq("id", userId).maybeSingle();
+  const remaining = balRow?.credits ?? 0;
+  const buyHint = remaining <= 0
+    ? ` That was your last card — reply BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35) for more.`
+    : remaining <= 2
+      ? ` ${remaining} card${remaining === 1 ? "" : "s"} left. Reply BUY for more.`
+      : "";
+
   return twiml(
     `Mailed! 📮 Your card to ${recipientName} arrives ${eta}. ` +
-    `See it travel: ${confirmUrl}`
+    `See it travel: ${confirmUrl}${buyHint}`
+  );
+}
+
+// v1.2 scheduled sending. Same setup as doMail (user + friend + photo) but
+// inserts the postcard with status='scheduled' and scheduled_send_at set,
+// then bails before the Lob handoff. The fire-scheduled-postcards Edge
+// Function (pg_cron triggered, daily) picks up the row when the timestamp
+// arrives and fires Lob.
+async function doSchedule(
+  phone: string,
+  state: any,
+  schedule: ParsedSendConfirm,
+): Promise<Response> {
+  const data = state.conversation_data ?? {};
+  const recipientName = data.recipient_name as string;
+  const recipient = data.recipient as {
+    line1: string; line2: string; city: string; state: string; zip: string;
+  };
+  const message = data.message as string;
+  const draftToken = state.draft_token as string;
+
+  if (!recipientName || !recipient || !message || !draftToken || !schedule.arrival_iso) {
+    await resetState(phone);
+    return twiml("Something's missing from your draft. Text us a fresh photo to start over.");
+  }
+
+  // Lob first-class average transit is ~7 days. Subtract from arrival to get
+  // send-at. Use noon UTC to dodge timezone edge cases — being off by a day
+  // is fine for postcards.
+  const arrival = new Date(schedule.arrival_iso + "T12:00:00Z");
+  const sendAt = new Date(arrival.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  // Past-date guard. If send-at is in the past or within a day, just refuse
+  // and tell the user. Per QA finding: be SPECIFIC about lead time so the
+  // user knows the issue is "too close" not "couldn't parse."
+  if (sendAt.getTime() < Date.now() + 24 * 60 * 60 * 1000) {
+    const arrivalLabel = schedule.formatted ??
+      arrival.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return twiml(
+      `${arrivalLabel} is too close. We need ~7 days for first-class mail. ` +
+      `Reply SEND to mail now, or pick a later date.`
+    );
+  }
+
+  // 1. User + friend (same as doMail)
+  let userId: string;
+  try {
+    userId = await findOrCreateUserByPhone(phone);
+  } catch (e) {
+    console.error("[sms-inbound] user create failed (schedule)", e);
+    return twiml("Couldn't set up your account. Try again in a minute.");
+  }
+
+  const senderCityFromData = (data.sender_city as string) || "";
+  const senderStateFromData = (data.sender_state as string) || "";
+  if (senderCityFromData && senderStateFromData) {
+    await admin
+      .from("profiles")
+      .update({ city: senderCityFromData, state: senderStateFromData })
+      .eq("id", userId);
+  }
+
+  let friendId: string;
+  try {
+    friendId = await findOrCreateFriend(userId, {
+      ...recipient, name: recipientName, confidence: 1, formatted: "",
+    });
+  } catch (e) {
+    console.error("[sms-inbound] friend create failed (schedule)", e);
+    return twiml("Couldn't save your recipient. Try again in a minute.");
+  }
+
+  // 2. Sign the photo for ~30 days so the URL outlives short schedules.
+  const { data: draftRow } = await admin
+    .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
+  if (!draftRow?.photo_path) {
+    await resetState(phone);
+    return twiml("Your photo expired. Text a new one to start over.");
+  }
+  let photoUrl = draftRow.photo_path;
+  if (!photoUrl.startsWith("http")) {
+    const { data: signed } = await admin.storage
+      .from("sms-photos")
+      .createSignedUrl(photoUrl, 60 * 60 * 24 * 30); // 30-day TTL
+    if (!signed?.signedUrl) {
+      return twiml("Couldn't access your photo. Text us another to start over.");
+    }
+    photoUrl = signed.signedUrl;
+  }
+
+  const senderCity = (data.sender_city as string) || "";
+
+  // 3. send_postcard_sms with p_scheduled_send_at set — RPC creates the row
+  //    with status='scheduled' and skips Lob handoff. fire-scheduled-postcards
+  //    picks it up when sendAt arrives.
+  const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms", {
+    p_user_id: userId,
+    p_to_friend_id: friendId,
+    p_message: message,
+    p_photo_path: photoUrl,
+    p_to_city: recipient.city,
+    p_from_city: senderCity,
+    p_scheduled_send_at: sendAt.toISOString(),
+  });
+  if (rpcErr) {
+    console.error("[sms-inbound] send_postcard_sms (scheduled) failed", rpcErr);
+    const oom = rpcErr.message?.includes("insufficient_credits");
+    return twiml(oom
+      ? "You're out of cards. Top up: BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35). " +
+        "Then schedule this card again."
+      : "Couldn't schedule your card. Try again, or text a new photo.");
+  }
+
+  // 4. Consume the draft so the token can't be reused. consume_sms_draft
+  //    just marks consumed_at + postcard_id; postcard-confirmation still
+  //    resolves the URL after the card actually mails.
+  await admin.rpc("consume_sms_draft", { p_token: draftToken, p_postcard_id: postcardId });
+  await resetState(phone);
+
+  // Always render our own short format ("Jun 15") — the LLM's `formatted`
+  // sometimes includes the year ("June 15, 2026") which feels verbose in SMS.
+  const sendDateFmt = sendAt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const arrivalFmt = arrival.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  return twiml(
+    `Scheduled. We'll mail your card to ${recipientName} on ${sendDateFmt} so it arrives ` +
+    `around ${arrivalFmt}. Save your link: https://app.themailroom.club/c/${draftToken}`
   );
 }
 
