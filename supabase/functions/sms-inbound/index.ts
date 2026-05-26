@@ -194,16 +194,13 @@ serve(async (req) => {
   }
 
   if (numMedia === 0) {
-    return twiml(
-      "Send me a photo and I'll turn it into a real paper postcard. " +
-      "First card's on us."
-    );
+    return twiml("Please send a photo to get started. We'll turn it into a real paper postcard — first one's free.");
   }
 
   const mediaUrl = formData["MediaUrl0"];
   const mediaType = formData["MediaContentType0"];
   if (!mediaUrl) {
-    return twiml("Got your message but no photo came through. Try again?");
+    return twiml("Please send a photo to get started. We'll turn it into a real paper postcard — first one's free.");
   }
 
   // Mint the token first so we can use it as the storage folder.
