@@ -141,6 +141,12 @@ interface ParsedConfirm {
   intent: "yes" | "no" | "unclear";
 }
 
+interface ParsedLocation {
+  city: string;
+  state: string;          // 2-letter
+  confidence: number;     // 0-1
+}
+
 // Generic chat-completion call returning parsed JSON.
 async function openaiJson(messages: Array<{ role: string; content: string }>): Promise<any | null> {
   const key = Deno.env.get("OPENAI_API_KEY") ?? "";
@@ -192,6 +198,25 @@ async function parseAddress(input: string): Promise<ParsedAddress | null> {
   ]);
   if (!result) return null;
   return result as ParsedAddress;
+}
+
+async function parseLocation(input: string): Promise<ParsedLocation | null> {
+  const result = await openaiJson([
+    {
+      role: "system",
+      content:
+        "You parse a US city + state from messy text. Return JSON only. " +
+        'Schema: { "city": string, "state": string (2-letter), "confidence": number 0-1 }. ' +
+        "Normalize state to 2 letters (e.g. 'Florida' → 'FL', 'New York' → 'NY'). " +
+        "If the input doesn't clearly contain a city + state, return confidence: 0 and empty strings. " +
+        'Examples: "Bethesda, MD" → {"city": "Bethesda", "state": "MD", "confidence": 0.99}. ' +
+        '"naples florida" → {"city": "Naples", "state": "FL", "confidence": 0.95}. ' +
+        '"SF" → {"city": "San Francisco", "state": "CA", "confidence": 0.85}. ' +
+        '"hi" → {"city": "", "state": "", "confidence": 0}.',
+    },
+    { role: "user", content: input },
+  ]);
+  return result as ParsedLocation | null;
 }
 
 async function parseConfirmation(input: string): Promise<ParsedConfirm> {
@@ -379,6 +404,9 @@ async function handleInbound(ctx: InboundContext): Promise<Response> {
     case "awaiting_message":
       return await handleMessage(from, body, state);
 
+    case "awaiting_sender_location":
+      return await handleSenderLocation(from, body, state);
+
     case "awaiting_send_confirm":
       return await handleSendConfirm(from, body, state);
 
@@ -481,13 +509,72 @@ async function handleMessage(
     return twiml("Tell me what you want the postcard to say.");
   }
   const truncated = message.length > 240 ? message.slice(0, 240) : message;
-  await advanceState(phone, "awaiting_send_confirm", state.draft_token, {
+
+  // v1.2: after the message, check if we already know the sender's city.
+  // If yes, skip the location ask and go straight to send confirm. If no,
+  // ask for it — we need it for the post-SEND delivery map confirmation
+  // page that animates "your city → recipient's mailbox".
+  const { data: profile } = await admin
+    .from("profiles").select("city, state").eq("phone", phone).maybeSingle();
+  const knownCity = (profile?.city ?? "").trim();
+  const knownState = (profile?.state ?? "").trim();
+
+  if (knownCity && knownState) {
+    // Skip — already on file.
+    await advanceState(phone, "awaiting_send_confirm", state.draft_token, {
+      message: truncated,
+    });
+    const recipientName = (state.conversation_data?.recipient_name ?? "your friend") as string;
+    return twiml(
+      `Ready to mail. Your note to ${recipientName}: "${truncated}". ` +
+      `Reply SEND to mail it (first card free) or CANCEL.`
+    );
+  }
+
+  await advanceState(phone, "awaiting_sender_location", state.draft_token, {
     message: truncated,
   });
-  const recipientName = (state.conversation_data?.recipient_name ?? "your friend") as string;
   return twiml(
-    `Ready to mail. Your note to ${recipientName}: "${truncated}". ` +
-    `Reply SEND to mail it (first card free) or CANCEL.`
+    `Last thing: where are you texting from? Just your city + state (e.g. ` +
+    `"Bethesda, MD"). Goes on the back as your return address.`
+  );
+}
+
+async function handleSenderLocation(
+  phone: string, body: string, state: any,
+): Promise<Response> {
+  const parsed = await parseLocation(body);
+  if (!parsed || parsed.confidence < 0.6 || !parsed.city || !parsed.state) {
+    return twiml(
+      `I didn't catch a city. Try again — just "City, ST" works ` +
+      `(e.g. "Bethesda, MD" or "San Francisco, CA").`
+    );
+  }
+
+  // Persist to the profile so we never have to ask this user again.
+  // Find-or-create-user happens on SEND, but the row might already exist
+  // from a previous card. Upsert keyed on phone via the profile.phone
+  // unique index.
+  const { data: existing } = await admin
+    .from("profiles").select("id").eq("phone", phone).maybeSingle();
+  if (existing?.id) {
+    await admin
+      .from("profiles")
+      .update({ city: parsed.city, state: parsed.state })
+      .eq("id", existing.id);
+  }
+  // Stash in conversation_data too so doMail can pass to_city + from_city
+  // without re-querying the profile.
+  await advanceState(phone, "awaiting_send_confirm", state.draft_token, {
+    sender_city: parsed.city,
+    sender_state: parsed.state,
+  });
+
+  const recipientName = (state.conversation_data?.recipient_name ?? "your friend") as string;
+  const note = (state.conversation_data?.message ?? "") as string;
+  return twiml(
+    `Got it — from ${parsed.city}, ${parsed.state}. Ready to mail to ${recipientName}: ` +
+    `"${note}". Reply SEND to mail it (first card free) or CANCEL.`
   );
 }
 
@@ -552,14 +639,21 @@ async function doMail(phone: string, state: any): Promise<Response> {
     photoUrl = signed.signedUrl;
   }
 
-  // 3. send_postcard_sms RPC (postcard row + credit deduction)
+  // 3. Sender location: prefer the conversation_data we just collected,
+  //    fall back to the profile we updated in handleSenderLocation, fall
+  //    back to empty (cards back will just show the recipient address +
+  //    a Mailroom return).
+  const senderCity = (data.sender_city as string) || "";
+  const senderState = (data.sender_state as string) || "";
+
+  // 4. send_postcard_sms RPC (postcard row + credit deduction)
   const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms", {
     p_user_id: userId,
     p_to_friend_id: friendId,
     p_message: message,
     p_photo_path: photoUrl,
     p_to_city: recipient.city,
-    p_from_city: "",
+    p_from_city: senderCity,
   });
   if (rpcErr) {
     console.error("[sms-inbound] send_postcard_sms failed", rpcErr);
@@ -595,9 +689,14 @@ async function doMail(phone: string, state: any): Promise<Response> {
       })
     : "in 3-5 days";
 
+  // v1.2: instead of just a "Mailed!" text, link to a live delivery
+  // map + postcard preview. The draft token is the unguessable handle
+  // — the /c/<token> page reads the draft → postcard_id → renders.
+  const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
+
   return twiml(
     `Mailed! 📮 Your card to ${recipientName} arrives ${eta}. ` +
-    `Want to see it land? Download Mailroom: https://apps.apple.com/app/id6768460855`
+    `See it travel: ${confirmUrl}`
   );
 }
 
