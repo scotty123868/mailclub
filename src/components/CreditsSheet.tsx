@@ -143,10 +143,10 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
       <StripeShell>
         <View style={styles.root}>
         <SheetHeader
-          title="Buy stamps"
-          subtitle={`${credits} ${credits === 1 ? "stamp" : "stamps"} in your pocket. Each one mails a real postcard, anywhere in the US.`}
+          title="Buy cards"
+          subtitle={`${credits} ${credits === 1 ? "card" : "cards"} in your pocket. Each one mails a real postcard, anywhere in the US.`}
           onClose={onClose}
-          closeAccessibilityLabel="Close stamps sheet"
+          closeAccessibilityLabel="Close cards sheet"
           closeTestID="credits-sheet-close"
         />
 
@@ -168,13 +168,13 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
               </View>
               <Text style={styles.resultTitle}>
                 {purchaseResult.status === "credited"
-                  ? `${purchaseResult.credits} ${purchaseResult.credits === 1 ? "stamp" : "stamps"} added.`
+                  ? `${purchaseResult.credits} ${purchaseResult.credits === 1 ? "card" : "cards"} added.`
                   : "Payment received."}
               </Text>
               <Text style={styles.resultBody}>
                 {purchaseResult.status === "credited"
-                  ? `Your balance is ${credits} ${credits === 1 ? "stamp" : "stamps"}. Mail something.`
-                  : `Your ${purchaseResult.credits} ${purchaseResult.credits === 1 ? "stamp" : "stamps"} should appear shortly. Check back in a moment.`}
+                  ? `Your balance is ${credits} ${credits === 1 ? "card" : "cards"}. Mail something.`
+                  : `Your ${purchaseResult.credits} ${purchaseResult.credits === 1 ? "card" : "cards"} should appear shortly. Check back in a moment.`}
               </Text>
               <View style={styles.resultActions}>
                 <Pressable
@@ -197,7 +197,7 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
                   onPress={() => setPurchaseResult(null)}
                   style={styles.resultSecondary}
                   accessibilityRole="button"
-                  accessibilityLabel="Buy more stamps"
+                  accessibilityLabel="Buy more cards"
                 >
                   <Text style={styles.resultSecondaryText}>Buy more</Text>
                 </Pressable>
@@ -225,18 +225,17 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
             {CREDIT_PACKS.map((pack) => {
               const isBusy = busyPackId === pack.id;
               const disabled = !stripeReady || Boolean(busyPackId);
-              // v0.7.0.27: render as dollars when >= $1, cents otherwise.
-              // User feedback: "100 cents per stamp" reads as nonsense
-              // (it's $1) — switch to dollar formatting above the cent
-              // threshold. The USPS Forever Stamp reference below stays
-              // in cents since it's actually < $1 (82¢).
-              const perStampCents = Math.round((pack.priceUsd / pack.credits) * 100);
-              const perStampDisplay =
-                perStampCents >= 100
-                  ? (perStampCents % 100 === 0
-                      ? `$${perStampCents / 100} per stamp`
-                      : `$${(perStampCents / 100).toFixed(2)} per stamp`)
-                  : `${perStampCents}¢ per stamp`;
+              // Render as dollars when >= $1, cents otherwise. New pricing
+              // ($1.25, $1.00, $0.83 per card) means the entry pack reads
+              // in dollars. No more USPS stamp comparison — Mailroom is a
+              // premium club, not the cheapest stamp.
+              const perCardCents = Math.round((pack.priceUsd / pack.credits) * 100);
+              const perCardDisplay =
+                perCardCents >= 100
+                  ? (perCardCents % 100 === 0
+                      ? `$${perCardCents / 100} per card`
+                      : `$${(perCardCents / 100).toFixed(2)} per card`)
+                  : `${perCardCents}¢ per card`;
               return (
                 <View
                   key={pack.id}
@@ -246,17 +245,16 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
                   {pack.featured ? (
                     <View style={styles.featuredPill}>
                       <Sparkles color={colors.white} size={11} strokeWidth={2} />
-                      <Text style={styles.featuredPillText}>Less than a stamp</Text>
+                      <Text style={styles.featuredPillText}>For the regulars</Text>
                     </View>
                   ) : null}
                   <View style={styles.packCopy}>
                     <Text style={styles.packCredits}>
-                      {pack.credits} {pack.credits === 1 ? "stamp" : "stamps"}
+                      {pack.credits} {pack.credits === 1 ? "card" : "cards"}
                     </Text>
                     <Text style={styles.packPrice}>{formatPrice(pack)}</Text>
                     <Text style={[styles.packPerStamp, pack.featured && styles.packPerStampFeatured]}>
-                      {perStampDisplay}
-                      {pack.featured ? " · the USPS Forever Stamp is 82¢" : null}
+                      {perCardDisplay}
                     </Text>
                   </View>
                   <Pressable
@@ -264,7 +262,7 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
                     disabled={disabled}
                     style={[styles.buyBtn, disabled && styles.buyBtnLocked]}
                     accessibilityRole="button"
-                    accessibilityLabel={`Buy ${pack.credits} stamps for ${formatPrice(pack)}`}
+                    accessibilityLabel={`Buy ${pack.credits} cards for ${formatPrice(pack)}`}
                     testID={`credits-pack-${pack.id}-buy`}
                   >
                     {isBusy ? (
@@ -285,7 +283,7 @@ export function CreditsSheet({ visible, onClose }: { visible: boolean; onClose: 
           </Text>
 
           <Text style={styles.fineprint}>
-            Payments are processed by Stripe. Mailroom charges only when you buy stamps — never recurring. Stamps don't expire.
+            Payments are processed by Stripe. Mailroom only charges when you buy a pack — never recurring. Cards never expire.
           </Text>
         </ScrollView>
 

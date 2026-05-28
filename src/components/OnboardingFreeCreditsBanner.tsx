@@ -17,7 +17,7 @@ export function OnboardingFreeCreditsBanner() {
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>
-          {freeCreditsRemaining} free {freeCreditsRemaining === 1 ? "stamp" : "stamps"} to start
+          {freeCreditsRemaining} free {freeCreditsRemaining === 1 ? "card" : "cards"} to start
         </Text>
         <Text style={styles.body}>A photo, a note, a friend. Mail one on the house.</Text>
       </View>

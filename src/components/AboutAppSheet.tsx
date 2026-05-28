@@ -42,12 +42,12 @@ export function AboutAppSheet({ visible, onClose }: { visible: boolean; onClose:
 
           <Section icon={FileText} title="What this is">
             <Para>
-              A private postcard club. You send real, hand-written mail to friends and to strangers in the club.
-              Every card you send is a small act of attention in an attention-starved world.
+              A magical mail club. You send a real paper postcard to a friend — or a stranger in the
+              club — and a card finds its way back to you.
             </Para>
             <Para>
-              Mailroom is in beta. Send queueing is local, fulfillment is being wired with a real printer
-              partner, and Apple In-App Purchase replaces the demo credit grants in the next release.
+              Each card is printed, stamped, and dropped in USPS first-class mail.
+              Delivery is 3–5 days. Sent cards never expire.
             </Para>
           </Section>
 

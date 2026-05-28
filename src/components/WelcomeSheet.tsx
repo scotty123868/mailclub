@@ -837,7 +837,7 @@ export function WelcomeSheet({
           }
         }
       } else if (recipientKind === "penpal") {
-        throw new Error("Pen pals are coming soon. Pick a friend, yourself, or a magic link for real mailed postcards right now.");
+        throw new Error("You're early for pen pal mode — pool opens in days, not weeks. Pick a friend, yourself, or a magic link for now.");
       } else {
         // Unknown recipient kind — defensive.
         throw new Error("Pick a recipient first.");
@@ -1156,7 +1156,7 @@ function HeroStep({
       </View>
       <View style={heroStyles.textBlock}>
         <Text style={heroStyles.wordmark}>Mailroom</Text>
-        <Text style={heroStyles.tagline}>Mail a memory for less than a stamp.</Text>
+        <Text style={heroStyles.tagline}>A magical mail club. Send a postcard, get one back.</Text>
       </View>
 
       {pendingInviteCopy ? (
