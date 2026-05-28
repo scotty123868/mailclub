@@ -469,20 +469,20 @@ function isRestartCommand(body: string): boolean {
 
 // v1.2 BUY keyword — repeat senders text BUY (optionally with a pack size)
 // to get a Stripe Checkout URL for more credits. Matches:
-//   BUY            → default pack (p25 — best per-stamp value at sub-USPS)
-//   BUY 5 / BUY5   → p5
-//   BUY 25 / BUY25 → p25
-//   BUY 50 / BUY50 → p50
+//   BUY            → default pack (p10 — "ten for ten" middle option)
+//   BUY 5 / BUY5   → p5  ($5 / 4 cards)
+//   BUY 10 / BUY10 → p10 ($10 / 10 cards)
+//   BUY 25 / BUY25 → p25 ($25 / 30 cards)
 // Anything else → falls through (LLM parse handles ambiguous "BUY MORE" etc.
 // via the state machine — we can promote this later if needed).
 function parseBuyKeyword(body: string): { matched: true; pack_id: string } | { matched: false } {
-  const m = body.trim().toUpperCase().match(/^BUY\s*(5|25|50)?$/);
+  const m = body.trim().toUpperCase().match(/^BUY\s*(5|10|25)?$/);
   if (!m) return { matched: false };
   const size = m[1];
   if (size === "5") return { matched: true, pack_id: "p5" };
-  if (size === "50") return { matched: true, pack_id: "p50" };
-  // Default (BUY alone, or BUY 25) → p25, the featured 80¢/stamp pack.
-  return { matched: true, pack_id: "p25" };
+  if (size === "25") return { matched: true, pack_id: "p25" };
+  // Default (BUY alone, or BUY 10) → p10, the clean "ten for ten" middle.
+  return { matched: true, pack_id: "p10" };
 }
 
 async function createBuyCheckout(
@@ -544,17 +544,17 @@ async function handleInbound(ctx: InboundContext): Promise<Response> {
     }
     return twiml(
       `${checkout.pack_label}: ${checkout.url}\n\n` +
-      `Link expires in 1 hour. Other packs: BUY 5 or BUY 50.`
+      `Link expires in 1 hour. Other packs: BUY 5 or BUY 25.`
     );
   }
 
   // BUY-with-unknown-size fallback — catches "BUY 100", "BUY MORE", "BUY10",
-  // "BUY 5 PACK" etc. The strict regex above only accepts exactly 5/25/50.
+  // "BUY 5 PACK" etc. The strict regex above only accepts exactly 5/10/25.
   // Without this branch, "BUY 100" falls through to the idle prompt which
   // tells a high-intent user to "send a photo." Per QA finding.
   if (/^buy\b/i.test(body.trim())) {
     return twiml(
-      "Pack sizes: BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35). " +
+      "Pack sizes: BUY 5 ($5/4), BUY 10 ($10/10), or BUY 25 ($25/30). " +
       "Or just text BUY for the 25-pack (our best per-stamp value)."
     );
   }
@@ -600,8 +600,8 @@ async function handleInbound(ctx: InboundContext): Promise<Response> {
         const credits = prof.credits ?? 0;
         if (credits <= 0) {
           replyText = effectiveCount === 0
-            ? "You're out of cards. Top up: BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35). Then text a photo."
-            : "Reply BUY 5 / BUY 25 / BUY 50 to top up. Then text a photo.";
+            ? "You're out of cards. Top up: BUY 5 ($5/4), BUY 10 ($10/10), or BUY 25 ($25/30). Then text a photo."
+            : "Reply BUY 5 / BUY 10 / BUY 25 to top up. Then text a photo.";
         } else {
           replyText = effectiveCount === 0
             ? `You have ${credits} card${credits === 1 ? "" : "s"} left. Text a photo to start a new one.`
@@ -921,7 +921,7 @@ async function doMail(phone: string, state: any): Promise<Response> {
     console.error("[sms-inbound] send_postcard_sms failed", rpcErr);
     const oom = rpcErr.message?.includes("insufficient_credits");
     return twiml(oom
-      ? "You're out of cards. Top up: BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35). " +
+      ? "You're out of cards. Top up: BUY 5 ($5/4), BUY 10 ($10/10), or BUY 25 ($25/30). " +
         "Then SEND to mail this one."
       : "Couldn't mail your card. Try SEND again, or text a new photo to start over.");
   }
@@ -964,7 +964,7 @@ async function doMail(phone: string, state: any): Promise<Response> {
     .from("profiles").select("credits").eq("id", userId).maybeSingle();
   const remaining = balRow?.credits ?? 0;
   const buyHint = remaining <= 0
-    ? ` That was your last card — reply BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35) for more.`
+    ? ` That was your last card — reply BUY 5 ($5/4), BUY 10 ($10/10), or BUY 25 ($25/30) for more.`
     : remaining <= 2
       ? ` ${remaining} card${remaining === 1 ? "" : "s"} left. Reply BUY for more.`
       : "";
@@ -1080,7 +1080,7 @@ async function doSchedule(
     console.error("[sms-inbound] send_postcard_sms (scheduled) failed", rpcErr);
     const oom = rpcErr.message?.includes("insufficient_credits");
     return twiml(oom
-      ? "You're out of cards. Top up: BUY 5 ($5), BUY 25 ($20), or BUY 50 ($35). " +
+      ? "You're out of cards. Top up: BUY 5 ($5/4), BUY 10 ($10/10), or BUY 25 ($25/30). " +
         "Then schedule this card again."
       : "Couldn't schedule your card. Try again, or text a new photo.");
   }

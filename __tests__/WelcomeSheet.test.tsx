@@ -45,13 +45,13 @@ describe("WelcomeSheet (v0.7 forced signup→send)", () => {
     expect(queryByTestId("welcome-step-hero")).toBeNull();
   });
 
-  it("shows the v0.7 tagline 'Mail a memory for less than a stamp.'", () => {
+  it("shows the Mail Club tagline", () => {
     const { getByText } = render(
       <AllProviders>
         <WelcomeSheet visible={true} onComplete={() => {}} />
       </AllProviders>
     );
-    expect(getByText("Mail a memory for less than a stamp.")).toBeTruthy();
+    expect(getByText("A magical mail club. Send a postcard, get one back.")).toBeTruthy();
   });
 
   it("hero exposes the email-fallback link", () => {

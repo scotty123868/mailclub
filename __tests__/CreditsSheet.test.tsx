@@ -23,42 +23,44 @@ describe("CreditsSheet", () => {
     // v0.7.0.29: FREE_CREDITS=1 means initial balance is "1 stamp" (singular)
     // not "stamps" (plural). Match either form so the test survives future
     // tweaks to the starter balance.
-    expect(getByText(/stamps? in your pocket/)).toBeTruthy();
+    expect(getByText(/cards? in your pocket/)).toBeTruthy();
     expect(getByTestId("credits-pack-p5")).toBeTruthy();
+    expect(getByTestId("credits-pack-p10")).toBeTruthy();
     expect(getByTestId("credits-pack-p25")).toBeTruthy();
-    // v0.7.0.27: p50 is back (50 cards · $35 · $0.70/card).
-    expect(getByTestId("credits-pack-p50")).toBeTruthy();
   });
 
-  it("does not render retired packs (p10)", () => {
+  it("does not render retired packs (p50)", () => {
     const { queryByTestId } = render(
       <AllProviders>
         <CreditsSheet visible={true} onClose={() => {}} />
       </AllProviders>
     );
-    expect(queryByTestId("credits-pack-p10")).toBeNull();
+    // Old p50 (50/$35) was retired in the Mail Club repricing.
+    expect(queryByTestId("credits-pack-p50")).toBeNull();
   });
 
-  it("features the 25-pack with a 'Less than a stamp' pill", () => {
+  it("features the 30-pack with a 'For the regulars' pill", () => {
     const { getByText } = render(
       <AllProviders>
         <CreditsSheet visible={true} onClose={() => {}} />
       </AllProviders>
     );
-    expect(getByText("Less than a stamp")).toBeTruthy();
+    expect(getByText("For the regulars")).toBeTruthy();
   });
 
-  it("shows the per-stamp math on each pack", () => {
+  it("shows the per-card math on each pack", () => {
     const { getByText } = render(
       <AllProviders>
         <CreditsSheet visible={true} onClose={() => {}} />
       </AllProviders>
     );
-    // v0.7.0.27: ≥100¢ renders as $X, <100¢ stays in cents.
-    // 5-pack at $5 → $1 per stamp
-    expect(getByText(/\$1 per stamp/)).toBeTruthy();
-    // 25-pack at $20 → 80¢ per stamp, with USPS comparison
-    expect(getByText(/80¢ per stamp · the USPS Forever Stamp is 82¢/)).toBeTruthy();
+    // Mail Club repricing: dollar amounts above $1.00, cents below.
+    // p5: $5 / 4 = $1.25 per card
+    expect(getByText(/\$1\.25 per card/)).toBeTruthy();
+    // p10: $10 / 10 = $1 per card
+    expect(getByText(/\$1 per card/)).toBeTruthy();
+    // p25 featured: $25 / 30 = 83¢ per card (no USPS comparison anymore)
+    expect(getByText(/83¢ per card/)).toBeTruthy();
   });
 
   it("shows the 'Stripe not configured' banner when key missing", () => {

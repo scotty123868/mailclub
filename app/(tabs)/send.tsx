@@ -406,8 +406,8 @@ export default function SendScreen() {
       }
       case "cover":
         // v0.7.0.49 (Codex P2): photo is now OPTIONAL. The product is
-        // "send a memory for less than a stamp" — sometimes a quick
-        // thought IS the memory. The CoverStep shows a "Skip — text only"
+        // "send a postcard with a text" — sometimes a quick thought IS
+        // the memory. The CoverStep shows a "Skip — text only"
         // affordance below the picker. When skipped, the front renders
         // a cream Mailroom placeholder (see buildFrontHtml in
         // lob-send-postcard/index.ts). The back's handwritten message
