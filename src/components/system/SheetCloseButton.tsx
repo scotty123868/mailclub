@@ -4,9 +4,9 @@
  * 22pt 1.5 stroke).
  *
  * Sheets that should migrate to this primitive:
- *   NotificationsSheet, PrivacySheet, SettingsSheet, CreditsSheet,
- *   AboutAppSheet, AddFriendSheet, FriendDetailSheet, EditAboutMeSheet,
- *   MailHistorySheet, PlacePicker, QRCodeModal, RouteDetailSheet.
+ * NotificationsSheet, PrivacySheet, SettingsSheet, CreditsSheet,
+ * AboutAppSheet, AddFriendSheet, FriendDetailSheet, EditAboutMeSheet,
+ * MailHistorySheet, PlacePicker, QRCodeModal, RouteDetailSheet.
  *
  * If a sheet wants a different background or size, override via the
  * `tone` prop or open a discussion before adding new variants.
@@ -16,37 +16,37 @@ import { Pressable, StyleSheet } from "react-native";
 import { colors } from "@/src/theme/colors";
 
 type SheetCloseButtonProps = {
-  onPress: () => void;
-  accessibilityLabel: string;
-  testID?: string;
+ onPress: () => void;
+ accessibilityLabel: string;
+ testID?: string;
 };
 
 export function SheetCloseButton({
-  onPress,
-  accessibilityLabel,
-  testID,
+ onPress,
+ accessibilityLabel,
+ testID,
 }: SheetCloseButtonProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      hitSlop={6}
-      testID={testID}
-    >
-      <X color={colors.ink} size={22} strokeWidth={1.5} />
-    </Pressable>
-  );
+ return (
+ <Pressable
+ onPress={onPress}
+ style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
+ accessibilityRole="button"
+ accessibilityLabel={accessibilityLabel}
+ hitSlop={6}
+ testID={testID}
+ >
+ <X color={colors.ink} size={22} strokeWidth={1.5} />
+ </Pressable>
+ );
 }
 
 const styles = StyleSheet.create({
-  btn: {
-    backgroundColor: "rgba(155,175,155,0.20)",
-    borderRadius: 18,
-    padding: 8,
-  },
-  btnPressed: {
-    backgroundColor: "rgba(155,175,155,0.30)",
-  },
+ btn: {
+ backgroundColor: "rgba(155,175,155,0.20)",
+ borderRadius: 18,
+ padding: 8,
+ },
+ btnPressed: {
+ backgroundColor: "rgba(155,175,155,0.30)",
+ },
 });

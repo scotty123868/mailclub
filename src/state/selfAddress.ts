@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AddressDraft, isAddressComplete } from "@/src/types/address";
 
 /**
- * Self-address — the user's own mailing address, used when they pick
+ * Self-address. the user's own mailing address, used when they pick
  * "Yourself" on the Send → Recipient step.
  *
  * Stored on-device (AsyncStorage) so the Send flow can detect first-time
@@ -24,17 +24,17 @@ import { AddressDraft, isAddressComplete } from "@/src/types/address";
 const KEY = "mailroom.selfAddress.v1";
 
 export async function getSelfAddress(): Promise<AddressDraft | null> {
-  try {
-    const raw = await AsyncStorage.getItem(KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as AddressDraft;
-    // Basic shape guard — bail if storage was corrupted or written by a
-    // pre-v1 schema. The caller will treat null as "no address yet".
-    if (!parsed || typeof parsed.line1 !== "string") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
+ try {
+ const raw = await AsyncStorage.getItem(KEY);
+ if (!raw) return null;
+ const parsed = JSON.parse(raw) as AddressDraft;
+ // Basic shape guard. bail if storage was corrupted or written by a
+ // pre-v1 schema. The caller will treat null as "no address yet".
+ if (!parsed || typeof parsed.line1 !== "string") return null;
+ return parsed;
+ } catch {
+ return null;
+ }
 }
 
 /**
@@ -43,24 +43,24 @@ export async function getSelfAddress(): Promise<AddressDraft | null> {
  * on repeat sends.
  */
 export async function hasCompleteSelfAddress(): Promise<boolean> {
-  const a = await getSelfAddress();
-  return !!a && isAddressComplete(a);
+ const a = await getSelfAddress();
+ return !!a && isAddressComplete(a);
 }
 
 export async function setSelfAddress(addr: AddressDraft): Promise<void> {
-  try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(addr));
-  } catch (e) {
-    // Non-fatal: worst case the user gets asked again next send.
-    // eslint-disable-next-line no-console
-    console.warn("setSelfAddress failed:", e);
-  }
+ try {
+ await AsyncStorage.setItem(KEY, JSON.stringify(addr));
+ } catch (e) {
+ // Non-fatal: worst case the user gets asked again next send.
+ // eslint-disable-next-line no-console
+ console.warn("setSelfAddress failed:", e);
+ }
 }
 
 export async function clearSelfAddress(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(KEY);
-  } catch {
-    // ignore
-  }
+ try {
+ await AsyncStorage.removeItem(KEY);
+ } catch {
+ // ignore
+ }
 }

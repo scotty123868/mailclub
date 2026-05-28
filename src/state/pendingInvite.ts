@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
- * Pending invite — survives the sign-up boundary.
+ * Pending invite. survives the sign-up boundary.
  *
  * When a brand-new user scans a Mailroom QR code, the welcome-mail screen
  * loads their token but they aren't signed in yet. We stash the token here
@@ -18,7 +18,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * Storage key is namespaced (`mailroom.pendingInvite.v1`) so future schema
  * changes (e.g. multiple pending tokens, or token + recipient_name) can
  * coexist with a `.v2`. Reading `.v1` after a schema bump just returns
- * null and the old token gets dropped — acceptable for a v1 → v2 jump
+ * null and the old token gets dropped. acceptable for a v1 → v2 jump
  * given how rare this lifecycle event is.
  */
 
@@ -26,12 +26,12 @@ const KEY = "mailroom.pendingInvite.v1";
 const TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 type PendingInvite = {
-  token: string;
-  storedAt: number; // epoch ms, used for TTL check
+ token: string;
+ storedAt: number; // epoch ms, used for TTL check
 };
 
 /**
- * Stash a token from a QR scan. Idempotent — overwrites whatever was
+ * Stash a token from a QR scan. Idempotent. overwrites whatever was
  * there. We only ever track ONE pending invite at a time; multiple QR
  * scans before sign-up just keep the most recent one. Rationale: a fresh
  * user scanning two cards from two different senders in a row most likely
@@ -39,16 +39,16 @@ type PendingInvite = {
  * can scan the older card again post-signup.
  */
 export async function setPendingInvite(token: string): Promise<void> {
-  const payload: PendingInvite = { token, storedAt: Date.now() };
-  try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(payload));
-  } catch (e) {
-    // AsyncStorage failures here are not fatal — the receiver flow still
-    // works for signed-in users. Worst case: a fresh user has to scan
-    // again after sign-up.
-    // eslint-disable-next-line no-console
-    console.warn("setPendingInvite failed:", e);
-  }
+ const payload: PendingInvite = { token, storedAt: Date.now() };
+ try {
+ await AsyncStorage.setItem(KEY, JSON.stringify(payload));
+ } catch (e) {
+ // AsyncStorage failures here are not fatal. the receiver flow still
+ // works for signed-in users. Worst case: a fresh user has to scan
+ // again after sign-up.
+ // eslint-disable-next-line no-console
+ console.warn("setPendingInvite failed:", e);
+ }
 }
 
 /**
@@ -57,29 +57,29 @@ export async function setPendingInvite(token: string): Promise<void> {
  * of the sign-up flow. Returns null if missing, malformed, or expired.
  */
 export async function peekPendingInvite(): Promise<PendingInvite | null> {
-  try {
-    const raw = await AsyncStorage.getItem(KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PendingInvite;
-    if (typeof parsed?.token !== "string" || typeof parsed?.storedAt !== "number") {
-      // Malformed — treat as missing.
-      await AsyncStorage.removeItem(KEY);
-      return null;
-    }
-    if (Date.now() - parsed.storedAt > TTL_MS) {
-      // Expired — drop and report none.
-      await AsyncStorage.removeItem(KEY);
-      return null;
-    }
-    return parsed;
-  } catch (e) {
-    return null;
-  }
+ try {
+ const raw = await AsyncStorage.getItem(KEY);
+ if (!raw) return null;
+ const parsed = JSON.parse(raw) as PendingInvite;
+ if (typeof parsed?.token !== "string" || typeof parsed?.storedAt !== "number") {
+ // Malformed. treat as missing.
+ await AsyncStorage.removeItem(KEY);
+ return null;
+ }
+ if (Date.now() - parsed.storedAt > TTL_MS) {
+ // Expired. drop and report none.
+ await AsyncStorage.removeItem(KEY);
+ return null;
+ }
+ return parsed;
+ } catch (e) {
+ return null;
+ }
 }
 
 /**
  * Take and remove the pending invite atomically. Call this exactly once
- * per consume attempt — the MailClub context invokes it right after
+ * per consume attempt. the MailClub context invokes it right after
  * `completeSignup` succeeds, then forwards the token to the reciprocation
  * scan RPC.
  *
@@ -91,21 +91,21 @@ export async function peekPendingInvite(): Promise<PendingInvite | null> {
  * fail for a transient reason and we'd lose the token.
  */
 export async function consumePendingInvite(): Promise<string | null> {
-  try {
-    const raw = await AsyncStorage.getItem(KEY);
-    await AsyncStorage.removeItem(KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PendingInvite;
-    if (typeof parsed?.token !== "string" || typeof parsed?.storedAt !== "number") {
-      return null;
-    }
-    if (Date.now() - parsed.storedAt > TTL_MS) {
-      return null;
-    }
-    return parsed.token;
-  } catch (e) {
-    return null;
-  }
+ try {
+ const raw = await AsyncStorage.getItem(KEY);
+ await AsyncStorage.removeItem(KEY);
+ if (!raw) return null;
+ const parsed = JSON.parse(raw) as PendingInvite;
+ if (typeof parsed?.token !== "string" || typeof parsed?.storedAt !== "number") {
+ return null;
+ }
+ if (Date.now() - parsed.storedAt > TTL_MS) {
+ return null;
+ }
+ return parsed.token;
+ } catch (e) {
+ return null;
+ }
 }
 
 /**
@@ -115,9 +115,9 @@ export async function consumePendingInvite(): Promise<string | null> {
  * stash so the next sign-up isn't haunted by a card they ignored.
  */
 export async function clearPendingInvite(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(KEY);
-  } catch (e) {
-    // ignore
-  }
+ try {
+ await AsyncStorage.removeItem(KEY);
+ } catch (e) {
+ // ignore
+ }
 }

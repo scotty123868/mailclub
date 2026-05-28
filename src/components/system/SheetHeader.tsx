@@ -8,7 +8,7 @@
  * shared SheetCloseButton primitive.
  *
  * If a sheet needs a different visual hierarchy (a back button, a
- * gear icon, a step counter), don't fork this — build a different
+ * gear icon, a step counter), don't fork this. build a different
  * primitive. This one is intentionally narrow.
  */
 import { StyleSheet, Text, View } from "react-native";
@@ -17,55 +17,55 @@ import { fonts } from "@/src/theme/typography";
 import { SheetCloseButton } from "./SheetCloseButton";
 
 type SheetHeaderProps = {
-  title: string;
-  subtitle?: string;
-  onClose: () => void;
-  closeAccessibilityLabel?: string;
-  closeTestID?: string;
+ title: string;
+ subtitle?: string;
+ onClose: () => void;
+ closeAccessibilityLabel?: string;
+ closeTestID?: string;
 };
 
 export function SheetHeader({
-  title,
-  subtitle,
-  onClose,
-  closeAccessibilityLabel,
-  closeTestID,
+ title,
+ subtitle,
+ onClose,
+ closeAccessibilityLabel,
+ closeTestID,
 }: SheetHeaderProps) {
-  return (
-    <View style={styles.row}>
-      <View style={styles.textCol}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-      </View>
-      <SheetCloseButton
-        onPress={onClose}
-        accessibilityLabel={closeAccessibilityLabel ?? `Close ${title.toLowerCase()}`}
-        testID={closeTestID}
-      />
-    </View>
-  );
+ return (
+ <View style={styles.row}>
+ <View style={styles.textCol}>
+ <Text style={styles.title}>{title}</Text>
+ {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+ </View>
+ <SheetCloseButton
+ onPress={onClose}
+ accessibilityLabel={closeAccessibilityLabel ?? `Close ${title.toLowerCase()}`}
+ testID={closeTestID}
+ />
+ </View>
+ );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "space-between",
-  },
-  textCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    color: colors.ink,
-    fontFamily: fonts.serifSemi,
-    fontSize: 28,
-  },
-  subtitle: {
-    color: colors.mutedInk,
-    fontFamily: fonts.serifItalic,
-    fontSize: 13,
-    marginTop: 4,
-  },
+ row: {
+ alignItems: "flex-start",
+ flexDirection: "row",
+ gap: 12,
+ justifyContent: "space-between",
+ },
+ textCol: {
+ flex: 1,
+ minWidth: 0,
+ },
+ title: {
+ color: colors.ink,
+ fontFamily: fonts.serifSemi,
+ fontSize: 28,
+ },
+ subtitle: {
+ color: colors.mutedInk,
+ fontFamily: fonts.serifItalic,
+ fontSize: 13,
+ marginTop: 4,
+ },
 });

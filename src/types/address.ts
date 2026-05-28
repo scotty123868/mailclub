@@ -9,34 +9,34 @@
  */
 
 export type AddressDraft = {
-  name: string;
-  line1: string;
-  line2?: string;
-  city: string;
-  state: string;
-  zip: string;
+ name: string;
+ line1: string;
+ line2?: string;
+ city: string;
+ state: string;
+ zip: string;
 };
 
 export const EMPTY_ADDRESS: AddressDraft = {
-  name: "",
-  line1: "",
-  line2: "",
-  city: "",
-  state: "",
-  zip: "",
+ name: "",
+ line1: "",
+ line2: "",
+ city: "",
+ state: "",
+ zip: "",
 };
 
 /**
  * USPS-deliverable test: a name, a street, a city, a state, and a 5- or 9-digit
- * ZIP. Not a USPS authoritative check — that ships when we wire Lob's address
+ * ZIP. Not a USPS authoritative check. that ships when we wire Lob's address
  * verification API in 0.6.x.
  */
 export function isAddressComplete(a: AddressDraft): boolean {
-  return (
-    a.name.trim().length > 0 &&
-    a.line1.trim().length > 0 &&
-    a.city.trim().length > 0 &&
-    a.state.trim().length > 0 &&
-    /^\d{5}(-\d{4})?$/.test(a.zip.trim())
-  );
+ return (
+ a.name.trim().length > 0 &&
+ a.line1.trim().length > 0 &&
+ a.city.trim().length > 0 &&
+ a.state.trim().length > 0 &&
+ /^\d{5}(-\d{4})?$/.test(a.zip.trim())
+ );
 }

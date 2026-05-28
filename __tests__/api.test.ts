@@ -9,141 +9,141 @@ import { supabase } from "@/src/services/supabase";
 const sb = supabase as any;
 
 afterEach(() => {
-  jest.clearAllMocks();
+ jest.clearAllMocks();
 });
 
 describe("api.fetchProfile", () => {
-  it("returns null when no profile exists", async () => {
-    sb.from.mockReturnValue({
-      select: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
-    });
-    const result = await api.fetchProfile();
-    expect(result).toBeNull();
-  });
+ it("returns null when no profile exists", async () => {
+ sb.from.mockReturnValue({
+ select: jest.fn().mockReturnThis(),
+ maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+ });
+ const result = await api.fetchProfile();
+ expect(result).toBeNull();
+ });
 
-  it("maps a profile row into the app's CurrentUser shape", async () => {
-    sb.from.mockReturnValue({
-      select: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({
-        data: {
-          id: "u1",
-          name: "Pat",
-          city: "Boise",
-          state: "ID",
-          since: "2026",
-          avatar_initials: "PA",
-          tagline: "",
-          interests: "",
-          send_me: "",
-          birthday: "",
-          currently_into: "",
-          credits: 5,
-          free_credits_remaining: 5,
-          has_seen_free_credits_intro: false,
-          has_completed_signup: true,
-          notifications: { cardDelivered: true, replyReceived: true, birthdays: true },
-          privacy: { whoCanSendToMe: "anyone" },
-        },
-        error: null,
-      }),
-    });
-    const result = await api.fetchProfile();
-    expect(result?.currentUser.name).toBe("Pat");
-    expect(result?.currentUser.city).toBe("Boise");
-    expect(result?.currentUser.avatarInitials).toBe("PA");
-    expect(result?.credits).toBe(5);
-    expect(result?.hasCompletedSignup).toBe(true);
-  });
+ it("maps a profile row into the app's CurrentUser shape", async () => {
+ sb.from.mockReturnValue({
+ select: jest.fn().mockReturnThis(),
+ maybeSingle: jest.fn().mockResolvedValue({
+ data: {
+ id: "u1",
+ name: "Pat",
+ city: "Boise",
+ state: "ID",
+ since: "2026",
+ avatar_initials: "PA",
+ tagline: "",
+ interests: "",
+ send_me: "",
+ birthday: "",
+ currently_into: "",
+ credits: 5,
+ free_credits_remaining: 5,
+ has_seen_free_credits_intro: false,
+ has_completed_signup: true,
+ notifications: { cardDelivered: true, replyReceived: true, birthdays: true },
+ privacy: { whoCanSendToMe: "anyone" },
+ },
+ error: null,
+ }),
+ });
+ const result = await api.fetchProfile();
+ expect(result?.currentUser.name).toBe("Pat");
+ expect(result?.currentUser.city).toBe("Boise");
+ expect(result?.currentUser.avatarInitials).toBe("PA");
+ expect(result?.credits).toBe(5);
+ expect(result?.hasCompletedSignup).toBe(true);
+ });
 });
 
 describe("api.completeSignup", () => {
-  it("calls the complete_signup RPC with trimmed inputs", async () => {
-    sb.rpc.mockResolvedValue({
-      data: {
-        id: "u1", name: "Pat", city: "Boise", state: "ID", since: "2026",
-        avatar_initials: "PA", tagline: "", interests: "", send_me: "",
-        birthday: "", currently_into: "", credits: 5, free_credits_remaining: 5,
-        has_seen_free_credits_intro: true, has_completed_signup: true,
-        notifications: { cardDelivered: true, replyReceived: true, birthdays: true },
-        privacy: { whoCanSendToMe: "anyone" },
-      },
-      error: null,
-    });
-    const result = await api.completeSignup({ name: "  Pat ", city: " Boise ", state: "ID" });
-    expect(sb.rpc).toHaveBeenCalledWith("complete_signup", {
-      p_name: "  Pat ", p_city: " Boise ", p_state: "ID", p_device_id: null,
-    });
-    expect(result.currentUser.name).toBe("Pat");
-  });
+ it("calls the complete_signup RPC with trimmed inputs", async () => {
+ sb.rpc.mockResolvedValue({
+ data: {
+ id: "u1", name: "Pat", city: "Boise", state: "ID", since: "2026",
+ avatar_initials: "PA", tagline: "", interests: "", send_me: "",
+ birthday: "", currently_into: "", credits: 5, free_credits_remaining: 5,
+ has_seen_free_credits_intro: true, has_completed_signup: true,
+ notifications: { cardDelivered: true, replyReceived: true, birthdays: true },
+ privacy: { whoCanSendToMe: "anyone" },
+ },
+ error: null,
+ });
+ const result = await api.completeSignup({ name: " Pat ", city: " Boise ", state: "ID" });
+ expect(sb.rpc).toHaveBeenCalledWith("complete_signup", {
+ p_name: " Pat ", p_city: " Boise ", p_state: "ID", p_device_id: null,
+ });
+ expect(result.currentUser.name).toBe("Pat");
+ });
 
-  it("throws on RPC error", async () => {
-    sb.rpc.mockResolvedValue({ data: null, error: { message: "not authenticated" } });
-    await expect(api.completeSignup({ name: "Pat", city: "", state: "" })).rejects.toMatchObject({ message: "not authenticated" });
-  });
+ it("throws on RPC error", async () => {
+ sb.rpc.mockResolvedValue({ data: null, error: { message: "not authenticated" } });
+ await expect(api.completeSignup({ name: "Pat", city: "", state: "" })).rejects.toMatchObject({ message: "not authenticated" });
+ });
 });
 
 describe("api.sendPostcard", () => {
-  it("calls send_postcard RPC with the right params for a handwritten send", async () => {
-    sb.rpc.mockImplementation((fn: string) => {
-      if (fn === "send_postcard") {
-        return Promise.resolve({
-          data: {
-            id: "p1", to_kind: "friend", to_friend_id: "f1",
-            from_city: "Denver", to_city: "Boise", category: "handwritten",
-            credit_cost: 1, status: "sent", message: "hi", place_name: null,
-            photo_uri: null, custom_description: null, custom_tone: null,
-            reference_photo_uris: [], sent_at: "2026-01-01T00:00:00Z",
-          },
-          error: null,
-        });
-      }
-      return Promise.resolve({ data: null, error: null });
-    });
-    sb.from.mockReturnValue({
-      select: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
-    });
-    const { postcard } = await api.sendPostcard({ kind: "handwritten", friendId: "f1", message: "hi" });
-    expect(postcard.category).toBe("handwritten");
-    expect(postcard.creditCost).toBe(1);
-    expect(sb.rpc).toHaveBeenCalledWith("send_postcard", expect.objectContaining({
-      p_to_kind: "friend",
-      p_to_friend_id: "f1",
-      p_category: "handwritten",
-      p_message: "hi",
-    }));
-  });
+ it("calls send_postcard RPC with the right params for a handwritten send", async () => {
+ sb.rpc.mockImplementation((fn: string) => {
+ if (fn === "send_postcard") {
+ return Promise.resolve({
+ data: {
+ id: "p1", to_kind: "friend", to_friend_id: "f1",
+ from_city: "Denver", to_city: "Boise", category: "handwritten",
+ credit_cost: 1, status: "sent", message: "hi", place_name: null,
+ photo_uri: null, custom_description: null, custom_tone: null,
+ reference_photo_uris: [], sent_at: "2026-01-01T00:00:00Z",
+ },
+ error: null,
+ });
+ }
+ return Promise.resolve({ data: null, error: null });
+ });
+ sb.from.mockReturnValue({
+ select: jest.fn().mockReturnThis(),
+ maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+ });
+ const { postcard } = await api.sendPostcard({ kind: "handwritten", friendId: "f1", message: "hi" });
+ expect(postcard.category).toBe("handwritten");
+ expect(postcard.creditCost).toBe(1);
+ expect(sb.rpc).toHaveBeenCalledWith("send_postcard", expect.objectContaining({
+ p_to_kind: "friend",
+ p_to_friend_id: "f1",
+ p_category: "handwritten",
+ p_message: "hi",
+ }));
+ });
 
-  it("surfaces RPC errors", async () => {
-    sb.rpc.mockResolvedValue({ data: null, error: { message: "insufficient credits" } });
-    await expect(api.sendPostcard({ kind: "handwritten", friendId: "f1", message: "hi" })).rejects.toMatchObject({ message: "insufficient credits" });
-  });
+ it("surfaces RPC errors", async () => {
+ sb.rpc.mockResolvedValue({ data: null, error: { message: "insufficient credits" } });
+ await expect(api.sendPostcard({ kind: "handwritten", friendId: "f1", message: "hi" })).rejects.toMatchObject({ message: "insufficient credits" });
+ });
 });
 
 describe("api.sendIntoVoid", () => {
-  it("calls send_postcard with to_kind=void", async () => {
-    sb.rpc.mockResolvedValue({
-      data: {
-        id: "v1", to_kind: "void", to_friend_id: null,
-        from_city: "Denver", to_city: "Anywhere", category: "handwritten",
-        credit_cost: 1, status: "sent", message: "hi",
-        place_name: null, photo_uri: null, custom_description: null,
-        custom_tone: null, reference_photo_uris: [], sent_at: "2026-01-01T00:00:00Z",
-      },
-      error: null,
-    });
-    const result = await api.sendIntoVoid("hi");
-    expect(result.toFriendId).toBe("void");
-    // v0.7.0.28: sendIntoVoid now calls send_into_void_with_matching
-    // (Postcrossing-style stranger matching) instead of the legacy
-    // send_postcard RPC. Old send_postcard stays in place for friend
-    // sends.
-    expect(sb.rpc).toHaveBeenCalledWith("send_into_void_with_matching", expect.objectContaining({
-      p_message: "hi",
-      p_category: "handwritten",
-    }));
-  });
+ it("calls send_postcard with to_kind=void", async () => {
+ sb.rpc.mockResolvedValue({
+ data: {
+ id: "v1", to_kind: "void", to_friend_id: null,
+ from_city: "Denver", to_city: "Anywhere", category: "handwritten",
+ credit_cost: 1, status: "sent", message: "hi",
+ place_name: null, photo_uri: null, custom_description: null,
+ custom_tone: null, reference_photo_uris: [], sent_at: "2026-01-01T00:00:00Z",
+ },
+ error: null,
+ });
+ const result = await api.sendIntoVoid("hi");
+ expect(result.toFriendId).toBe("void");
+ // v0.7.0.28: sendIntoVoid now calls send_into_void_with_matching
+ // (Postcrossing-style stranger matching) instead of the legacy
+ // send_postcard RPC. Old send_postcard stays in place for friend
+ // sends.
+ expect(sb.rpc).toHaveBeenCalledWith("send_into_void_with_matching", expect.objectContaining({
+ p_message: "hi",
+ p_category: "handwritten",
+ }));
+ });
 });
 
 // v0.7.0.49: api.purchaseCredits removed. The underlying public.purchase_credits
@@ -152,47 +152,47 @@ describe("api.sendIntoVoid", () => {
 // which is covered by the stripe-webhook function's own tests.
 
 describe("api.addFriend", () => {
-  it("derives initials from a name like 'Jamie River'", async () => {
-    sb.auth.getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    const insertChain = {
-      select: jest.fn().mockReturnThis(),
-      single: jest.fn().mockResolvedValue({
-        data: {
-          id: "f1", name: "Jamie River", city: "Boise", state: "ID",
-          avatar_initials: "JR", cards_sent: 0, cards_received: 0,
-          connection_type: "postcard-invite", last_interaction_at: "2026-01-01T00:00:00Z",
-          relationship_signal: "Just added", signal_tone: "blue",
-        },
-        error: null,
-      }),
-    };
-    sb.from.mockReturnValue({ insert: jest.fn().mockReturnValue(insertChain) });
-    const friend = await api.addFriend({ name: "Jamie River", city: "Boise", state: "ID" });
-    expect(friend.avatarInitials).toBe("JR");
-    expect(friend.name).toBe("Jamie River");
-  });
+ it("derives initials from a name like 'Jamie River'", async () => {
+ sb.auth.getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+ const insertChain = {
+ select: jest.fn().mockReturnThis(),
+ single: jest.fn().mockResolvedValue({
+ data: {
+ id: "f1", name: "Jamie River", city: "Boise", state: "ID",
+ avatar_initials: "JR", cards_sent: 0, cards_received: 0,
+ connection_type: "postcard-invite", last_interaction_at: "2026-01-01T00:00:00Z",
+ relationship_signal: "Just added", signal_tone: "blue",
+ },
+ error: null,
+ }),
+ };
+ sb.from.mockReturnValue({ insert: jest.fn().mockReturnValue(insertChain) });
+ const friend = await api.addFriend({ name: "Jamie River", city: "Boise", state: "ID" });
+ expect(friend.avatarInitials).toBe("JR");
+ expect(friend.name).toBe("Jamie River");
+ });
 
-  it("rejects empty names", async () => {
-    sb.auth.getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    await expect(api.addFriend({ name: "  ", city: "Boise", state: "" })).rejects.toMatchObject({ message: "name required" });
-  });
+ it("rejects empty names", async () => {
+ sb.auth.getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+ await expect(api.addFriend({ name: " ", city: "Boise", state: "" })).rejects.toMatchObject({ message: "name required" });
+ });
 });
 
 describe("api.signInWithEmail / signUpWithEmail / signOut", () => {
-  it("forwards email + password to supabase.auth.signInWithPassword", async () => {
-    sb.auth.signInWithPassword.mockResolvedValue({ data: { user: { id: "u1" }, session: null }, error: null });
-    await api.signInWithEmail("a@b.com", "secret123");
-    expect(sb.auth.signInWithPassword).toHaveBeenCalledWith({ email: "a@b.com", password: "secret123" });
-  });
+ it("forwards email + password to supabase.auth.signInWithPassword", async () => {
+ sb.auth.signInWithPassword.mockResolvedValue({ data: { user: { id: "u1" }, session: null }, error: null });
+ await api.signInWithEmail("a@b.com", "secret123");
+ expect(sb.auth.signInWithPassword).toHaveBeenCalledWith({ email: "a@b.com", password: "secret123" });
+ });
 
-  it("throws when sign-in fails", async () => {
-    sb.auth.signInWithPassword.mockResolvedValue({ data: { user: null, session: null }, error: { message: "Invalid login" } });
-    await expect(api.signInWithEmail("a@b.com", "bad")).rejects.toMatchObject({ message: "Invalid login" });
-  });
+ it("throws when sign-in fails", async () => {
+ sb.auth.signInWithPassword.mockResolvedValue({ data: { user: null, session: null }, error: { message: "Invalid login" } });
+ await expect(api.signInWithEmail("a@b.com", "bad")).rejects.toMatchObject({ message: "Invalid login" });
+ });
 
-  it("signs out", async () => {
-    sb.auth.signOut.mockResolvedValue({ error: null });
-    await api.signOut();
-    expect(sb.auth.signOut).toHaveBeenCalled();
-  });
+ it("signs out", async () => {
+ sb.auth.signOut.mockResolvedValue({ error: null });
+ await api.signOut();
+ expect(sb.auth.signOut).toHaveBeenCalled();
+ });
 });

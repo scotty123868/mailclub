@@ -1,22 +1,22 @@
-// claim — recipient-facing endpoint for "Send a Link" postcards
+// claim. recipient-facing endpoint for "Send a Link" postcards
 //
 // URL: https://nlwnmgwylmmnaemdnzlq.functions.supabase.co/claim?t=TOKEN
 //
-// GET  → Returns an HTML page that shows "Scotty wants to send you a postcard"
-//        plus an address form. Mobile-friendly. No authentication required.
+// GET → Returns an HTML page that shows "Scotty wants to send you a postcard"
+// plus an address form. Mobile-friendly. No authentication required.
 //
 // POST → JSON body { token, name, line1, line2?, city, state, zip } →
-//        validates + redeems the claim → triggers Lob submission server-side.
-//        Returns JSON {ok, postcard_id} on success.
+// validates + redeems the claim → triggers Lob submission server-side.
+// Returns JSON {ok, postcard_id} on success.
 //
-// PRIVACY: this endpoint NEVER returns the sender's address — only the
+// PRIVACY: this endpoint NEVER returns the sender's address. only the
 // snapshot of their display name + city (frozen at send time so it works
 // even if the sender later updates their profile or quits the service).
 //
 // Deploy:
-//   supabase functions deploy claim --no-verify-jwt
+// supabase functions deploy claim --no-verify-jwt
 
-// @ts-nocheck — Deno runtime
+// @ts-nocheck. Deno runtime
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -25,219 +25,219 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "
 const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+ "Access-Control-Allow-Origin": "*",
+ "Access-Control-Allow-Headers": "content-type",
+ "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
-  }
+ if (req.method === "OPTIONS") {
+ return new Response("ok", { headers: CORS_HEADERS });
+ }
 
-  const url = new URL(req.url);
-  const tokenFromQuery = url.searchParams.get("t") ?? url.searchParams.get("token");
+ const url = new URL(req.url);
+ const tokenFromQuery = url.searchParams.get("t") ?? url.searchParams.get("token");
 
-  if (req.method === "GET") {
-    return handleGet(tokenFromQuery ?? "", req);
-  }
-  if (req.method === "POST") {
-    return handlePost(req, tokenFromQuery);
-  }
-  return new Response("Method not allowed", { status: 405 });
+ if (req.method === "GET") {
+ return handleGet(tokenFromQuery ?? "", req);
+ }
+ if (req.method === "POST") {
+ return handlePost(req, tokenFromQuery);
+ }
+ return new Response("Method not allowed", { status: 405 });
 });
 
 async function handleGet(token: string, req?: Request): Promise<Response> {
-  // v0.7.0.57: support JSON response on GET when the caller asks for it
-  // via Accept: application/json. The static web page at
-  // app.themailroom.club/claim wants to know token state BEFORE showing
-  // its form (so it can render the "already claimed" / "expired" UI
-  // itself instead of just submitting + failing). HTML fallback path is
-  // unchanged for browsers that hit this Edge Function URL directly.
-  const wantsJson = req?.headers.get("accept")?.toLowerCase().includes("application/json") ?? false;
+ // v0.7.0.57: support JSON response on GET when the caller asks for it
+ // via Accept: application/json. The static web page at
+ // app.themailroom.club/claim wants to know token state BEFORE showing
+ // its form (so it can render the "already claimed" / "expired" UI
+ // itself instead of just submitting + failing). HTML fallback path is
+ // unchanged for browsers that hit this Edge Function URL directly.
+ const wantsJson = req?.headers.get("accept")?.toLowerCase().includes("application/json") ?? false;
 
-  if (!token) {
-    if (wantsJson) return jsonResponse({ ok: false, reason: "MISSING_TOKEN" }, 400);
-    return htmlResponse(errorPage("Missing claim token in URL."), 400);
-  }
+ if (!token) {
+ if (wantsJson) return jsonResponse({ ok: false, reason: "MISSING_TOKEN" }, 400);
+ return htmlResponse(errorPage("Missing claim token in URL."), 400);
+ }
 
-  const { data, error } = await admin.rpc("claim_lookup", { p_claim_token: token });
-  if (error) {
-    if (wantsJson) return jsonResponse({ ok: false, reason: "SERVER_ERROR", error: error.message }, 500);
-    return htmlResponse(errorPage(`Server error: ${error.message}`), 500);
-  }
+ const { data, error } = await admin.rpc("claim_lookup", { p_claim_token: token });
+ if (error) {
+ if (wantsJson) return jsonResponse({ ok: false, reason: "SERVER_ERROR", error: error.message }, 500);
+ return htmlResponse(errorPage(`Server error: ${error.message}`), 500);
+ }
 
-  if (!data?.ok) {
-    if (wantsJson) return jsonResponse(data ?? { ok: false, reason: "NOT_FOUND" }, 200);
-    if (data?.reason === "ALREADY_CLAIMED") {
-      return htmlResponse(alreadyClaimedPage(), 200);
-    }
-    if (data?.reason === "EXPIRED") {
-      return htmlResponse(errorPage("This link has expired."), 410);
-    }
-    return htmlResponse(errorPage("That link doesn't look right."), 404);
-  }
+ if (!data?.ok) {
+ if (wantsJson) return jsonResponse(data ?? { ok: false, reason: "NOT_FOUND" }, 200);
+ if (data?.reason === "ALREADY_CLAIMED") {
+ return htmlResponse(alreadyClaimedPage(), 200);
+ }
+ if (data?.reason === "EXPIRED") {
+ return htmlResponse(errorPage("This link has expired."), 410);
+ }
+ return htmlResponse(errorPage("That link doesn't look right."), 404);
+ }
 
-  // v0.7.0.58: strip message_preview from the JSON + HTML responses.
-  // The note + photo are meant to be a SURPRISE for the recipient —
-  // they shouldn't see the content on the claim page; the postcard
-  // arriving in the mail is the reveal. The claim_lookup RPC still
-  // returns message_preview for back-compat, but we drop it here so
-  // no client surface ever shows it.
-  const safeData = { ...data };
-  delete (safeData as Record<string, unknown>).message_preview;
-  if (wantsJson) return jsonResponse(safeData, 200);
-  return htmlResponse(claimFormPage(token, safeData), 200);
+ // v0.7.0.58: strip message_preview from the JSON + HTML responses.
+ // The note + photo are meant to be a SURPRISE for the recipient .
+ // they shouldn't see the content on the claim page; the postcard
+ // arriving in the mail is the reveal. The claim_lookup RPC still
+ // returns message_preview for back-compat, but we drop it here so
+ // no client surface ever shows it.
+ const safeData = { ...data };
+ delete (safeData as Record<string, unknown>).message_preview;
+ if (wantsJson) return jsonResponse(safeData, 200);
+ return htmlResponse(claimFormPage(token, safeData), 200);
 }
 
 async function handlePost(req: Request, tokenFromQuery: string | null): Promise<Response> {
-  let body: any;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400);
-  }
+ let body: any;
+ try {
+ body = await req.json();
+ } catch {
+ return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400);
+ }
 
-  const token = body?.token ?? tokenFromQuery;
-  if (!token) return jsonResponse({ ok: false, error: "Missing token" }, 400);
+ const token = body?.token ?? tokenFromQuery;
+ if (!token) return jsonResponse({ ok: false, error: "Missing token" }, 400);
 
-  const { name, line1, line2, city, state, zip } = body;
-  if (!name || !line1 || !city || !state || !zip) {
-    return jsonResponse({ ok: false, error: "Missing required address fields" }, 400);
-  }
+ const { name, line1, line2, city, state, zip } = body;
+ if (!name || !line1 || !city || !state || !zip) {
+ return jsonResponse({ ok: false, error: "Missing required address fields" }, 400);
+ }
 
-  const { data, error } = await admin.rpc("redeem_postcard_claim", {
-    p_claim_token: token,
-    p_name: name,
-    p_address_line1: line1,
-    p_city: city,
-    p_state: state,
-    p_zip: zip,
-    p_address_line2: line2 ?? null,
-    p_country: "US",
-  });
-  if (error) return jsonResponse({ ok: false, error: error.message }, 500);
-  if (!data?.ok) return jsonResponse({ ok: false, error: data?.reason ?? "Unknown error" }, 400);
+ const { data, error } = await admin.rpc("redeem_postcard_claim", {
+ p_claim_token: token,
+ p_name: name,
+ p_address_line1: line1,
+ p_city: city,
+ p_state: state,
+ p_zip: zip,
+ p_address_line2: line2 ?? null,
+ p_country: "US",
+ });
+ if (error) return jsonResponse({ ok: false, error: error.message }, 500);
+ if (!data?.ok) return jsonResponse({ ok: false, error: data?.reason ?? "Unknown error" }, 400);
 
-  // v0.7.0.11: send the postcard to Lob now that we have the recipient's
-  // address. Calls lob-send-postcard with render_mode="html", which
-  // server-side renders the front (photo) + back (message) templates
-  // using the data already in the DB. Lob auto-renders the recipient
-  // address on the right half of the back from the to[*] form fields.
-  //
-  // This closes the Phase 6/7 KNOWN GAP: previously the postcard row
-  // sat in status='queued' forever with no Lob handoff. The recipient
-  // would tell the sender "I claimed your card!" and then nothing
-  // would ever arrive in the mail.
-  //
-  // v0.7.0.48 FIX (Codex P1.4a): use EdgeRuntime.waitUntil so the Lob
-  // fetch is durably registered as background work that must complete
-  // before the function instance is torn down. Previously this was a
-  // bare fire-and-forget fetch() — Supabase's Edge runtime can reap the
-  // instance the moment the response is sent, dropping any in-flight
-  // detached promises. Result: silent Lob handoff failures. See:
-  // https://supabase.com/docs/guides/functions/background-tasks
-  //
-  // We also report a non-success ok:false now when secrets are missing,
-  // so the caller (claim page or App Clip) doesn't get a false success
-  // for a claim that never had the chance to ship. Previously this just
-  // logged + returned ok:true, hiding a misconfiguration in production.
-  const internalSecret = Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "";
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  if (!internalSecret || !anonKey) {
-    // eslint-disable-next-line no-console
-    console.error("[claim] MAILROOM_INTERNAL_SECRET or SUPABASE_ANON_KEY not set — cannot hand off to Lob");
-    // v0.7.0.49 (Codex P2): persist lob_error so retry-orphan can pick this
-    // up. Previously the claim returned ok:false but the postcards row had
-    // no durable record of why the handoff never happened — only the edge
-    // function logs. Now the row carries the failure reason and shows up
-    // in the orphan dashboard.
-    try {
-      await admin
-        .from("postcards")
-        .update({ lob_error: "internal secret not configured — handoff skipped" })
-        .eq("id", data.postcard_id);
-    } catch {
-      /* defensive — don't double-fail on the durability write */
-    }
-    return jsonResponse({
-      ok: false,
-      error: "Server misconfigured — please contact support. Your address was saved.",
-      postcard_id: data.postcard_id,
-    }, 500);
-  }
-  const lobFnUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/lob-send-postcard`;
-  // v0.7.0.49: lob-send-postcard ALWAYS returns HTTP 200 (see json()
-  // helper there — outcome lives in body.ok). Previously we only checked
-  // resp.ok which was always true, so Lob rejections were completely
-  // invisible — recipient saw "On its way!" while the postcard rotted as
-  // an orphan (status=sent, lob_id=null). Now we parse the body and
-  // persist any error to postcards.lob_error so the retry-orphan button
-  // can see + act on it. Still fire-and-forget via waitUntil — the
-  // recipient's claim succeeded; only the print step might have failed.
-  const lobHandoff = fetch(lobFnUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-mailroom-internal": internalSecret,
-      // Supabase platform JWT gate requires a bearer even though our
-      // function code prefers the internal-secret path. Anon key
-      // satisfies the gate without granting any extra privileges.
-      Authorization: `Bearer ${anonKey}`,
-    },
-    body: JSON.stringify({
-      postcard_id: data.postcard_id,
-      render_mode: "html",
-    }),
-  }).then(async (resp) => {
-    // Always parse body.ok — resp.ok is always true (200) by design.
-    const text = await resp.text().catch(() => "");
-    let parsed: { ok?: boolean; error?: string } = {};
-    try { parsed = text ? JSON.parse(text) : {}; } catch { /* non-JSON */ }
-    if (parsed.ok === false) {
-      // eslint-disable-next-line no-console
-      console.warn("[claim] lob-send-postcard body.ok=false:", parsed.error, "(HTTP", resp.status + ")");
-      // Persist so the retry-orphan UI can show the real reason.
-      try {
-        await admin
-          .from("postcards")
-          .update({ lob_error: parsed.error ?? `Lob send failed (HTTP ${resp.status})` })
-          .eq("id", data.postcard_id);
-      } catch (writeErr) {
-        // eslint-disable-next-line no-console
-        console.error("[claim] failed to persist lob_error:", writeErr);
-      }
-    } else if (!resp.ok) {
-      // eslint-disable-next-line no-console
-      console.warn("[claim] lob-send-postcard returned non-ok:", resp.status, text);
-    }
-  }).catch(async (err) => {
-    // eslint-disable-next-line no-console
-    console.warn("[claim] lob-send-postcard call failed:", err?.message ?? err);
-    // v0.7.0.49 (Codex P2): persist on network failure too. Previously a
-    // dropped connection to lob-send-postcard left the postcard with no
-    // durable error state; the orphan dashboard had nothing to show.
-    try {
-      await admin
-        .from("postcards")
-        .update({ lob_error: `claim handoff failed: ${err?.message ?? "network error"}` })
-        .eq("id", data.postcard_id);
-    } catch {
-      /* defensive */
-    }
-  });
-  // EdgeRuntime is provided by Supabase's Deno runtime. Guard against
-  // local test environments that don't expose it.
-  // deno-lint-ignore no-explicit-any
-  const ER = (globalThis as any).EdgeRuntime;
-  if (ER && typeof ER.waitUntil === "function") {
-    ER.waitUntil(lobHandoff);
-  }
+ // v0.7.0.11: send the postcard to Lob now that we have the recipient's
+ // address. Calls lob-send-postcard with render_mode="html", which
+ // server-side renders the front (photo) + back (message) templates
+ // using the data already in the DB. Lob auto-renders the recipient
+ // address on the right half of the back from the to[*] form fields.
+ //
+ // This closes the Phase 6/7 KNOWN GAP: previously the postcard row
+ // sat in status='queued' forever with no Lob handoff. The recipient
+ // would tell the sender "I claimed your card!" and then nothing
+ // would ever arrive in the mail.
+ //
+ // v0.7.0.48 FIX (Codex P1.4a): use EdgeRuntime.waitUntil so the Lob
+ // fetch is durably registered as background work that must complete
+ // before the function instance is torn down. Previously this was a
+ // bare fire-and-forget fetch(). Supabase's Edge runtime can reap the
+ // instance the moment the response is sent, dropping any in-flight
+ // detached promises. Result: silent Lob handoff failures. See:
+ // https://supabase.com/docs/guides/functions/background-tasks
+ //
+ // We also report a non-success ok:false now when secrets are missing,
+ // so the caller (claim page or App Clip) doesn't get a false success
+ // for a claim that never had the chance to ship. Previously this just
+ // logged + returned ok:true, hiding a misconfiguration in production.
+ const internalSecret = Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "";
+ const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+ if (!internalSecret || !anonKey) {
+ // eslint-disable-next-line no-console
+ console.error("[claim] MAILROOM_INTERNAL_SECRET or SUPABASE_ANON_KEY not set. cannot hand off to Lob");
+ // v0.7.0.49 (Codex P2): persist lob_error so retry-orphan can pick this
+ // up. Previously the claim returned ok:false but the postcards row had
+ // no durable record of why the handoff never happened. only the edge
+ // function logs. Now the row carries the failure reason and shows up
+ // in the orphan dashboard.
+ try {
+ await admin
+ .from("postcards")
+ .update({ lob_error: "internal secret not configured. handoff skipped" })
+ .eq("id", data.postcard_id);
+ } catch {
+ /* defensive. don't double-fail on the durability write */
+ }
+ return jsonResponse({
+ ok: false,
+ error: "Server misconfigured. please contact support. Your address was saved.",
+ postcard_id: data.postcard_id,
+ }, 500);
+ }
+ const lobFnUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/lob-send-postcard`;
+ // v0.7.0.49: lob-send-postcard ALWAYS returns HTTP 200 (see json()
+ // helper there. outcome lives in body.ok). Previously we only checked
+ // resp.ok which was always true, so Lob rejections were completely
+ // invisible. recipient saw "On its way!" while the postcard rotted as
+ // an orphan (status=sent, lob_id=null). Now we parse the body and
+ // persist any error to postcards.lob_error so the retry-orphan button
+ // can see + act on it. Still fire-and-forget via waitUntil. the
+ // recipient's claim succeeded; only the print step might have failed.
+ const lobHandoff = fetch(lobFnUrl, {
+ method: "POST",
+ headers: {
+ "Content-Type": "application/json",
+ "x-mailroom-internal": internalSecret,
+ // Supabase platform JWT gate requires a bearer even though our
+ // function code prefers the internal-secret path. Anon key
+ // satisfies the gate without granting any extra privileges.
+ Authorization: `Bearer ${anonKey}`,
+ },
+ body: JSON.stringify({
+ postcard_id: data.postcard_id,
+ render_mode: "html",
+ }),
+ }).then(async (resp) => {
+ // Always parse body.ok. resp.ok is always true (200) by design.
+ const text = await resp.text().catch(() => "");
+ let parsed: { ok?: boolean; error?: string } = {};
+ try { parsed = text ? JSON.parse(text) : {}; } catch { /* non-JSON */ }
+ if (parsed.ok === false) {
+ // eslint-disable-next-line no-console
+ console.warn("[claim] lob-send-postcard body.ok=false:", parsed.error, "(HTTP", resp.status + ")");
+ // Persist so the retry-orphan UI can show the real reason.
+ try {
+ await admin
+ .from("postcards")
+ .update({ lob_error: parsed.error ?? `Lob send failed (HTTP ${resp.status})` })
+ .eq("id", data.postcard_id);
+ } catch (writeErr) {
+ // eslint-disable-next-line no-console
+ console.error("[claim] failed to persist lob_error:", writeErr);
+ }
+ } else if (!resp.ok) {
+ // eslint-disable-next-line no-console
+ console.warn("[claim] lob-send-postcard returned non-ok:", resp.status, text);
+ }
+ }).catch(async (err) => {
+ // eslint-disable-next-line no-console
+ console.warn("[claim] lob-send-postcard call failed:", err?.message ?? err);
+ // v0.7.0.49 (Codex P2): persist on network failure too. Previously a
+ // dropped connection to lob-send-postcard left the postcard with no
+ // durable error state; the orphan dashboard had nothing to show.
+ try {
+ await admin
+ .from("postcards")
+ .update({ lob_error: `claim handoff failed: ${err?.message ?? "network error"}` })
+ .eq("id", data.postcard_id);
+ } catch {
+ /* defensive */
+ }
+ });
+ // EdgeRuntime is provided by Supabase's Deno runtime. Guard against
+ // local test environments that don't expose it.
+ // deno-lint-ignore no-explicit-any
+ const ER = (globalThis as any).EdgeRuntime;
+ if (ER && typeof ER.waitUntil === "function") {
+ ER.waitUntil(lobHandoff);
+ }
 
-  return jsonResponse({
-    ok: true,
-    postcard_id: data.postcard_id,
-  });
+ return jsonResponse({
+ ok: true,
+ postcard_id: data.postcard_id,
+ });
 }
 
 // ---------------------------------------------------------------------------
@@ -245,228 +245,228 @@ async function handlePost(req: Request, tokenFromQuery: string | null): Promise<
 // ---------------------------------------------------------------------------
 
 function claimFormPage(
-  token: string,
-  info: { sender_name?: string; sender_city?: string; message_preview?: string; category?: string },
+ token: string,
+ info: { sender_name?: string; sender_city?: string; message_preview?: string; category?: string },
 ): string {
-  const senderName = escapeHtml(info.sender_name ?? "Someone");
-  const senderCity = escapeHtml(info.sender_city ?? "");
-  const message = escapeHtml(info.message_preview ?? "");
-  const senderLine = senderCity ? `${senderName} in ${senderCity}` : senderName;
-  const fromTag = senderName === "Someone" ? "Someone" : senderName.split(" ")[0];
+ const senderName = escapeHtml(info.sender_name ?? "Someone");
+ const senderCity = escapeHtml(info.sender_city ?? "");
+ const message = escapeHtml(info.message_preview ?? "");
+ const senderLine = senderCity ? `${senderName} in ${senderCity}` : senderName;
+ const fromTag = senderName === "Someone" ? "Someone" : senderName.split(" ")[0];
 
-  return /* html */ `
+ return /* html */ `
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>${fromTag} sent you a postcard</title>
-  <style>
-    :root {
-      --paper: #F8F1E3;
-      --ink: #221F1A;
-      --muted: #6F6A5D;
-      --postal: #B84A3A;
-      --line: #C2A56D;
-    }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { background: var(--paper); color: var(--ink); margin: 0; padding: 0;
-      font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
-      min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
-    main { max-width: 480px; width: 100%; padding: 32px 20px 80px; }
-    .hero { text-align: center; padding: 24px 0 8px; }
-    .stamp { display: inline-block; font-size: 11px; letter-spacing: 2px;
-      color: var(--postal); font-weight: 700; padding: 4px 10px;
-      border: 1px solid var(--postal); border-radius: 2px;
-      margin-bottom: 16px; transform: rotate(-2deg); }
-    .h1 { font-family: "Cormorant Garamond", "Times New Roman", serif;
-      font-size: 32px; line-height: 1.15; font-weight: 600;
-      margin: 0 0 8px; color: var(--ink); }
-    .sub { font-family: "Cormorant Garamond", serif; font-style: italic;
-      color: var(--muted); margin: 0 0 24px; font-size: 17px; }
-    .preview { background: white; border: 1px solid var(--line);
-      border-radius: 3px; padding: 22px 18px;
-      font-family: "Caveat", "Bradley Hand", cursive;
-      font-size: 19px; line-height: 1.45; color: var(--ink);
-      margin: 0 0 28px; min-height: 80px;
-      transform: rotate(-0.5deg); box-shadow: 2px 2px 8px rgba(0,0,0,0.08); }
-    form { background: white; border-radius: 10px; padding: 22px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-    label { display: block; font-family: -apple-system; font-size: 11px;
-      letter-spacing: 1px; color: var(--muted); font-weight: 700;
-      margin: 14px 0 6px; }
-    input { width: 100%; font-size: 16px; padding: 12px 14px;
-      border: 1px solid #DDD5C2; border-radius: 8px;
-      background: #FAFAF8; color: var(--ink);
-      font-family: -apple-system; }
-    input:focus { outline: none; border-color: var(--postal); background: white; }
-    .row { display: flex; gap: 10px; }
-    .row > div { flex: 1; }
-    button { width: 100%; margin-top: 22px; padding: 16px;
-      background: var(--ink); color: white; border: none;
-      border-radius: 8px; font-size: 16px; font-weight: 600;
-      font-family: -apple-system; letter-spacing: 0.2px;
-      cursor: pointer; transition: opacity 0.15s; }
-    button:disabled { opacity: 0.5; }
-    .privacy { color: var(--muted); font-size: 12px; line-height: 1.5;
-      margin: 18px 4px 0; font-family: "Cormorant Garamond", serif;
-      font-style: italic; text-align: center; }
-    .footer { color: var(--muted); font-size: 11px; text-align: center;
-      margin-top: 32px; font-family: -apple-system; letter-spacing: 0.5px; }
-    .success { text-align: center; padding: 60px 20px; }
-    .success h2 { font-family: "Cormorant Garamond", serif; font-size: 28px;
-      font-weight: 600; margin: 0 0 12px; }
-    .success p { color: var(--muted); font-family: "Cormorant Garamond", serif;
-      font-style: italic; font-size: 17px; }
-    .error { color: var(--postal); font-size: 13px; margin-top: 8px;
-      font-family: -apple-system; }
-  </style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+ <title>${fromTag} sent you a postcard</title>
+ <style>
+ :root {
+ --paper: #F8F1E3;
+ --ink: #221F1A;
+ --muted: #6F6A5D;
+ --postal: #B84A3A;
+ --line: #C2A56D;
+ }
+ * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+ body { background: var(--paper); color: var(--ink); margin: 0; padding: 0;
+ font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+ min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+ main { max-width: 480px; width: 100%; padding: 32px 20px 80px; }
+ .hero { text-align: center; padding: 24px 0 8px; }
+ .stamp { display: inline-block; font-size: 11px; letter-spacing: 2px;
+ color: var(--postal); font-weight: 700; padding: 4px 10px;
+ border: 1px solid var(--postal); border-radius: 2px;
+ margin-bottom: 16px; transform: rotate(-2deg); }
+ .h1 { font-family: "Cormorant Garamond", "Times New Roman", serif;
+ font-size: 32px; line-height: 1.15; font-weight: 600;
+ margin: 0 0 8px; color: var(--ink); }
+ .sub { font-family: "Cormorant Garamond", serif; font-style: italic;
+ color: var(--muted); margin: 0 0 24px; font-size: 17px; }
+ .preview { background: white; border: 1px solid var(--line);
+ border-radius: 3px; padding: 22px 18px;
+ font-family: "Caveat", "Bradley Hand", cursive;
+ font-size: 19px; line-height: 1.45; color: var(--ink);
+ margin: 0 0 28px; min-height: 80px;
+ transform: rotate(-0.5deg); box-shadow: 2px 2px 8px rgba(0,0,0,0.08); }
+ form { background: white; border-radius: 10px; padding: 22px;
+ box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+ label { display: block; font-family: -apple-system; font-size: 11px;
+ letter-spacing: 1px; color: var(--muted); font-weight: 700;
+ margin: 14px 0 6px; }
+ input { width: 100%; font-size: 16px; padding: 12px 14px;
+ border: 1px solid #DDD5C2; border-radius: 8px;
+ background: #FAFAF8; color: var(--ink);
+ font-family: -apple-system; }
+ input:focus { outline: none; border-color: var(--postal); background: white; }
+ .row { display: flex; gap: 10px; }
+ .row > div { flex: 1; }
+ button { width: 100%; margin-top: 22px; padding: 16px;
+ background: var(--ink); color: white; border: none;
+ border-radius: 8px; font-size: 16px; font-weight: 600;
+ font-family: -apple-system; letter-spacing: 0.2px;
+ cursor: pointer; transition: opacity 0.15s; }
+ button:disabled { opacity: 0.5; }
+ .privacy { color: var(--muted); font-size: 12px; line-height: 1.5;
+ margin: 18px 4px 0; font-family: "Cormorant Garamond", serif;
+ font-style: italic; text-align: center; }
+ .footer { color: var(--muted); font-size: 11px; text-align: center;
+ margin-top: 32px; font-family: -apple-system; letter-spacing: 0.5px; }
+ .success { text-align: center; padding: 60px 20px; }
+ .success h2 { font-family: "Cormorant Garamond", serif; font-size: 28px;
+ font-weight: 600; margin: 0 0 12px; }
+ .success p { color: var(--muted); font-family: "Cormorant Garamond", serif;
+ font-style: italic; font-size: 17px; }
+ .error { color: var(--postal); font-size: 13px; margin-top: 8px;
+ font-family: -apple-system; }
+ </style>
 </head>
 <body>
-  <main>
-    <div class="hero">
-      <div class="stamp">✉ MAILROOM</div>
-      <h1 class="h1">${fromTag} wants to send you a postcard.</h1>
-      <p class="sub">From ${senderLine}</p>
-    </div>
+ <main>
+ <div class="hero">
+ <div class="stamp">✉ MAILROOM</div>
+ <h1 class="h1">${fromTag} wants to send you a postcard.</h1>
+ <p class="sub">From ${senderLine}</p>
+ </div>
 
-    <!-- v0.7.0.58: removed the message preview. The note + photo are
-         meant to be a surprise — the postcard arriving in the mail is
-         the reveal. Sender name + city stays so the recipient knows
-         who's mailing them something. -->
+ <!-- v0.7.0.58: removed the message preview. The note + photo are
+ meant to be a surprise. the postcard arriving in the mail is
+ the reveal. Sender name + city stays so the recipient knows
+ who's mailing them something. -->
 
-    <p class="sub" style="text-align:center; font-size:15px;">
-      Tell us where to send it. Your address stays private to Mailroom — ${fromTag} will never see it.
-    </p>
+ <p class="sub" style="text-align:center; font-size:15px;">
+ Tell us where to send it. Your address stays private to Mailroom. ${fromTag} will never see it.
+ </p>
 
-    <form id="form">
-      <label>Your name</label>
-      <input id="name" type="text" autocomplete="name" required />
+ <form id="form">
+ <label>Your name</label>
+ <input id="name" type="text" autocomplete="name" required />
 
-      <label>Street address</label>
-      <input id="line1" type="text" autocomplete="address-line1" required />
+ <label>Street address</label>
+ <input id="line1" type="text" autocomplete="address-line1" required />
 
-      <label>Apt / suite (optional)</label>
-      <input id="line2" type="text" autocomplete="address-line2" />
+ <label>Apt / suite (optional)</label>
+ <input id="line2" type="text" autocomplete="address-line2" />
 
-      <div class="row">
-        <div>
-          <label>City</label>
-          <input id="city" type="text" autocomplete="address-level2" required />
-        </div>
-        <div>
-          <label>State</label>
-          <input id="state" type="text" autocomplete="address-level1" required maxlength="2" style="text-transform:uppercase" />
-        </div>
-      </div>
+ <div class="row">
+ <div>
+ <label>City</label>
+ <input id="city" type="text" autocomplete="address-level2" required />
+ </div>
+ <div>
+ <label>State</label>
+ <input id="state" type="text" autocomplete="address-level1" required maxlength="2" style="text-transform:uppercase" />
+ </div>
+ </div>
 
-      <label>ZIP</label>
-      <input id="zip" type="text" autocomplete="postal-code" inputmode="numeric" required maxlength="10" />
+ <label>ZIP</label>
+ <input id="zip" type="text" autocomplete="postal-code" inputmode="numeric" required maxlength="10" />
 
-      <button type="submit" id="submit">Send my postcard →</button>
-      <p class="error" id="error" style="display:none"></p>
-    </form>
+ <button type="submit" id="submit">Send my postcard →</button>
+ <p class="error" id="error" style="display:none"></p>
+ </form>
 
-    <p class="privacy">
-      Mailroom prints &amp; mails real paper postcards via USPS. Your address is used once to ship this card. It's never shared with the sender or used for marketing.
-    </p>
-    <p class="footer">MAILROOM · REAL MAIL · 2026</p>
-  </main>
+ <p class="privacy">
+ Mailroom prints &amp; mails real paper postcards via USPS. Your address is used once to ship this card. It's never shared with the sender or used for marketing.
+ </p>
+ <p class="footer">MAILROOM · REAL MAIL · 2026</p>
+ </main>
 
-  <script>
-    const TOKEN = ${JSON.stringify(token)};
-    const form = document.getElementById('form');
-    const submit = document.getElementById('submit');
-    const errorEl = document.getElementById('error');
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      errorEl.style.display = 'none';
-      submit.disabled = true;
-      submit.textContent = 'Sending…';
-      const payload = {
-        token: TOKEN,
-        name: document.getElementById('name').value.trim(),
-        line1: document.getElementById('line1').value.trim(),
-        line2: document.getElementById('line2').value.trim() || null,
-        city: document.getElementById('city').value.trim(),
-        state: document.getElementById('state').value.trim().toUpperCase(),
-        zip: document.getElementById('zip').value.trim(),
-      };
-      try {
-        const r = await fetch(window.location.pathname + window.location.search, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const json = await r.json();
-        if (json.ok) {
-          document.querySelector('main').innerHTML = \`
-            <div class="success">
-              <div class="stamp" style="display:inline-block;font-size:11px;letter-spacing:2px;color:var(--postal);font-weight:700;padding:4px 10px;border:1px solid var(--postal);border-radius:2px;margin-bottom:24px;transform:rotate(-2deg);">✉ MAILROOM</div>
-              <h2>On its way.</h2>
-              <p>Your postcard from \${${JSON.stringify(fromTag)}} is queued for printing. Expect it in your mailbox in 5-8 business days.</p>
-            </div>
-          \`;
-        } else {
-          errorEl.textContent = json.error || 'Something went wrong. Try again.';
-          errorEl.style.display = 'block';
-          submit.disabled = false;
-          submit.textContent = 'Send my postcard →';
-        }
-      } catch (err) {
-        errorEl.textContent = 'Network error. Check your connection and try again.';
-        errorEl.style.display = 'block';
-        submit.disabled = false;
-        submit.textContent = 'Send my postcard →';
-      }
-    });
-  </script>
+ <script>
+ const TOKEN = ${JSON.stringify(token)};
+ const form = document.getElementById('form');
+ const submit = document.getElementById('submit');
+ const errorEl = document.getElementById('error');
+ form.addEventListener('submit', async (e) => {
+ e.preventDefault();
+ errorEl.style.display = 'none';
+ submit.disabled = true;
+ submit.textContent = 'Sending…';
+ const payload = {
+ token: TOKEN,
+ name: document.getElementById('name').value.trim(),
+ line1: document.getElementById('line1').value.trim(),
+ line2: document.getElementById('line2').value.trim() || null,
+ city: document.getElementById('city').value.trim(),
+ state: document.getElementById('state').value.trim().toUpperCase(),
+ zip: document.getElementById('zip').value.trim(),
+ };
+ try {
+ const r = await fetch(window.location.pathname + window.location.search, {
+ method: 'POST',
+ headers: { 'content-type': 'application/json' },
+ body: JSON.stringify(payload),
+ });
+ const json = await r.json();
+ if (json.ok) {
+ document.querySelector('main').innerHTML = \`
+ <div class="success">
+ <div class="stamp" style="display:inline-block;font-size:11px;letter-spacing:2px;color:var(--postal);font-weight:700;padding:4px 10px;border:1px solid var(--postal);border-radius:2px;margin-bottom:24px;transform:rotate(-2deg);">✉ MAILROOM</div>
+ <h2>On its way.</h2>
+ <p>Your postcard from \${${JSON.stringify(fromTag)}} is queued for printing. Expect it in your mailbox in 5-8 business days.</p>
+ </div>
+ \`;
+ } else {
+ errorEl.textContent = json.error || 'Something went wrong. Try again.';
+ errorEl.style.display = 'block';
+ submit.disabled = false;
+ submit.textContent = 'Send my postcard →';
+ }
+ } catch (err) {
+ errorEl.textContent = 'Network error. Check your connection and try again.';
+ errorEl.style.display = 'block';
+ submit.disabled = false;
+ submit.textContent = 'Send my postcard →';
+ }
+ });
+ </script>
 </body>
 </html>`;
 }
 
 function alreadyClaimedPage(): string {
-  return /* html */ `
+ return /* html */ `
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Already claimed</title>
-  <style>
-    body { background: #F8F1E3; font-family: -apple-system, system-ui, sans-serif;
-      color: #221F1A; text-align: center; padding: 80px 20px;
-      min-height: 100vh; margin: 0; }
-    h1 { font-family: "Cormorant Garamond", serif; font-size: 28px; }
-    p { color: #6F6A5D; font-family: "Cormorant Garamond", serif; font-style: italic; }
-  </style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <title>Already claimed</title>
+ <style>
+ body { background: #F8F1E3; font-family: -apple-system, system-ui, sans-serif;
+ color: #221F1A; text-align: center; padding: 80px 20px;
+ min-height: 100vh; margin: 0; }
+ h1 { font-family: "Cormorant Garamond", serif; font-size: 28px; }
+ p { color: #6F6A5D; font-family: "Cormorant Garamond", serif; font-style: italic; }
+ </style>
 </head>
 <body>
-  <h1>This card's already on its way.</h1>
-  <p>You only need to claim a Mailroom link once. If you're expecting another one, ask the sender for a fresh link.</p>
+ <h1>This card's already on its way.</h1>
+ <p>You only need to claim a Mailroom link once. If you're expecting another one, ask the sender for a fresh link.</p>
 </body>
 </html>`;
 }
 
 function errorPage(msg: string): string {
-  return /* html */ `
+ return /* html */ `
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mailroom</title>
-  <style>
-    body { background: #F8F1E3; font-family: -apple-system, system-ui, sans-serif;
-      color: #221F1A; text-align: center; padding: 80px 20px;
-      min-height: 100vh; margin: 0; }
-    h1 { font-family: "Cormorant Garamond", serif; font-size: 28px; }
-    p { color: #6F6A5D; font-family: "Cormorant Garamond", serif; font-style: italic; }
-  </style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <title>Mailroom</title>
+ <style>
+ body { background: #F8F1E3; font-family: -apple-system, system-ui, sans-serif;
+ color: #221F1A; text-align: center; padding: 80px 20px;
+ min-height: 100vh; margin: 0; }
+ h1 { font-family: "Cormorant Garamond", serif; font-size: 28px; }
+ p { color: #6F6A5D; font-family: "Cormorant Garamond", serif; font-style: italic; }
+ </style>
 </head>
 <body>
-  <h1>Hmm.</h1>
-  <p>${escapeHtml(msg)}</p>
+ <h1>Hmm.</h1>
+ <p>${escapeHtml(msg)}</p>
 </body>
 </html>`;
 }
@@ -476,28 +476,28 @@ function errorPage(msg: string): string {
 // ---------------------------------------------------------------------------
 
 function htmlResponse(html: string, status = 200): Response {
-  return new Response(html, {
-    status,
-    headers: {
-      ...CORS_HEADERS,
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  });
+ return new Response(html, {
+ status,
+ headers: {
+ ...CORS_HEADERS,
+ "Content-Type": "text/html; charset=utf-8",
+ "Cache-Control": "no-store",
+ },
+ });
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-  });
+ return new Response(JSON.stringify(body), {
+ status,
+ headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+ });
 }
 
 function escapeHtml(s: string): string {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+ return s
+ .replaceAll("&", "&amp;")
+ .replaceAll("<", "&lt;")
+ .replaceAll(">", "&gt;")
+ .replaceAll('"', "&quot;")
+ .replaceAll("'", "&#39;");
 }
