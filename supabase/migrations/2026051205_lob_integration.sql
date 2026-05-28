@@ -74,7 +74,7 @@ alter table public.profiles
 --     );
 --
 -- Lob also needs to READ the URLs we POST it. Two options:
---   A) Make the bucket "public" — anyone with the URL can read. Simpler.
+--   A) Make the bucket "public". anyone with the URL can read. Simpler.
 --   B) Generate signed URLs at submit time (expire after 24h). More secure.
 --
 -- For TestFlight beta we recommend A (public bucket) since the URLs include

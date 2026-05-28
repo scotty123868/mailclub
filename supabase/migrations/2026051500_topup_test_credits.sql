@@ -1,9 +1,9 @@
--- v0.7.0.27 — one-off top-up of test credits.
+-- v0.7.0.27. one-off top-up of test credits.
 --
 -- The user has been re-signing-up in TestFlight across many builds.
 -- Each test session burns through their 5 free credits, and the
 -- server-side credit count persists across builds (which is correct
--- behavior for real users — it's just brutal for testers who need
+-- behavior for real users. it's just brutal for testers who need
 -- many sessions). After build 41 they reported being at 0 credits with
 -- no way to verify the photo-in-journal fix or any other send-flow
 -- regression.
@@ -20,7 +20,7 @@
 -- (which we should probably wrap in an admin-only RPC for tonight,
 -- but a migration is the fastest path right now).
 --
--- Production users are not affected — the WHERE clause filters by
+-- Production users are not affected. the WHERE clause filters by
 -- the specific email.
 
 update public.profiles

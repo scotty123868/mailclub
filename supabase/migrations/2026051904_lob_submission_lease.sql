@@ -1,5 +1,5 @@
 -- =========================================================================
--- 2026-05-19 — Lob submission lease (Codex audit P1)
+-- 2026-05-19. Lob submission lease (Codex audit P1)
 -- =========================================================================
 --
 -- Background: lob-send-postcard had an early-return guard checking
@@ -7,7 +7,7 @@
 -- finished, second POST sees the lob_id and bails). It DOES NOT catch
 -- concurrent first submissions: two POSTs arrive at the same millisecond,
 -- both SELECT the row before either has written lob_id, both pass the
--- guard, both POST to Lob, both write back — last-write-wins. The user
+-- guard, both POST to Lob, both write back. last-write-wins. The user
 -- gets two physical postcards for one credit.
 --
 -- Fix: an idempotency lease table. Before calling Lob, the function
@@ -41,7 +41,7 @@ create index if not exists postcard_lob_submissions_status_idx
   on public.postcard_lob_submissions (status, lease_expires_at)
   where status = 'in_flight';
 
--- RLS — owners + service_role only. Sender can read their own
+-- RLS. owners + service_role only. Sender can read their own
 -- submissions for the retry-orphan UI to surface failure detail.
 alter table public.postcard_lob_submissions enable row level security;
 

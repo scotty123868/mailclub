@@ -1,9 +1,9 @@
--- v0.7.0.9 emergency fix — two critical send-flow bugs blocking ALL postcards
+-- v0.7.0.9 emergency fix. two critical send-flow bugs blocking ALL postcards
 --
 -- BUG 1: ambiguous send_postcard()
 --   The Phase 6 hardening migration (2026051211) tried to drop the
 --   original send_postcard before recreating it, but the DROP statement
---   listed parameters in the order (uuid, text, ...) — the NEW order,
+--   listed parameters in the order (uuid, text, ...). the NEW order,
 --   not the OLD order. The original signature was (text, uuid, ...).
 --   Postgres's DROP silently no-op'd because no function with the listed
 --   signature existed. Then CREATE OR REPLACE created a NEW function

@@ -1,4 +1,4 @@
--- v0.7.0.27 follow-up — broader top-up.
+-- v0.7.0.27 follow-up. broader top-up.
 --
 -- The earlier 2026051500_topup_test_credits.sql matched by
 -- auth.users.email = 'scotty@lasolasvc.com'. Apple Sign In often
@@ -13,7 +13,7 @@
 -- the WelcomeGate returning-user gate broadened) don't force the
 -- user back through welcome and re-deplete what we just gave them.
 --
--- SAFE for this project state — it's a test environment with one
+-- SAFE for this project state. it's a test environment with one
 -- builder account and zero production traffic. NEVER re-apply this
 -- migration logic against a real user base; it would top up paying
 -- users' credits beyond what they purchased.

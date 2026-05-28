@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=1280" />
-<title>Mailroom — Signup Redesign + Pen-pal Gallery (v1, May 12 2026)</title>
+<title>Mailroom. Signup Redesign + Pen-pal Gallery (v1, May 12 2026)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Great+Vibes&family=Caveat:wght@400;600&display=swap" rel="stylesheet" />
@@ -211,7 +211,7 @@
     max-width: 90%;
   }
 
-  /* Phase 6 signup-flow page 1 — hero composition. Uses flex column to lay
+  /* Phase 6 signup-flow page 1. hero composition. Uses flex column to lay
      out art at top, brand text in middle, CTAs anchored at bottom. Replaces
      the absolute-positioned mess from v1 which had broken markup. */
   .phone-content-hero {
@@ -471,7 +471,7 @@
 
   <header class="top">
     <div>
-      <h1>Mailroom — Signup<br/>Redesign + Pen-pals</h1>
+      <h1>Mailroom. Signup<br/>Redesign + Pen-pals</h1>
       <p class="subtitle">5 hero-art options from Recraft, a multi-page sign-up flow that drops the birthday + uses address autocomplete, and the pen-pal feature wired back in. HTML review before code.</p>
     </div>
     <div class="meta">
@@ -494,11 +494,11 @@
     <h3>What changes vs today</h3>
     <p><strong>Today (v0.5.0 build 5):</strong> WelcomeSheet is one dense screen with name, city, state, birthday, Apple Sign In, and an email fallback all stacked. Functional but cramped, and the birthday ask up-front is friction nobody asked for.</p>
     <p><strong>Tomorrow (v0.6.0):</strong> one decision per page. Option B hero art ("Cards across the map") on page 1 carries the brand promise visually with the new CTA "Send a postcard with a text." Name on page 2, an explanation moment on page 3, address autocomplete on page 4 (single bar that suggests as you type), 3-stamps confirmation on page 5. No birthday.</p>
-    <p><strong>Pen-pal feature</strong> is Postcrossing applied to Mailroom: <em>send a card to a stranger, get one back.</em> About 2 weeks. Both ways are blind — you don't know where your card is going, the recipient doesn't know who sent theirs. Reply by scanning the QR if you want to upgrade the connection.</p>
+    <p><strong>Pen-pal feature</strong> is Postcrossing applied to Mailroom: <em>send a card to a stranger, get one back.</em> About 2 weeks. Both ways are blind. you don't know where your card is going, the recipient doesn't know who sent theirs. Reply by scanning the QR if you want to upgrade the connection.</p>
     <p><strong>No virtual mail.</strong> The receiver's app NEVER shows them mail before it physically arrives at their address. No pending counter, no in-app pre-notification. The card surprises them in their real mailbox, they scan the QR on the back, and only then does it land in their app feed. <em>Preserves the entire point.</em></p>
   </div>
 
-  <!-- ============================== SECTION 01 — HERO ART =============================== -->
+  <!-- ============================== SECTION 01. HERO ART =============================== -->
   <section id="hero-art">
     <div class="section-head">
       <h2><span class="num">01</span>Hero art · pick one for page 1, one for page 5</h2>
@@ -610,16 +610,16 @@
 
     <div class="callout">
       <h4>Pick for page 5</h4>
-      <p>Page 1 stays Option B. For the "3 stamps, on us." confirmation page, choose any other option. My instinct: <strong>Option G (cafe table)</strong> or <strong>Option I (cluttered desk)</strong> — both lean human and warm without competing with B's map illustration. <strong>Option F</strong> is too close to B (also a map). <strong>Option E</strong> works if you want a quiet/twilight feel for the finish.</p>
-      <p style="margin-top: 10px;"><strong>If still nothing fits</strong> — say a direction (more photo-realistic, more abstract, more people, different palette) and I'll fire another batch in 90 seconds.</p>
+      <p>Page 1 stays Option B. For the "3 stamps, on us." confirmation page, choose any other option. My instinct: <strong>Option G (cafe table)</strong> or <strong>Option I (cluttered desk)</strong>. both lean human and warm without competing with B's map illustration. <strong>Option F</strong> is too close to B (also a map). <strong>Option E</strong> works if you want a quiet/twilight feel for the finish.</p>
+      <p style="margin-top: 10px;"><strong>If still nothing fits</strong>. say a direction (more photo-realistic, more abstract, more people, different palette) and I'll fire another batch in 90 seconds.</p>
     </div>
   </section>
 
-  <!-- ============================== SECTION 02 — SIGNUP FLOW =============================== -->
+  <!-- ============================== SECTION 02. SIGNUP FLOW =============================== -->
   <section id="signup-flow">
     <div class="section-head">
       <h2><span class="num">02</span>Sign-up flow · one decision per page</h2>
-      <p class="lede">5 short pages instead of one dense form. <em>No birthday.</em> Just hero, name, an explanation breath, address autocomplete, you're in. Apple Sign In and email both available on the first screen — typing the name comes AFTER auth on the new-user path.</p>
+      <p class="lede">5 short pages instead of one dense form. <em>No birthday.</em> Just hero, name, an explanation breath, address autocomplete, you're in. Apple Sign In and email both available on the first screen. typing the name comes AFTER auth on the new-user path.</p>
     </div>
 
     <div class="grid cols-5">
@@ -643,7 +643,7 @@
         <div class="caption">
           <div class="step">Page 1 · Hero</div>
           <div class="label">Brand + auth</div>
-          <div class="note">Hero art (Option B — cards across the map), the brand promise as the CTA line ("Send a postcard with a text."), and Apple Sign In as the primary action. Email is the underlined fallback.</div>
+          <div class="note">Hero art (Option B. cards across the map), the brand promise as the CTA line ("Send a postcard with a text."), and Apple Sign In as the primary action. Email is the underlined fallback.</div>
         </div>
       </div>
 
@@ -679,7 +679,7 @@
               <div class="step-dots"><div class="dot done"></div><div class="dot done"></div><div class="dot active"></div><div class="dot"></div></div>
               <div class="page-title-mega" style="margin-top: 22px; font-size: 30px;">Mailroom mails<br/>real postcards.</div>
               <div class="helper" style="margin-top: 12px; font-size: 15px; line-height: 1.65;">
-                Pick a photo. Write a few words. We print it, stamp it, and mail it through USPS. A magical mail club — first card on us.<br/><br/>
+                Pick a photo. Write a few words. We print it, stamp it, and mail it through USPS. A magical mail club. first card on us.<br/><br/>
                 We give you 3 to start, on us.
               </div>
               <div style="margin-top: 32px; display: flex; gap: 14px; align-items: center;">
@@ -695,7 +695,7 @@
         <div class="caption">
           <div class="step">Page 3 · Explanation</div>
           <div class="label">"Mailroom mails real postcards"</div>
-          <div class="note">The pause page. Sets the mental model — this is real USPS mail, not a digital feed. The "3 free stamps" promise lands here, before you ask anything else.</div>
+          <div class="note">The pause page. Sets the mental model. this is real USPS mail, not a digital feed. The "3 free stamps" promise lands here, before you ask anything else.</div>
         </div>
       </div>
 
@@ -755,7 +755,7 @@
         <div class="caption">
           <div class="step">Page 5 · You're in</div>
           <div class="label">3-stamps confirmation</div>
-          <div class="note">Calm landing. Different art from page 1 (showing Option G as a default — the cafe writer). CTA goes straight to the send flow, not the home tab — first-card energy is the whole game.</div>
+          <div class="note">Calm landing. Different art from page 1 (showing Option G as a default. the cafe writer). CTA goes straight to the send flow, not the home tab. first-card energy is the whole game.</div>
         </div>
       </div>
 
@@ -773,7 +773,7 @@
     </div>
   </section>
 
-  <!-- ============================== SECTION 03 — ADDRESS AUTOCOMPLETE =============================== -->
+  <!-- ============================== SECTION 03. ADDRESS AUTOCOMPLETE =============================== -->
   <section id="address-input">
     <div class="section-head">
       <h2><span class="num">03</span>Address autocomplete · single bar</h2>
@@ -855,11 +855,11 @@
     </div>
   </section>
 
-  <!-- ============================== SECTION 04 — PEN-PAL =============================== -->
+  <!-- ============================== SECTION 04. PEN-PAL =============================== -->
   <section id="penpal">
     <div class="section-head">
       <h2><span class="num">04</span>Pen-pal · Mail a stranger. Get one back.</h2>
-      <p class="lede">Postcrossing's mechanic, applied to Mailroom. <em>You mail one. Someone in the network mails you one.</em> Not necessarily the same person — the matching engine handles it. Existing <code>sendIntoVoid</code> + <code>void_replies</code> infrastructure forms the foundation. No separate "Pen-pal mailbox" — when a card arrives at your physical mailbox and you scan the QR, it appears in your normal Received feed like any other card.</p>
+      <p class="lede">Postcrossing's mechanic, applied to Mailroom. <em>You mail one. Someone in the network mails you one.</em> Not necessarily the same person. the matching engine handles it. Existing <code>sendIntoVoid</code> + <code>void_replies</code> infrastructure forms the foundation. No separate "Pen-pal mailbox". when a card arrives at your physical mailbox and you scan the QR, it appears in your normal Received feed like any other card.</p>
     </div>
 
     <div class="callout" style="margin-bottom: 32px;">
@@ -870,7 +870,7 @@
     </div>
 
     <div class="callout warn" style="margin-bottom: 32px;">
-      <h4>No virtual cards — preserve the surprise</h4>
+      <h4>No virtual cards. preserve the surprise</h4>
       <p>The receiver's app NEVER tells them mail is on the way. No "pending" counter, no in-app pre-notification. The card appears in the Received feed only after it's PHYSICALLY DELIVERED and the recipient has scanned the QR on the back. Lob's delivery webhook flips a <code>delivered_at</code> timestamp on the postcard row; the receiver's <code>fetch_received_postcards</code> query filters to only show rows where <code>delivered_at IS NOT NULL</code> (or where the user has scanned, whichever comes first).</p>
       <p style="margin-top: 10px;"><strong>Senders</strong> can see their own sent card's progress on their existing Sent list (queued → in-transit → delivered) since that's their own postcard, not a surprise to ruin.</p>
     </div>
@@ -969,7 +969,7 @@
   </section>
 
 
-  <!-- ============================== SECTION 05 — DECISIONS =============================== -->
+  <!-- ============================== SECTION 05. DECISIONS =============================== -->
   <section id="decisions">
     <div class="section-head">
       <h2><span class="num">05</span>Decisions for you</h2>
@@ -987,7 +987,7 @@
         <tr>
           <td class="decision">Page-5 hero art (must differ from B)</td>
           <td class="options">A) Hands at mailbox · C) Writing desk · D) Garden mailbox · E) Constellation · F) Folk map · G) Cafe writer · H) Triptych · I) Cluttered desk · J) Open card</td>
-          <td class="rec-col">★ G or I — pick one</td>
+          <td class="rec-col">★ G or I. pick one</td>
         </tr>
         <tr>
           <td class="decision">Signup pages</td>
@@ -1016,7 +1016,7 @@
         </tr>
         <tr style="background:rgba(122,139,110,0.08);">
           <td class="decision">Stranger destination reveal <span style="color:var(--green); font-size:11px;">✓ DECIDED</span></td>
-          <td class="options">A) Show city · B) Show region · <strong style="color:var(--ink);">C) Show nothing — true blind both ways</strong></td>
+          <td class="options">A) Show city · B) Show region · <strong style="color:var(--ink);">C) Show nothing. true blind both ways</strong></td>
           <td class="rec-col" style="color:var(--green);">✓ C · blind</td>
         </tr>
         <tr style="background:rgba(122,139,110,0.08);">
@@ -1031,7 +1031,7 @@
         </tr>
         <tr style="background:rgba(122,139,110,0.08);">
           <td class="decision">Pre-arrival visibility <span style="color:var(--green); font-size:11px;">✓ DECIDED</span></td>
-          <td class="options">A) Show "pending receives" count to receiver · <strong style="color:var(--ink);">B) No spoilers — card only appears after physical delivery + QR scan</strong></td>
+          <td class="options">A) Show "pending receives" count to receiver · <strong style="color:var(--ink);">B) No spoilers. card only appears after physical delivery + QR scan</strong></td>
           <td class="rec-col" style="color:var(--green);">✓ B · preserve surprise</td>
         </tr>
       </tbody>

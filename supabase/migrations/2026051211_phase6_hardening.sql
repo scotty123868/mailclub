@@ -1,4 +1,4 @@
--- v0.6.1 — Phase 6 security + correctness hardening
+-- v0.6.1. Phase 6 security + correctness hardening
 --
 -- Fixes the most critical findings from the deep codex audit run after
 -- shipping 0.6.0 build 6 to TestFlight. Server-side issues here; client
@@ -23,7 +23,7 @@
 --      on (owner_id, source_user_id) so reciprocation_scan can ON CONFLICT.
 
 -- ---------------------------------------------------------------------------
--- 1. Privacy: postcard_claims sender SELECT — redact address columns
+-- 1. Privacy: postcard_claims sender SELECT. redact address columns
 -- ---------------------------------------------------------------------------
 
 -- Drop the over-permissive policy from 1208.
@@ -38,7 +38,7 @@ grant select on public.postcard_claims to service_role;
 
 -- Note: receiver visibility from 1210 was a SELECT policy
 -- (postcard_claims_receiver_select with scanned_by_user_id = auth.uid()).
--- That policy STILL FIRES because RLS is row-level, not column-level —
+-- That policy STILL FIRES because RLS is row-level, not column-level .
 -- the receiver gets to see their own row's columns, including
 -- (intentionally) the sender_name_snapshot they scanned. The sender's
 -- mailing address is never on a claim row, so no privacy issue there.
@@ -210,7 +210,7 @@ grant execute on function public.send_postcard(
 ) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 4. to_kind constraint — allow 'claim' (1208 inserts this value)
+-- 4. to_kind constraint. allow 'claim' (1208 inserts this value)
 -- ---------------------------------------------------------------------------
 -- The initial schema's check constraint allowed only 'friend' | 'void'.
 -- 2026051208 send_postcard_via_claim writes to_kind='claim'. If anyone
@@ -225,7 +225,7 @@ do $$ begin
 exception when undefined_table then null; end $$;
 
 -- ---------------------------------------------------------------------------
--- 5. Friends uniqueness — prevent duplicate scan-created rows
+-- 5. Friends uniqueness. prevent duplicate scan-created rows
 -- ---------------------------------------------------------------------------
 -- record_reciprocation_scan creates a friend row from (receiver → sender).
 -- Without a unique constraint, two scans from the same sender create two
@@ -260,7 +260,7 @@ create unique index if not exists friends_owner_source_unique_idx
   where source_user_id is not null;
 
 -- ---------------------------------------------------------------------------
--- 6. Postcards status check — broadened by 1209 already; verify
+-- 6. Postcards status check. broadened by 1209 already; verify
 -- ---------------------------------------------------------------------------
 -- Migration 1209 loosened the check to include 'queued', 'awaiting_address',
 -- 'in_transit', 'returned'. This is a no-op idempotent assertion that the

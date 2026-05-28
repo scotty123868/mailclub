@@ -1,8 +1,8 @@
--- Pen pal flow prereq — add 'awaiting_send_type' to the state machine.
+-- Pen pal flow prereq. add 'awaiting_send_type' to the state machine.
 --
 -- After photo intake we now ask the user to choose:
 --   1. Send to a friend (existing flow)
---   2. Send to a stranger pen pal (coming with public beta — stubbed for
+--   2. Send to a stranger pen pal (coming with public beta. stubbed for
 --      now to fall back to friend mode)
 --
 -- The choice lives in conversation_data.send_type as 'friend' | 'stranger'

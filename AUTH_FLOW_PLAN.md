@@ -1,6 +1,6 @@
-# Auth flow — simple email + Sign in with Apple
+# Auth flow. simple email + Sign in with Apple
 
-You pointed at <https://github.com/scotty123868/teteapp-main> as the reference architecture. This doc lays out exactly what changes in Mailroom to match that pattern: **one welcome screen, two big choices — "Continue with Apple" or "Continue with email" — and nothing else.**
+You pointed at <https://github.com/scotty123868/teteapp-main> as the reference architecture. This doc lays out exactly what changes in Mailroom to match that pattern: **one welcome screen, two big choices. "Continue with Apple" or "Continue with email". and nothing else.**
 
 This replaces the current two-step Welcome flow (identity → email/password) with something closer to what apps like Cash App, Tweet, and teteapp use: identity comes *after* auth, not before.
 
@@ -48,7 +48,7 @@ Identity step:    "What should we call you?"  →  name + city + state
 [home tab]
 ```
 
-The identity step still exists — it's where the user's *display* name and Mail Card details live — but it comes after we have a logged-in session. That means if the user backgrounds the app mid-onboarding, they're already an authenticated user; we just bring them back to "finish your Mail Card" on next launch.
+The identity step still exists. it's where the user's *display* name and Mail Card details live. but it comes after we have a logged-in session. That means if the user backgrounds the app mid-onboarding, they're already an authenticated user; we just bring them back to "finish your Mail Card" on next launch.
 
 ---
 
@@ -91,7 +91,7 @@ The .p8 contents + the Key ID + your Team ID are what you paste into Supabase in
 
 ### 3. Enable email auth (already done)
 
-The existing `signUpWithEmail` / `signInWithEmail` in `src/services/api.ts` is fine — keep it.
+The existing `signUpWithEmail` / `signInWithEmail` in `src/services/api.ts` is fine. keep it.
 
 ---
 
@@ -183,9 +183,9 @@ type Step = "auth-wall" | "email" | "identity";
 ```
 
 The auth-wall step has three pressables:
-- **Continue with Apple** — black button with Apple logo, only shown if `isAppleSignInAvailable()` is true (iOS 13+ on real device; sim works in iOS 17+).
-- **Continue with email** — outlined button → goes to `email` step.
-- **Skip for now** — bottom link, goes straight to `identity` step in local-only mode.
+- **Continue with Apple**. black button with Apple logo, only shown if `isAppleSignInAvailable()` is true (iOS 13+ on real device; sim works in iOS 17+).
+- **Continue with email**. outlined button → goes to `email` step.
+- **Skip for now**. bottom link, goes straight to `identity` step in local-only mode.
 
 The email step is what step 2 currently is (signup ↔ signin toggle + forgot password).
 
@@ -218,7 +218,7 @@ The WelcomeSheet uses the `isNewUser` flag to decide: if true, show the identity
 
 ### 4. Visual: the Apple button
 
-Apple has strict HIG rules — black background, white text, the Apple logo, exact font weight. `expo-apple-authentication` ships an `<AppleAuthentication.AppleAuthenticationButton>` component that matches the spec automatically. Use it; don't try to hand-roll the styling.
+Apple has strict HIG rules. black background, white text, the Apple logo, exact font weight. `expo-apple-authentication` ships an `<AppleAuthentication.AppleAuthenticationButton>` component that matches the spec automatically. Use it; don't try to hand-roll the styling.
 
 ```tsx
 <AppleAuthentication.AppleAuthenticationButton
@@ -243,7 +243,7 @@ Apple has strict HIG rules — black background, white text, the Apple logo, exa
 2. **Fewer fields up front.** First impression is one screen with two big buttons, not a form. Conversion goes up.
 3. **No password to remember.** On Apple's path, the user never types or stores a password. They re-auth with Face ID forever.
 4. **Privacy story.** Apple lets users hide their email behind a relay. Some testers love this. Costs us nothing.
-5. **Standard pattern.** Cash App, Robinhood, Notion, Threads — every app the user has installed already does this exact layout. Familiarity reduces friction.
+5. **Standard pattern.** Cash App, Robinhood, Notion, Threads. every app the user has installed already does this exact layout. Familiarity reduces friction.
 
 ---
 
@@ -252,7 +252,7 @@ Apple has strict HIG rules — black background, white text, the Apple logo, exa
 - **Apple returns a relay email** (e.g., `xyz123@privaterelay.appleid.com`). Treat this as a real email. Don't try to "fix" it. Some features (like reset password) won't apply because they don't have a password.
 - **Apple credential expired after a year of disuse.** Supabase auth refresh handles this; on failure, kick the user back to the auth wall.
 - **User cancels the Apple sheet.** The `ERR_REQUEST_CANCELED` code is normal; show no error, do nothing.
-- **User signs in with Apple, deletes the account, signs in with Apple again.** Apple's identifier is stable, so they re-link to whatever they had. Make sure our `delete_my_account()` RPC cleans the auth.users row too (it already does — verified in the v0.6 migration).
+- **User signs in with Apple, deletes the account, signs in with Apple again.** Apple's identifier is stable, so they re-link to whatever they had. Make sure our `delete_my_account()` RPC cleans the auth.users row too (it already does. verified in the v0.6 migration).
 - **Same person signs in with email once, then Apple another time.** Without account linking, these are two separate users. Out of scope for v0.7; surface as a known limitation in the support docs.
 
 ---
@@ -270,12 +270,12 @@ Apple has strict HIG rules — black background, white text, the Apple logo, exa
 1. Apple Developer console: create Services ID + Key + .p8 (20 min)
 2. Supabase dashboard: enable Apple provider, paste the keys (5 min)
 3. `npx expo install expo-apple-authentication` + edit `app.json` + prebuild (10 min)
-4. Write `src/services/apple-auth.ts` (the snippet above) — 15 min
-5. Rewrite WelcomeSheet from 2-step to 3-step (auth-wall / email / identity) — 1 hr
-6. Add `signInWithAppleAndProvision` to MailClubContext — 20 min
-7. Update tests: `WelcomeSheet.test.tsx` for the new step machine, mock `expo-apple-authentication` — 30 min
-8. Run on sim (Apple sign-in works on iOS 17+ simulators), then on a real device — 20 min
-9. Verify a fresh sign-in lands you on identity step, returning sign-in lands on home — 10 min
+4. Write `src/services/apple-auth.ts` (the snippet above). 15 min
+5. Rewrite WelcomeSheet from 2-step to 3-step (auth-wall / email / identity). 1 hr
+6. Add `signInWithAppleAndProvision` to MailClubContext. 20 min
+7. Update tests: `WelcomeSheet.test.tsx` for the new step machine, mock `expo-apple-authentication`. 30 min
+8. Run on sim (Apple sign-in works on iOS 17+ simulators), then on a real device. 20 min
+9. Verify a fresh sign-in lands you on identity step, returning sign-in lands on home. 10 min
 
 Total: a focused half-day.
 

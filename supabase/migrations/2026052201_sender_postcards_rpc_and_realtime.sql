@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 2026-05-22 v0.7.0.59 — reliable sender postcard refresh after claim redeem
+-- 2026-05-22 v0.7.0.59. reliable sender postcard refresh after claim redeem
 -- ===========================================================================
 --
 -- Bug:

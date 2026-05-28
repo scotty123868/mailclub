@@ -1,5 +1,5 @@
 -- =========================================================================
--- 2026-05-19 — server-side message length cap (Codex audit P2)
+-- 2026-05-19. server-side message length cap (Codex audit P2)
 -- =========================================================================
 --
 -- Background: the client caps postcard messages at 300 codepoints in
@@ -7,11 +7,11 @@
 -- send_postcard_via_claim, send_into_void_with_matching) accept
 -- unbounded p_message. A malicious or hacked client could submit a
 -- 2000-char message that pushes the compactHtml() output past Lob's
--- 10KB inline cap — at which point Lob rejects the send AND the
+-- 10KB inline cap. at which point Lob rejects the send AND the
 -- credit has already been deducted (atomic update fired first).
 --
 -- Codex measurement: 1000 chars of escapable HTML text (&, <, >)
--- expanded to 12,296 compacted bytes — already over the cap. Even
+-- expanded to 12,296 compacted bytes. already over the cap. Even
 -- 2000 plain chars hit 9,496 bytes (close to cap, fragile).
 --
 -- Defense: a CHECK constraint at the column level. Rejects any

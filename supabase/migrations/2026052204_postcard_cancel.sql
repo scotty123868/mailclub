@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 2026-05-22 v0.7.0.59 — postcard cancellation
+-- 2026-05-22 v0.7.0.59. postcard cancellation
 -- ===========================================================================
 --
 -- Lets a sender pull a postcard out of the print queue within Lob's
@@ -13,7 +13,7 @@
 --   2. cancelled_at column to record when (used to grey out + show the
 --      "Cancelled • Refunded" chip in the sheet).
 --   3. refund_postcard_on_cancel() helper: same idempotency pattern as
---      expire_unclaimed_postcards — refunded_at-on-claim or a dedicated
+--      expire_unclaimed_postcards. refunded_at-on-claim or a dedicated
 --      cancelled_at-on-postcards marker so a retry can't double-refund.
 -- ===========================================================================
 
@@ -64,7 +64,7 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'NOT_OWNER');
   end if;
   if v_postcard.cancelled_at is not null then
-    -- Already cancelled — idempotent no-op
+    -- Already cancelled. idempotent no-op
     return jsonb_build_object('ok', true, 'reason', 'ALREADY_CANCELLED');
   end if;
   if v_postcard.status not in ('queued', 'sent', 'awaiting_address') then

@@ -1,9 +1,9 @@
--- v0.7.0.20 — create the postcard-renders Storage bucket.
+-- v0.7.0.20. create the postcard-renders Storage bucket.
 --
 -- THIS IS THE BUG that's been silently failing every welcome-flow Mail-it
 -- tap since build 22. src/services/lob.ts:73 uploads the rendered front
 -- + back PNG to bucket `postcard-renders`. The bucket was never created
--- in any migration — it was assumed to be set up by hand in the Supabase
+-- in any migration. it was assumed to be set up by hand in the Supabase
 -- dashboard and got missed.
 --
 -- Symptom on TestFlight: user taps Mail it → submitToLob() → uploadSide()
@@ -13,7 +13,7 @@
 -- "Couldn't print your card" alert (build 24+).
 --
 -- All the work we did chasing Lob strictness, refund mechanisms, view-shot
--- URI schemes — those were real bugs but downstream of this one. The
+-- URI schemes. those were real bugs but downstream of this one. The
 -- upload never reached Lob; Lob never saw an address to reject.
 --
 -- Configure:

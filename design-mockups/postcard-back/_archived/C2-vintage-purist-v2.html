@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>Option C v2 — Vintage purist (corrected dimensions)</title>
+<title>Option C v2. Vintage purist (corrected dimensions)</title>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@500;600;700&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   /* Render at 2× the prior mockup (1200×816 = 6.25"×4.25" at 192px/in)
      so the type + stamp art are visible at real-world scale on screen.
-     The dashed red rectangles show Lob's protected zones — those are
+     The dashed red rectangles show Lob's protected zones. those are
      ACCURATE to Lob's published constraints:
        - Address zone: 3.2835" × 2.375", positioned 0.275" from right
          edge and 0.25" from bottom edge.
@@ -36,7 +36,7 @@
   /* All actual content sits on z-index 2+ so the noise is below it. */
   .stage > * { position: absolute; z-index: 2; }
 
-  /* Lob protected zones — accurate to inches × 192px/in scale */
+  /* Lob protected zones. accurate to inches × 192px/in scale */
   .lob-zone-addr { position: absolute;
                    /* 0.275in × 192 = 53px from right */
                    right: 53px;
@@ -125,12 +125,12 @@
   .stamp-year { font-family: 'JetBrains Mono', monospace; font-size: 12px;
                 color: rgba(184, 72, 58, 0.65); letter-spacing: 0.3em; }
 
-  /* Center divider — between message and address zone. Sits at the
+  /* Center divider. between message and address zone. Sits at the
      boundary between left safe column and right Lob zone. */
   .divider { position: absolute; left: 517px; top: 56px; bottom: 144px;
              width: 1px; background: rgba(194, 165, 109, 0.45); }
 
-  /* MESSAGE — left safe column ONLY. Strictly bounded:
+  /* MESSAGE. left safe column ONLY. Strictly bounded:
        left: 48px (0.25in margin from edge)
        right edge: 490px (clears x=517px Lob zone start with 27px buffer)
        top: 200px (clears the 132+24=156px tall top-left QR area + buffer)
@@ -151,7 +151,7 @@
     overflow: hidden; /* never overflows visible bounds */
   }
 
-  /* Postmark — bottom of left safe column, just above IMb zone. Real
+  /* Postmark. bottom of left safe column, just above IMb zone. Real
      postmarks are circular with wavy concentric rings; ours is a quiet
      thin oval outline around the city + date so it reads as a true
      postmark instead of footer metadata. The wavy lines extending right
@@ -192,9 +192,9 @@
 </head>
 <body>
 
-<h1>Option C v2 — Vintage purist, corrected</h1>
+<h1>Option C v2. Vintage purist, corrected</h1>
 <p class="pitch">
-  Per founder feedback: QR moves to top-left (replaces the wax-seal "M" — the
+  Per founder feedback: QR moves to top-left (replaces the wax-seal "M". the
   right-side stamp already says MAILROOM, no need for a second logo). Message
   is now strictly bounded to the left safe column (left: 48px, width: 442px,
   bottom: 660px) so it can never overflow into Lob's address zone.
@@ -211,7 +211,7 @@
 
   <!-- Top-left: QR + tagline (replaces the wax-seal M).
        v0.7.0.28 founder copy: drop the "open with iPhone camera"
-       instruction (condescending — QR scanning is universal). The
+       instruction (condescending. QR scanning is universal). The
        caption now tells the recipient WHAT the QR does, not HOW to
        use it: a single line action statement using the sender's
        first name. The URL stays as a wayfinder for anyone without
@@ -238,8 +238,8 @@
 
   <div class="divider"></div>
 
-  <!-- Message — strictly bounded to left safe column -->
-  <div class="msg">Hi Tati. I love you and this photo of us — it was a really special early day in spring, one of the first nice days to just be outside in the grass. I had just come back from the sphere with a new lawn towel that we put to good use. — Scotty</div>
+  <!-- Message. strictly bounded to left safe column -->
+  <div class="msg">Hi Tati. I love you and this photo of us. it was a really special early day in spring, one of the first nice days to just be outside in the grass. I had just come back from the sphere with a new lawn towel that we put to good use.. Scotty</div>
 
   <!-- Postmark: oval ring + faux cancellation wavy lines -->
   <div class="postmark">

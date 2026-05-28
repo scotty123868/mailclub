@@ -1,11 +1,11 @@
--- v1.1 SMS Phase 2 — OTP verification + submit path schema.
+-- v1.1 SMS Phase 2. OTP verification + submit path schema.
 --
 -- Adds:
---   1. phone_otp_codes table — stores generated 6-digit codes per phone.
---   2. sms_postcard_drafts.verified_phone column — set when OTP for a
+--   1. phone_otp_codes table. stores generated 6-digit codes per phone.
+--   2. sms_postcard_drafts.verified_phone column. set when OTP for a
 --      phone+draft pair has been successfully verified; gates submit.
 --   3. RPCs to mint, verify, and consume OTP codes (service-role only).
---   4. send_postcard_sms RPC — service-role version of send_postcard that
+--   4. send_postcard_sms RPC. service-role version of send_postcard that
 --      takes an explicit p_user_id (the existing send_postcard requires
 --      auth.uid() which we don't have from a phone-OTP'd web session).
 
@@ -30,7 +30,7 @@ create table if not exists public.phone_otp_codes (
   -- 0 means unused. Incremented on each failed verify attempt.
   attempts integer not null default 0,
   -- Set when this code was successfully verified. After that the code
-  -- is dead — re-using requires generating a new one.
+  -- is dead. re-using requires generating a new one.
   consumed_at timestamptz
 );
 
@@ -53,10 +53,10 @@ comment on column public.sms_postcard_drafts.verified_phone is
   'Set by sms-otp-verify when the user successfully proves they own '
   'the phone tied to this draft. sms-submit requires this to be '
   'non-null AND equal to from_phone (we OTP-verify the same number '
-  'they texted in from — no swapping).';
+  'they texted in from. no swapping).';
 
 ------------------------------------------------------------
--- 3. mint_phone_otp RPC — generates + stores a code, returns it
+-- 3. mint_phone_otp RPC. generates + stores a code, returns it
 --    so the Edge Function can SMS it. Service-role only.
 ------------------------------------------------------------
 
@@ -99,7 +99,7 @@ $$;
 grant execute on function public.mint_phone_otp(text, text) to service_role;
 
 ------------------------------------------------------------
--- 4. verify_phone_otp — checks a code, marks consumed, optionally
+-- 4. verify_phone_otp. checks a code, marks consumed, optionally
 --    flips the draft's verified_phone. Returns ok/reason.
 ------------------------------------------------------------
 
@@ -170,7 +170,7 @@ $$;
 grant execute on function public.verify_phone_otp(text, text, text) to service_role;
 
 ------------------------------------------------------------
--- 5. send_postcard_sms RPC — service-role version of send_postcard
+-- 5. send_postcard_sms RPC. service-role version of send_postcard
 --    that takes p_user_id explicitly. Replicates send_postcard's
 --    logic: deduct credit, INSERT postcard row, return id.
 --

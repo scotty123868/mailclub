@@ -1,5 +1,5 @@
 -- =========================================================================
--- 2026-05-18 — Reciprocation photo URL hardening (P2 audit closure)
+-- 2026-05-18. Reciprocation photo URL hardening (P2 audit closure)
 -- =========================================================================
 --
 -- Background: `lookup_reciprocation(token)` was returning `photo_path`
@@ -82,7 +82,7 @@ grant execute on function public.lookup_reciprocation(text)
   to service_role, authenticated, anon;
 
 -- -------------------------------------------------------------------------
--- _internal_get_reciprocation_photo_path — restricted to service_role.
+-- _internal_get_reciprocation_photo_path. restricted to service_role.
 -- Called ONLY by the reciprocation-photo Edge Function, which has the
 -- service-role JWT. Returns the photo storage key for a valid token.
 -- -------------------------------------------------------------------------

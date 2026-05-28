@@ -1,4 +1,4 @@
--- v1.1 SMS Phase 2 hotfix — send_postcard_sms used pre-migration-1209
+-- v1.1 SMS Phase 2 hotfix. send_postcard_sms used pre-migration-1209
 -- column names. Postcards table renamed owner_id→sender_id and
 -- photo_uri→photo_path; credit_transactions uses owner_id. Without this
 -- fix the RPC throws "column does not exist" on INSERT and sms-submit

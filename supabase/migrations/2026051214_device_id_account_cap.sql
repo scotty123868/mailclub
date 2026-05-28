@@ -1,18 +1,18 @@
--- v0.7.0.11 — per-device account cap to limit free-credit abuse
+-- v0.7.0.11. per-device account cap to limit free-credit abuse
 --
 -- Threat model: the welcome flow gives every new account a free first
 -- card. A bad actor with one phone could currently spin up dozens of
 -- Apple IDs / email addresses and burn through unlimited free sends.
 --
 -- Mitigation: track `iOSVendorId` (from `expo-application.getIosIdForVendorAsync`)
--- on every profile. Cap accounts per device id at 2 — accommodates
+-- on every profile. Cap accounts per device id at 2. accommodates
 -- shared devices (couples on a family iPad, parent + kid) without
 -- letting one person grind out free credits.
 --
 -- The vendor id persists across reinstalls IF ANY other app from the
 -- same vendor (us) remains installed. It resets if the user deletes
 -- every Mailroom-vendor app from the device. That's an acceptable
--- escape valve — deleting an app to get more free credits is a real
+-- escape valve. deleting an app to get more free credits is a real
 -- cost, much higher than typing in another email.
 
 -- 1. Column + index
@@ -84,7 +84,7 @@ begin
         city = excluded.city,
         state = excluded.state,
         avatar_initials = coalesce(excluded.avatar_initials, public.profiles.avatar_initials),
-        -- Don't reset device_id once set — preserves the first device
+        -- Don't reset device_id once set. preserves the first device
         -- recorded, so the cap holds across signups that retry.
         device_id = coalesce(public.profiles.device_id, excluded.device_id)
   returning * into v_result;

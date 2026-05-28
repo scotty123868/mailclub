@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 2026-05-21 v0.7.0.58 — create_reciprocation_token: allow service_role calls
+-- 2026-05-21 v0.7.0.58. create_reciprocation_token: allow service_role calls
 -- ===========================================================================
 --
 -- BUG WE'RE FIXING:

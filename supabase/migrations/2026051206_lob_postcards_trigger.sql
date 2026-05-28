@@ -6,7 +6,7 @@
 -- to Lob, then writes lob_id/lob_status back.
 --
 -- Prerequisites (set these once via SQL editor before running this
--- migration — both are simple admin-only settings on the project):
+-- migration. both are simple admin-only settings on the project):
 --
 --   ALTER DATABASE postgres SET app.settings.functions_url
 --     = 'https://nlwnmgwylmmnaemdnzlq.functions.supabase.co';
@@ -21,7 +21,7 @@
 --   • lob_id is NULL (haven't submitted yet)
 -- This keeps the trigger idempotent and avoids re-submitting on retries.
 
--- Make sure the `pg_net` extension is enabled — it's the official way to do
+-- Make sure the `pg_net` extension is enabled. it's the official way to do
 -- async HTTP from Postgres on Supabase.
 create extension if not exists pg_net with schema extensions;
 
@@ -74,7 +74,7 @@ begin
   end if;
 
   -- Fire-and-forget HTTP POST. pg_net schedules the request and returns
-  -- immediately — no blocking the postcard insert.
+  -- immediately. no blocking the postcard insert.
   perform net.http_post(
     url := v_functions_url || '/lob-send-postcard',
     headers := jsonb_build_object(
@@ -86,7 +86,7 @@ begin
       -- The Edge Function expects these URLs but the client is also calling
       -- submitToLob() with locally-rendered images. Until we move rendering
       -- server-side, the trigger path is for "user has set their friend's
-      -- address but already submitted from the client" — i.e. retry only.
+      -- address but already submitted from the client". i.e. retry only.
       -- For now we pass empty strings; the function will reject if both URLs
       -- are missing, which is the correct no-op.
       'front_url', '',
@@ -115,7 +115,7 @@ create trigger postcards_fire_lob_submit
   execute function public.fire_lob_submit_on_postcard_insert();
 
 -- ---------------------------------------------------------------------------
--- Manual retry helper — call from the client when the user updates a
+-- Manual retry helper. call from the client when the user updates a
 -- friend's address and wants to resubmit a previously-stuck postcard.
 -- ---------------------------------------------------------------------------
 create or replace function public.retry_lob_submit(p_postcard_id uuid)

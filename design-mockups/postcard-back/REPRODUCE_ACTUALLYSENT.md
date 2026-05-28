@@ -11,16 +11,16 @@ can run the same flow and know exactly what should come out.
 
 ## Three files form the contract
 
-1. `supabase/functions/lob-send-postcard/index.ts` — `buildBackHtml()`,
+1. `supabase/functions/lob-send-postcard/index.ts`. `buildBackHtml()`,
    currently at git ref `48a58a6`. The whole template literal between
    `return compactHtml(\`` and `</body></html>\`)` is the source of truth.
-   Front uses `buildFrontHtml()` in the same file — out of scope here.
-2. `/tmp/build_test_back.py` — extracts the template literal, substitutes
+   Front uses `buildFrontHtml()` in the same file. out of scope here.
+2. `/tmp/build_test_back.py`. extracts the template literal, substitutes
    reference data (Hi Tati message, balloon stamp URL, `A8B4F2` token,
    `CHEVY CHASE MD · MAY 18 · 2026` postmark). Expands the perforation
    `.map().join()` patterns and the rail tick `Array.from()` loop into
    static SVG so the output is valid HTML, not a JS string.
-3. The `compactHtml()` minifier inside `index.ts` — strips comments,
+3. The `compactHtml()` minifier inside `index.ts`. strips comments,
    collapses whitespace, drops trailing `;}`. Same rules ported to the
    Node one-liner below. Result must stay under Lob's 10KB inline cap.
 
@@ -46,7 +46,7 @@ console.log('compacted:', compact.length, 'bytes');
 "
 # → /tmp/test-back-current-min.html (~8.4KB, well under 10KB cap)
 
-# 3) Submit to Lob (test key — get from supabase secrets list / Lob dashboard)
+# 3) Submit to Lob (test key. get from supabase secrets list / Lob dashboard)
 export LOB_TEST_KEY='test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 curl -s -u "${LOB_TEST_KEY}:" https://api.lob.com/v1/postcards \
   -F "description=mailroom-repro" \
@@ -82,7 +82,7 @@ When the design is correct, the Lob back render must show:
 - [ ] Stamp top-right corner: balloon JPG (top portion shows balloon +
       clouds + sun, NOT the hills/fields), partially off-bleed at 3° tilt,
       1.25×1.48in. Below the artwork: `MAILROOM` 12pt, `FIRST CLASS` 4.4pt,
-      `70¢` 21pt, year 5pt — all in #B8483A red.
+      `70¢` 21pt, year 5pt. all in #B8483A red.
 - [ ] Lob auto-overlays in the right half (do NOT include in our HTML):
       return address top, POSTAGE INDICIA box, IMB barcode middle,
       delivery address bottom.
@@ -95,7 +95,7 @@ When the design is correct, the Lob back render must show:
   for the `back` form field. Going over throws a 422 without a clear
   reason. Track size after every CSS edit.
 - **CSS at 96dpi.** Lob interprets CSS as 96dpi but renders print at 300dpi.
-  Use `in` units everywhere — `px` will scale differently between the
+  Use `in` units everywhere. `px` will scale differently between the
   thumbnail (100dpi) and the printed card.
 - **No `repeating-linear-gradient`.** Causes banding artifacts in Lob's
   renderer. Use repeated SVG `<line>` or `<circle>` elements instead
@@ -104,7 +104,7 @@ When the design is correct, the Lob back render must show:
   position elements as actual children.
 - **`size: "4x6"` not `"6x4"`.** Lob's enum order matters even though the
   card is landscape. (`@page { size: 6.25in 4.25in }` inside CSS is
-  separately correct — that's the bleed-inclusive print size.)
+  separately correct. that's the bleed-inclusive print size.)
 - **Test keys do not verify addresses.** `/us_verifications` returns
   "undeliverable" for every address with a test key. Don't infer real
   USPS rejects from a test-key result.
@@ -113,7 +113,7 @@ When the design is correct, the Lob back render must show:
   Our CSS uses `object-fit: cover; object-position: 50% 5%` so the top
   portion (balloon + sky) shows, not the bottom (hills + fields). When
   Codex's v2/v3 attempts looked wrong, it was because the stamp had
-  drifted to showing the landscape — visible diagnostic.
+  drifted to showing the landscape. visible diagnostic.
 
 ## Why this was hard
 
@@ -126,7 +126,7 @@ Three failure modes piled on top of each other across the v15-v21 cycle:
    somewhere else. The compactor saved some, but adding a feature
    without removing one would silently push over the limit.
 3. Codex's outside reviews kept generating designs that LOOKED nicer in
-   isolation but didn't replicate the reference — different stamp art,
+   isolation but didn't replicate the reference. different stamp art,
    missing cancellation rail, wrong domain. Without a working repro
    command, every iteration started from "is this even right?" again.
 
@@ -140,7 +140,7 @@ then making small targeted edits with the round-trip verified each time.
 - Reproduction: Lob postcard `psc_7ad5383e96a4c31d` submitted 2026-05-18,
   back thumbnail downloaded to `/tmp/psc_7ad5_back_large.png`.
 - Local preview rendered via headless Chrome at 100dpi
-  (`/tmp/back-current-100dpi.png`) — matches Lob output for the LEFT half
+  (`/tmp/back-current-100dpi.png`). matches Lob output for the LEFT half
   of the card; the right half is filled by Lob's address overlays at
   print time.
 
@@ -152,10 +152,10 @@ truncation into the address mask, and no orphaned elements.
 
 | Variant       | Lob postcard ID         | What it stresses                                |
 |---------------|-------------------------|-------------------------------------------------|
-| canonical     | psc_dc416ebf3ded708e    | Smoke test — the reference data                 |
+| canonical     | psc_dc416ebf3ded708e    | Smoke test. the reference data                 |
 | long_message  | psc_4439fc562a66a9c6    | Multi-paragraph message overflow (8 lines)      |
 | long_city     | psc_7e7aeb5061d5cfb0    | "SAN BUENAVENTURA CA · DEC 31 · 2026" postmark  |
-| no_qr         | psc_a7ee09a44ed3c336    | Empty reciprocationUrl — entire QR cluster gone |
+| no_qr         | psc_a7ee09a44ed3c336    | Empty reciprocationUrl. entire QR cluster gone |
 
 How to run the pressure test:
 
@@ -182,7 +182,7 @@ What "passing" looks like:
   month/day/year, and `senderCity`/`senderState` parameters become the
   city prefix. Falls back to "Mailroom" when those are missing.
 - **No-QR fallback is graceful.** When `reciprocationUrl` is empty, the
-  entire QR + companion text + URL stripe disappears — no empty box, no
+  entire QR + companion text + URL stripe disappears. no empty box, no
   ghost elements, no shifted layout for the rest of the composition.
 
 If you change `buildBackHtml()` and any of the four variants regresses,

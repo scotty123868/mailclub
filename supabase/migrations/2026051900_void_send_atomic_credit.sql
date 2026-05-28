@@ -1,5 +1,5 @@
 -- =========================================================================
--- 2026-05-19 — send_into_void_with_matching atomic credit deduction
+-- 2026-05-19. send_into_void_with_matching atomic credit deduction
 -- =========================================================================
 --
 -- The pen-pal send path had the same race shape as send_postcard_via_claim:
@@ -46,7 +46,7 @@ begin
     raise exception 'INSUFFICIENT_CREDITS';
   end if;
 
-  -- Snapshot sender's city (no lock — read-only).
+  -- Snapshot sender's city (no lock. read-only).
   select city into v_from_city
     from public.profiles
     where id = v_sender_id;

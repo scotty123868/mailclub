@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 2026-05-23 v1.0.7 — disable legacy Lob insert trigger
+-- 2026-05-23 v1.0.7. disable legacy Lob insert trigger
 -- ===========================================================================
 --
 -- The original 2026051206 trigger fires on direct friend postcard INSERT and

@@ -24,13 +24,13 @@ REPRODUCE doc. Do not start from any file in this `_archived` directory.
 ## Why these were archived
 
 Each one drifted from the actuallysent.pdf reference in a different way:
-- `A-mirror-retro.html` — mirrored hero composition; lost the QR cluster
-- `B-bold-wordmark.html` — wordmark dominated; broke the stamp hierarchy
-- `C-vintage-purist.html` — vintage chrome; reproduction-too-faithful
-- `C2-vintage-purist-v2.html` — second pass at C with adjustments
-- `C2-print.html` — the closest to the saved reference, but reverse-engineered into the code already
-- `D-minimal-modern.html` — modern flat; lost the postal feel entirely
-- `index.html` — comparison index page that paired them up
+- `A-mirror-retro.html`. mirrored hero composition; lost the QR cluster
+- `B-bold-wordmark.html`. wordmark dominated; broke the stamp hierarchy
+- `C-vintage-purist.html`. vintage chrome; reproduction-too-faithful
+- `C2-vintage-purist-v2.html`. second pass at C with adjustments
+- `C2-print.html`. the closest to the saved reference, but reverse-engineered into the code already
+- `D-minimal-modern.html`. modern flat; lost the postal feel entirely
+- `index.html`. comparison index page that paired them up
 
 The chosen direction (actuallysent.pdf as the reference, rebuilt into
 `buildBackHtml()`) is documented in REPRODUCE_ACTUALLYSENT.md.

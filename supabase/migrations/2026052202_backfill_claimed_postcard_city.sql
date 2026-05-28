@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 2026-05-22 v0.7.0.59 — backfill sender-visible city for claimed links
+-- 2026-05-22 v0.7.0.59. backfill sender-visible city for claimed links
 -- ===========================================================================
 --
 -- Migration 2026052201 copies claimed_city onto postcards.to_city for future

@@ -1,30 +1,30 @@
-# Code Review — 2026-05-11
+# Code Review. 2026-05-11
 
 Consolidated from three independent passes:
 - **`/codex`** (gpt-5.4) review of the MVP simplification (FlipCard, send flow, RecipientPicker, MessageEditorSheet, WelcomeSheet, MailClubContext, credits)
-- **Simulator QA agent** — XcodeBuildMCP build + iPhone 17 Pro / iOS 26.4 simulator. Blocked at startup → fell back to static code review.
-- **Manual code-read** — what I caught reading the diffs after the MVP simplification landed.
+- **Simulator QA agent**. XcodeBuildMCP build + iPhone 17 Pro / iOS 26.4 simulator. Blocked at startup → fell back to static code review.
+- **Manual code-read**. what I caught reading the diffs after the MVP simplification landed.
 
 All three agreed on most findings. The full bug list is below, ranked. Test suite was 204/204 passing, typecheck clean, but neither verifies runtime behavior.
 
 ---
 
-## P0 — SHIP-BLOCKING
+## P0. SHIP-BLOCKING
 
 ### 1. App crashes on launch on iOS 26 (Stripe `NativeEventEmitter` null)
 
 **File:** `src/services/payments.ts:25` (import side-effect)
 **Chain:** `app/_layout.tsx:6,17` and `app/(tabs)/my-card.tsx:10` → `src/components/CreditsSheet.tsx:7` → `payments.ts:25` (top-level `import { initPaymentSheet, presentPaymentSheet } from "@stripe/stripe-react-native"`)
-**Symptom:** Splash → red error overlay: `new NativeEventEmitter() requires a non-null argument`. After dismissing 4 stacked errors, user lands on Expo's "Unmatched Route" sitemap — only `index.tsx` + `(tabs)/_layout.tsx` registered because the crash short-circuited route registration for every tab.
+**Symptom:** Splash → red error overlay: `new NativeEventEmitter() requires a non-null argument`. After dismissing 4 stacked errors, user lands on Expo's "Unmatched Route" sitemap. only `index.tsx` + `(tabs)/_layout.tsx` registered because the crash short-circuited route registration for every tab.
 
-**Why:** `@stripe/stripe-react-native@0.39.0` with Expo SDK 54 (RN 0.81 / Hermes) on iOS 26 — Stripe's native module is returning null when the JS side tries to subscribe to native events at module eval.
+**Why:** `@stripe/stripe-react-native@0.39.0` with Expo SDK 54 (RN 0.81 / Hermes) on iOS 26. Stripe's native module is returning null when the JS side tries to subscribe to native events at module eval.
 
-**Impact:** Any user on iOS 26+ who installs the TestFlight build cannot get past splash. Possible iOS 25 / older also affected — needs verification on real devices.
+**Impact:** Any user on iOS 26+ who installs the TestFlight build cannot get past splash. Possible iOS 25 / older also affected. needs verification on real devices.
 
 **Fix options (ranked):**
-1. **Lazy-import** — move the Stripe import inside `purchasePack` so it only loads when the user taps Buy. Cheapest, biggest blast radius reduction.
-2. **Upgrade `@stripe/stripe-react-native` to 0.4x** — the version with RN 0.81 / iOS 26 support. Requires pod rebuild.
-3. **Rebuild iOS pods** from clean state — sometimes the autolinked native module is just stale.
+1. **Lazy-import**. move the Stripe import inside `purchasePack` so it only loads when the user taps Buy. Cheapest, biggest blast radius reduction.
+2. **Upgrade `@stripe/stripe-react-native` to 0.4x**. the version with RN 0.81 / iOS 26 support. Requires pod rebuild.
+3. **Rebuild iOS pods** from clean state. sometimes the autolinked native module is just stale.
 
 **Action:** Before you push the TestFlight Internal Testing invite to your phone, install the build on a device or download to iOS 26 simulator first. If it crashes there too, do option 1 today and re-archive.
 
@@ -32,7 +32,7 @@ All three agreed on most findings. The full bug list is below, ranked. Test suit
 
 ---
 
-## P1 — CRITICAL (silent revenue + data loss)
+## P1. CRITICAL (silent revenue + data loss)
 
 ### 2. Credit refund leak on failed send
 
@@ -46,7 +46,7 @@ All three agreed on most findings. The full bug list is below, ranked. Test suit
 - Expected: credit returns to 1, error alert
 - Actual: credit drops to 0, no card sent, silent loss
 
-**Fix:** Wrap the deduct/send in try/catch with credit restore on throw. Or even cleaner — deduct AFTER server confirms send, not optimistically.
+**Fix:** Wrap the deduct/send in try/catch with credit restore on throw. Or even cleaner. deduct AFTER server confirms send, not optimistically.
 
 ### 3. Send button double-tap race → double-deduct + duplicate cards
 
@@ -70,14 +70,14 @@ async function onSend() {
 
 ---
 
-## P2 — HIGH (visible UX bugs)
+## P2. HIGH (visible UX bugs)
 
 ### 4. FlipCard state lies during the 600ms animation
 
 **File:** `src/components/FlipCard.tsx:74`
 **Codex + QA agreed.** `doFlip()` calls `setFace("back")` synchronously while `withTiming` is still running. During the 600ms transition:
 - `pointerEvents` (`:119-122`) reports the hidden face → tap target can hit the wrong layer mid-flip
-- `getFace()` (`:84`) lies — returns "back" when visually we're still 50% rotated
+- `getFace()` (`:84`) lies. returns "back" when visually we're still 50% rotated
 - Accessibility label (`:114`) flips early
 
 **Fix:** Drive `face` from the animation finish callback (or a `useDerivedValue` snapshot at the end of timing). The shared value `progress.value === 1` is the truth.
@@ -87,14 +87,14 @@ async function onSend() {
 **File:** `src/components/FlipCard.tsx:75`
 **Codex finding.** Prop contract at `:42-43` says: "Optional callback fired AFTER each flip completes." But the call at `:75` fires synchronously, 600ms early. Any caller sequencing UI off this is going to see the next state change too soon.
 
-**Fix:** Move the `onFlipComplete?.(...)` call into the `withTiming` completion callback (line 64-72 — `if (finished) { runOnJS(onFlipComplete)(...) }`).
+**Fix:** Move the `onFlipComplete?.(...)` call into the `withTiming` completion callback (line 64-72. `if (finished) { runOnJS(onFlipComplete)(...) }`).
 
 ### 6. MessageEditorSheet emoji counter + slice broken
 
 **File:** `src/components/MessageEditorSheet.tsx:77` (slice), `:98` (counter)
 **Codex + my code-read.** `t.slice(0, MAX_LENGTH)` slices on UTF-16 code units. A multi-byte emoji at the 250 boundary gets cut into a broken char. The visible counter at `:98` (`{draft.length}/{MAX_LENGTH}`) lies because emoji count as 2+ code units.
 
-**Fix:** Use grapheme-aware counting — `Array.from(str)` gives codepoints (closer but still not grapheme-correct for ZWJ sequences). Real fix is `[...new Intl.Segmenter().segment(str)]`.
+**Fix:** Use grapheme-aware counting. `Array.from(str)` gives codepoints (closer but still not grapheme-correct for ZWJ sequences). Real fix is `[...new Intl.Segmenter().segment(str)]`.
 
 ### 7. Birthday validation accepts impossible dates
 
@@ -106,7 +106,7 @@ async function onSend() {
 ### 8. WelcomeSheet state input `maxLength={3}` (should be 2)
 
 **File:** `src/components/WelcomeSheet.tsx:252`
-**QA agent caught this one — I missed it.** The state TextInput accepts up to 3 chars. US state codes are 2. So `CAL` enters and gets persisted. No validator catches it because `canContinue` doesn't check state at all (`:49`).
+**QA agent caught this one. I missed it.** The state TextInput accepts up to 3 chars. US state codes are 2. So `CAL` enters and gets persisted. No validator catches it because `canContinue` doesn't check state at all (`:49`).
 
 **Fix:** `maxLength={2}` + add `state.length === 2` to `canContinue` (or relax state to optional).
 
@@ -119,7 +119,7 @@ async function onSend() {
 
 ---
 
-## P3 — MEDIUM
+## P3. MEDIUM
 
 ### 10. MessageEditorSheet has no discard confirmation
 
@@ -131,19 +131,19 @@ async function onSend() {
 ### 11. MessageEditorSheet allows empty save
 
 **File:** `src/components/MessageEditorSheet.tsx:64`
-**QA agent.** `onPress={() => onSave(draft)}` with no length check. The send-screen `validate()` catches it on Send, but the "Note" button label flips to "Edit note" anyway (`send.tsx:381` — `message.trim()` is the check, so an empty save with whitespace passes neither side). Worse: if user previously had a saved note, then opens editor, clears the field, taps Done → prior note is lost without warning.
+**QA agent.** `onPress={() => onSave(draft)}` with no length check. The send-screen `validate()` catches it on Send, but the "Note" button label flips to "Edit note" anyway (`send.tsx:381`. `message.trim()` is the check, so an empty save with whitespace passes neither side). Worse: if user previously had a saved note, then opens editor, clears the field, taps Done → prior note is lost without warning.
 
 **Fix:** Disable Done when `draft.trim().length === 0` OR confirm "Clear your message?" if user is about to overwrite a non-empty `initial` with empty.
 
 ---
 
-## P4 — LOW / CLEANUP
+## P4. LOW / CLEANUP
 
 ### 12. Dead code from old 4-category system
 
 **Files:**
-- `src/state/MailClubContext.tsx:14-18` — `SendInput` union still has `handwritten | photo | place | custom`
-- `src/data/credits.ts:3-44` — `CARD_COSTS` map still maps all four (even though they all = 1)
+- `src/state/MailClubContext.tsx:14-18`. `SendInput` union still has `handwritten | photo | place | custom`
+- `src/data/credits.ts:3-44`. `CARD_COSTS` map still maps all four (even though they all = 1)
 
 **Why it matters:** Confusing for future devs. The runtime knows about categories that the UI never shows. Strip down to `{ photo: 1 }` and `kind: "photo"`.
 
@@ -178,12 +178,12 @@ async function onSend() {
 
 These were specifically checked and cleared by codex or the QA agent:
 
-- **Address mode auto-friend-create** (`send.tsx:223-245`) — codex says no code-local bug. My concern about phantom friends if `sendPostcard` fails after `addFriendByAddress` succeeded is a real data-hygiene issue but is debatable as a "bug." Defer.
-- **"Ask" mode + send with no photo** — `validate()` correctly bails with `"Pick a photo for the front first."`
-- **Library picker permission flow** (`send.tsx:128-135`) — codex says OK.
-- **Friend cycler with empty friends list** (`RecipientPicker.tsx:104-145`) — QA agent confirmed empty-state card renders correctly; tap-cycle is gated.
-- **Test suite** — 28 suites, 204 tests, all passing in ~4.6s.
-- **TypeScript** — `npm run typecheck` clean.
+- **Address mode auto-friend-create** (`send.tsx:223-245`). codex says no code-local bug. My concern about phantom friends if `sendPostcard` fails after `addFriendByAddress` succeeded is a real data-hygiene issue but is debatable as a "bug." Defer.
+- **"Ask" mode + send with no photo**. `validate()` correctly bails with `"Pick a photo for the front first."`
+- **Library picker permission flow** (`send.tsx:128-135`). codex says OK.
+- **Friend cycler with empty friends list** (`RecipientPicker.tsx:104-145`). QA agent confirmed empty-state card renders correctly; tap-cycle is gated.
+- **Test suite**. 28 suites, 204 tests, all passing in ~4.6s.
+- **TypeScript**. `npm run typecheck` clean.
 
 ---
 

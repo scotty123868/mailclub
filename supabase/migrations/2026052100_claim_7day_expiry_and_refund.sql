@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 2026-05-21 v0.7.0.58 — claim links expire in 7 days + auto-refund credit
+-- 2026-05-21 v0.7.0.58. claim links expire in 7 days + auto-refund credit
 -- ===========================================================================
 --
 -- WHAT CHANGES:
@@ -10,9 +10,9 @@
 --      Idempotent via postcard_claims.refunded_at marker, so re-running
 --      the function never double-refunds.
 --   3. Postcards row gets status='expired' so the sender's app can show
---      "your card came back unsent — credit refunded" instead of leaving
+--      "your card came back unsent. credit refunded" instead of leaving
 --      it stuck in awaiting_address forever.
---   4. Existing unclaimed claims keep their original expires_at — we
+--   4. Existing unclaimed claims keep their original expires_at. we
 --      don't retroactively shorten anyone's window. The new 7-day default
 --      only applies to claims created from this migration forward.
 --
@@ -39,7 +39,7 @@ do $$ begin
     alter type public.postcard_status add value 'expired';
   end if;
 exception when undefined_object then
-  -- postcard_status isn't an enum (text column) — nothing to do
+  -- postcard_status isn't an enum (text column). nothing to do
   null;
 end $$;
 
@@ -112,7 +112,7 @@ comment on function public.expire_unclaimed_postcards is
 revoke execute on function public.expire_unclaimed_postcards() from public, anon;
 grant execute on function public.expire_unclaimed_postcards() to service_role, authenticated;
 
--- 5. Schedule the daily sweep via pg_cron. Picks 03:17 UTC — quiet time,
+-- 5. Schedule the daily sweep via pg_cron. Picks 03:17 UTC. quiet time,
 --    avoids on-the-hour cron pile-ups. Bracket in a DO block so the
 --    migration succeeds even if pg_cron isn't installed in this project
 --    (Supabase free tier doesn't enable it). In that case the sweep

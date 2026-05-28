@@ -10,12 +10,12 @@
 --
 -- Two schema changes here:
 --
---   1. sms_postcard_drafts table — short-lived rows that live in the
+--   1. sms_postcard_drafts table. short-lived rows that live in the
 --      window between "user texted us a photo" and "user finished
 --      composing on the web." Tokens expire after 24 hours so abandoned
 --      drafts don't accumulate.
 --
---   2. postcards.sms_origin boolean — flags postcards that came in via
+--   2. postcards.sms_origin boolean. flags postcards that came in via
 --      the SMS surface vs the iOS app. Used by:
 --        a) the Lob template to render a small "Sent via Mailroom" mark
 --           on the back (SMS users haven't seen our brand otherwise)
@@ -41,7 +41,7 @@ create table if not exists public.sms_postcard_drafts (
   -- compose page (and Lob handoff later) work without Twilio creds.
   -- Example: 'sms-photos/<token>/photo.jpg'
   photo_path text not null,
-  -- Original Twilio media URL — kept for debugging only. Not exposed
+  -- Original Twilio media URL. kept for debugging only. Not exposed
   -- to clients (RLS blocks it).
   twilio_media_url text,
   -- When the draft was created. The 24h expiry is computed as
@@ -73,7 +73,7 @@ create index if not exists sms_postcard_drafts_expires_idx
 alter table public.sms_postcard_drafts enable row level security;
 
 revoke all on public.sms_postcard_drafts from anon, authenticated;
--- (service_role bypasses RLS by default — Edge Functions using SUPABASE_SERVICE_ROLE_KEY
+-- (service_role bypasses RLS by default. Edge Functions using SUPABASE_SERVICE_ROLE_KEY
 --  can read/write freely.)
 
 ------------------------------------------------------------
@@ -90,7 +90,7 @@ comment on column public.postcards.sms_origin is
   'routes status updates to SMS instead of in-app Realtime.';
 
 ------------------------------------------------------------
--- profiles.phone — store the verified phone for SMS users so we
+-- profiles.phone. store the verified phone for SMS users so we
 -- can lookup repeat senders by phone (Supabase Auth tracks phone
 -- separately; we mirror it here for join-friendly access)
 ------------------------------------------------------------
@@ -105,7 +105,7 @@ comment on column public.profiles.phone is
   'Apple Sign In without a phone.';
 
 ------------------------------------------------------------
--- create_sms_draft RPC — service-role only. Called by sms-inbound
+-- create_sms_draft RPC. service-role only. Called by sms-inbound
 -- Edge Function when a new MMS comes in.
 ------------------------------------------------------------
 
@@ -123,7 +123,7 @@ as $$
 declare
   v_id uuid;
 begin
-  -- Reject anonymous callers — service_role only.
+  -- Reject anonymous callers. service_role only.
   if auth.role() <> 'service_role' then
     raise exception 'service_role required';
   end if;
@@ -141,7 +141,7 @@ $$;
 grant execute on function public.create_sms_draft(text, text, text, text, text) to service_role;
 
 ------------------------------------------------------------
--- resolve_sms_draft RPC — service-role only. Reads a draft by
+-- resolve_sms_draft RPC. service-role only. Reads a draft by
 -- token and returns the public-safe shape for the compose page.
 -- Refuses if expired or already consumed.
 ------------------------------------------------------------
@@ -189,7 +189,7 @@ $$;
 grant execute on function public.resolve_sms_draft(text) to service_role;
 
 ------------------------------------------------------------
--- consume_sms_draft RPC — marks a draft consumed and links it to
+-- consume_sms_draft RPC. marks a draft consumed and links it to
 -- the postcard that was created. Called from the submit Edge
 -- Function after send_postcard runs successfully.
 ------------------------------------------------------------

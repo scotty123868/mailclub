@@ -1,4 +1,4 @@
-# Send flow — what's responsive, what's static
+# Send flow. what's responsive, what's static
 
 You asked: "Does every piece of the send mail flow work? Responsive to what text is input?"
 
@@ -50,7 +50,7 @@ Here's the honest map of every interactive element and whether it actually drive
 | Element | Responsive | Notes |
 |---|---|---|
 | Description input | ✅ | Local input |
-| Imagine button | ✅ | Disabled when empty. On tap → seeds `state.message` + `state.category` from a fixed prompt-to-occasion map (so "birthday for mom" sets birthday occasion + warm message). No real AI yet — it's keyword matching. |
+| Imagine button | ✅ | Disabled when empty. On tap → seeds `state.message` + `state.category` from a fixed prompt-to-occasion map (so "birthday for mom" sets birthday occasion + warm message). No real AI yet. it's keyword matching. |
 | 4 quick suggestions | ✅ | Tap to pre-fill the input |
 
 ### 4. Occasion grid (12 tiles)
@@ -106,7 +106,7 @@ Wired into `<PostcardFrontPreview>` + `<PostcardBackPreview>` (see `src/componen
 
 ## What's intentionally NOT responsive (and why)
 
-These are decorative or static-by-design — not bugs, just product decisions:
+These are decorative or static-by-design. not bugs, just product decisions:
 
 | Element | Static | Why |
 |---|---|---|
@@ -124,22 +124,22 @@ These are decorative or static-by-design — not bugs, just product decisions:
 
 Roughly in priority order:
 
-1. **🚨 Recipient address coverage** — the preview shows the recipient's full mailing address if it exists, but the **app doesn't make the user input it before sending** (the AddFriend mailing-address section is collapsed by default + optional). For real shipping via Lob, we should either:
+1. **🚨 Recipient address coverage**. the preview shows the recipient's full mailing address if it exists, but the **app doesn't make the user input it before sending** (the AddFriend mailing-address section is collapsed by default + optional). For real shipping via Lob, we should either:
    - Block Send when the friend has no address
    - Show "We'll prompt your friend to claim their card and add their address" copy
    - Default to "queued until address is on file"
 
    Right now the failure mode is silent: you tap Send, postcard row saves, Lob trigger fires, trigger sees missing address, no-op. The user thinks the card is queued. **This is the biggest UX gap.** Easy to fix once you decide which path.
 
-2. **Per-category placeholder copy** — composer says "Tonight's photo" for Photo, "Tonight's photo" for Place. Should be "Photo" / "A place" respectively.
+2. **Per-category placeholder copy**. composer says "Tonight's photo" for Photo, "Tonight's photo" for Place. Should be "Photo" / "A place" respectively.
 
-3. **Stamp denomination** — match the card's credit cost (1¢ / 2¢ / 5¢). 10 min.
+3. **Stamp denomination**. match the card's credit cost (1¢ / 2¢ / 5¢). 10 min.
 
-4. **Send button disabled state when invalid** — currently you can tap Send with an empty message and it goes through. Should disable for blank messages.
+4. **Send button disabled state when invalid**. currently you can tap Send with an empty message and it goes through. Should disable for blank messages.
 
-5. **Photo-only / Place-only preview cleanup** — for Photo category, the front preview shows the photo. For Place without a photo, the front shows the placeholder + place caption. For Note, the front is just a placeholder with no caption. Could make the Note front a more intentional "this is a paper note, no photo needed" design.
+5. **Photo-only / Place-only preview cleanup**. for Photo category, the front preview shows the photo. For Place without a photo, the front shows the placeholder + place caption. For Note, the front is just a placeholder with no caption. Could make the Note front a more intentional "this is a paper note, no photo needed" design.
 
-6. **Custom category preview** — Custom is supposed to be designer-crafted art. The preview shows the same generic placeholder + handwritten message as Note. Could show a "🎨 Designer queue · your description renders here once we craft it" state.
+6. **Custom category preview**. Custom is supposed to be designer-crafted art. The preview shows the same generic placeholder + handwritten message as Note. Could show a "🎨 Designer queue · your description renders here once we craft it" state.
 
 ---
 

@@ -1,19 +1,19 @@
 -- =========================================================================
--- 2026-05-19 — redeem_postcard_claim atomic update (Codex audit P1)
+-- 2026-05-19. redeem_postcard_claim atomic update (Codex audit P1)
 -- =========================================================================
 --
 -- Background: redeem_postcard_claim read claimed_at without FOR UPDATE,
 -- then updated by id alone (no claimed_at IS NULL predicate). Two
 -- concurrent valid POSTs for the same token could both pass the
 -- claimed_at IS NULL check, both succeed the redeem, and both trigger
--- the claim → lob-send-postcard handoff — resulting in two Lob
+-- the claim → lob-send-postcard handoff. resulting in two Lob
 -- submissions for one postcard.
 --
 -- This migration:
 --   1. Performs the redemption as an atomic UPDATE with the
 --      `claimed_at IS NULL AND expires_at > now()` predicate baked
 --      into the WHERE clause. RETURNING id; null returning means no
---      row matched — could be NOT_FOUND, EXPIRED, or already-claimed.
+--      row matched. could be NOT_FOUND, EXPIRED, or already-claimed.
 --   2. After the atomic update, a follow-up SELECT distinguishes the
 --      three failure modes for the response payload.
 --
@@ -103,6 +103,6 @@ grant execute on function public.redeem_postcard_claim(text, text, text, text, t
   to service_role;
 
 comment on function public.redeem_postcard_claim is
-  'v0.7.0.49: redemption now atomic — UPDATE ... WHERE claimed_at IS NULL ensures '
+  'v0.7.0.49: redemption now atomic. UPDATE ... WHERE claimed_at IS NULL ensures '
   'concurrent POSTs for the same token can''t both pass the check. The companion '
   'lob-send-postcard guard rejects re-submission to Lob if lob_id is already set.';

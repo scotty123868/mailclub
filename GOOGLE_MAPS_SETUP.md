@@ -1,8 +1,8 @@
-# Google Maps API key — setup for the Mailroom map
+# Google Maps API key. setup for the Mailroom map
 
 Mailroom's Map tab uses `react-native-maps` rendering real US geography styled as an aged-parchment vintage map. On iOS, Apple Maps doesn't accept custom style JSON, so the actual styled map requires **Google Maps** as the provider. This doc walks you through getting a free Google Maps API key and wiring it into the app.
 
-> **Cost:** Google Maps Mobile SDK gives **$200 of credit per month free**. For the tier we'll be in (TestFlight beta with <100 users), this is effectively free — you'd need ~30,000 map opens per month to start paying.
+> **Cost:** Google Maps Mobile SDK gives **$200 of credit per month free**. For the tier we'll be in (TestFlight beta with <100 users), this is effectively free. you'd need ~30,000 map opens per month to start paying.
 >
 > **If you skip this:** the app falls back to Apple Maps `mutedStandard` + a sepia tint overlay. It works and looks decent, but you can't hide the modern road grid or label labels, so it won't match the Indiana Jones aesthetic. **Get the Google key for the real thing.**
 
@@ -42,7 +42,7 @@ Google Cloud requires a payment method on file even for the free tier. You won't
 1. Sidebar → **APIs & Services → Credentials**
 2. **+ Create Credentials → API key**
 3. A modal pops up with your new key. **Copy it.** Looks like `AIzaSyB...`
-4. Click **Restrict Key** (important — unrestricted keys get billed if anyone scrapes them).
+4. Click **Restrict Key** (important. unrestricted keys get billed if anyone scrapes them).
 5. Configure restrictions:
    - **Application restrictions:** iOS apps → Add `com.mailroom.app` (the Mailroom bundle ID)
    - **API restrictions:** Restrict key → select **Maps SDK for iOS** only
@@ -113,8 +113,8 @@ The first launch with Google Maps takes ~5 seconds extra because the SDK has to 
 Open the Map tab in the app. You should see:
 
 - **Real US coastline + state borders** (Apple Maps with mutedStandard wouldn't show state borders this crisply)
-- **Sepia/parchment colors** — cream land, deep tan ocean
-- **No roads or POI labels** — clean vintage feel
+- **Sepia/parchment colors**. cream land, deep tan ocean
+- **No roads or POI labels**. clean vintage feel
 - **Red dashed routes** connecting your cities
 - **Custom pin markers** with paper-pin styling + serif uppercase city names
 - **Vintage compass rose + MAILROOM cartouche** beneath the map
@@ -136,7 +136,7 @@ If you see modern Apple Maps colors (green parks, blue roads, white background),
 ### Map shows but no roads/borders disappear with the style
 
 - Verify `provider={PROVIDER_GOOGLE}` is being used. On Apple Maps, the custom style is ignored.
-- Open `src/components/MapPanel.tsx` and confirm `HAS_GOOGLE` is true at runtime — add a `console.log(HAS_GOOGLE)` temporarily.
+- Open `src/components/MapPanel.tsx` and confirm `HAS_GOOGLE` is true at runtime. add a `console.log(HAS_GOOGLE)` temporarily.
 
 ### Map appears blank / grey
 
@@ -149,7 +149,7 @@ If you see modern Apple Maps colors (green parks, blue roads, white background),
 - Almost certainly because the key was unrestricted and got scraped. Revoke immediately:
   - Cloud Console → Credentials → click your key → Disable → confirm
   - Create a new key with strict iOS bundle ID restriction this time
-- If you exceeded $1 of usage in a beta, something's off — contact Google billing support, they typically refund small accidental charges.
+- If you exceeded $1 of usage in a beta, something's off. contact Google billing support, they typically refund small accidental charges.
 
 ---
 
@@ -158,7 +158,7 @@ If you see modern Apple Maps colors (green parks, blue roads, white background),
 - Apple SDK calls: **$0.00 per call**
 - Google Maps Mobile SDK: **$7 per 1,000 map opens** above the free tier
 - Free tier: **$200/month** ≈ 28,571 map opens/month free
-- For a 100-user TestFlight beta with each user opening the map 10×/day: ~30,000 opens/month — right at the boundary, still effectively free.
+- For a 100-user TestFlight beta with each user opening the map 10×/day: ~30,000 opens/month. right at the boundary, still effectively free.
 - Public launch at 1,000 daily active users averaging 5 map opens: ~150,000/month = $850/month. **This is when you'd switch to Mapbox** (better pricing at scale).
 
 ---
@@ -178,7 +178,7 @@ Google Maps gives us a clean canvas: hide all modern features, paint everything 
 
 Both are reasonable for v2 if Mailroom outgrows the Google free tier:
 
-- **Mapbox** — better pricing at scale (~$0.50 per 1,000 map loads at 100k+/month), more powerful custom styles (Studio editor)
-- **MapLibre** (open-source fork of Mapbox) — fully free, self-hostable, but more setup
+- **Mapbox**. better pricing at scale (~$0.50 per 1,000 map loads at 100k+/month), more powerful custom styles (Studio editor)
+- **MapLibre** (open-source fork of Mapbox). fully free, self-hostable, but more setup
 
 For v1 beta, Google is the path of least resistance.

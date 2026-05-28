@@ -1,5 +1,5 @@
 -- =========================================================================
--- 2026-05-19 — Void send retro-fulfill race fix (Codex audit P2)
+-- 2026-05-19. Void send retro-fulfill race fix (Codex audit P2)
 -- =========================================================================
 --
 -- Background: 2026051900_void_send_atomic_credit closed the credit-
@@ -21,7 +21,7 @@
 --     );
 --
 -- Two concurrent sends, both matching with v_matched_user_id, both pick
--- THE SAME oldest orphan, both UPDATE its to_profile_id — last write wins
+-- THE SAME oldest orphan, both UPDATE its to_profile_id. last write wins
 -- and one sender silently doesn't get credited with the orphan match.
 --
 -- Fix: add `to_profile_id IS NULL` to the outer UPDATE so only the first
@@ -108,7 +108,7 @@ begin
       for update skip locked;
 
     -- Step B: update only if the orphan is still unassigned. Belt +
-    -- suspenders — SKIP LOCKED already serializes, but the WHERE
+    -- suspenders. SKIP LOCKED already serializes, but the WHERE
     -- predicate prevents an unexpected stale handle from clobbering
     -- another caller's already-set to_profile_id.
     if v_orphan_id is not null then

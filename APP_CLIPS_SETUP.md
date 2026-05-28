@@ -1,8 +1,8 @@
-# App Clips Setup — Mailroom Claim Flow
+# App Clips Setup. Mailroom Claim Flow
 
 **Current status (build 40):**
-- Vercel site: AASA + claim page + content-type rewrite — **DONE, LIVE.**
-- iOS app: claim URLs minted against `mailroomclub.vercel.app/claim` — **DONE in build 40.**
+- Vercel site: AASA + claim page + content-type rewrite. **DONE, LIVE.**
+- iOS app: claim URLs minted against `mailroomclub.vercel.app/claim`. **DONE in build 40.**
 - iOS Associated Domains entitlement: drafted in file, **DISABLED** until step 1 below.
 - App Clip Xcode target: **NOT YET ADDED.** Files staged in `ios/MailroomClip/`.
 - App Clip activation: **BLOCKED** on steps 1, 2, 4, 5 below (manual, user must do).
@@ -18,7 +18,7 @@ Link routing get the **static HTML web fallback**:
 - Verified live: `https://mailroomclub.vercel.app/.well-known/apple-app-site-association` returns 200 + `application/json`
 
 That's a complete claim flow. App Clips and Universal Links are UX
-upgrades, not blockers — the product works without them.
+upgrades, not blockers. the product works without them.
 
 ## To enable Universal Links into the full Mailroom app
 
@@ -26,14 +26,14 @@ upgrades, not blockers — the product works without them.
 installed tap a claim link → app opens directly (instead of bouncing
 through Safari).
 
-### Step 1 — Apple Developer portal: enable Associated Domains cap
+### Step 1. Apple Developer portal: enable Associated Domains cap
 
 1. https://developer.apple.com/account → Identifiers
 2. Tap `com.mailrooms.app` (Mailroom main App ID)
 3. Scroll to Capabilities → check **Associated Domains**
 4. Save (Apple regenerates the App ID configuration)
 
-### Step 2 — Uncomment + rebuild
+### Step 2. Uncomment + rebuild
 
 In `ios/Mailroom/Mailroom.entitlements`, uncomment the
 `com.apple.developer.associated-domains` array (it's already drafted,
@@ -58,10 +58,10 @@ open Mailroom directly instead of Safari.
 ## To add the App Clip (no install required for recipients)
 
 **~30-45 minutes total.** Apple's biggest UX win for share-link
-flows — recipients enter their address in a tiny native UI without
+flows. recipients enter their address in a tiny native UI without
 ever installing Mailroom.
 
-### Step 3 — Apple Developer portal: register Clip bundle ID
+### Step 3. Apple Developer portal: register Clip bundle ID
 
 1. https://developer.apple.com/account → Identifiers → +
 2. App Clip → Continue
@@ -71,7 +71,7 @@ ever installing Mailroom.
 6. Register
 7. Confirm `com.mailrooms.app.Clip` appears in the identifier list
 
-### Step 4 — Xcode: add the App Clip target
+### Step 4. Xcode: add the App Clip target
 
 1. Open `ios/Mailroom.xcworkspace` in Xcode
 2. File → New → Target → App Clip → Next
@@ -96,19 +96,19 @@ Confirm in the MailroomClip target's Signing & Capabilities tab:
 - "Associated Domains" capability present with both
   `applinks:mailroomclub.vercel.app` and `appclips:mailroomclub.vercel.app`
 
-### Step 5 — App Store Connect: App Clip experience
+### Step 5. App Store Connect: App Clip experience
 
 1. https://appstoreconnect.apple.com → Mailroom → App Information
 2. Scroll to "App Clip Experiences" → add new
 3. URL prefix: `https://mailroomclub.vercel.app/claim`
 4. Card metadata:
    - Title: "Receive a postcard"
-   - Subtitle: "Enter your address — we mail it"
+   - Subtitle: "Enter your address. we mail it"
    - Action: "Open" (default)
-   - Card image: 1200x600 PNG (TODO — design needed; placeholder OK for first test)
+   - Card image: 1200x600 PNG (TODO. design needed; placeholder OK for first test)
 5. Save
 
-### Step 6 — Build + test
+### Step 6. Build + test
 
 ```bash
 # Bump build number 40 → 42 (or whatever's next)
@@ -134,7 +134,7 @@ Test on a real device (App Clips don't run in simulator):
 | `ios/MailroomClip/MailroomClip.entitlements` | Associated Domains + parent app id |
 | `vercel-staging/.well-known/apple-app-site-association` | Source-of-truth copy (deployed to Vercel) |
 | `vercel-staging/vercel.json` | Source-of-truth copy (deployed to Vercel) |
-| `vercel-staging/app/claim/page.tsx` | Next.js TSX version (not used — Vercel site is static HTML) |
+| `vercel-staging/app/claim/page.tsx` | Next.js TSX version (not used. Vercel site is static HTML) |
 
 ## What's live on Vercel right now
 
@@ -153,10 +153,10 @@ Pushed to `github.com/scotty123868/mail` → Vercel auto-deployed.
   but a real domain is more professional.
 - **AASA caching**: Apple's swcd refreshes the AASA on a schedule
   (sometimes 24-48h). After deploying changes, force a refresh on
-  test devices by deleting + reinstalling the main Mailroom app —
+  test devices by deleting + reinstalling the main Mailroom app .
   fresh installs always re-fetch the AASA.
 
-## Quick reference — full URL flow
+## Quick reference. full URL flow
 
 | Recipient state | What happens when they tap a claim link |
 |---|---|

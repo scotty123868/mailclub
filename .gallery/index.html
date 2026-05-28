@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mailroom — UI/UX gallery</title>
+<title>Mailroom. UI/UX gallery</title>
 <style>
   :root {
     --paper: #F8F1E3;
@@ -550,7 +550,7 @@
 
     <div style="background: rgba(155,175,155,0.16); border: 1px solid rgba(155,175,155,0.6); border-radius: 10px; padding: 14px 18px; margin: -8px 0 22px;">
       <div style="font-family: 'Inter'; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; color: #4A5A38; margin-bottom: 4px;">✓ FRESH FROM THE SIM · MAY 11, 2026</div>
-      <div style="font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.5; color: var(--ink);">All 5 tab screenshots below were captured today from a live iOS 26.4 / iPhone 17 Pro simulator running the Mailroom build with the rename + react-native-maps + updated prices. The user is in "Skip for now" mode (no signup), so most counters are 0 — design intent is what we're reviewing.</div>
+      <div style="font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.5; color: var(--ink);">All 5 tab screenshots below were captured today from a live iOS 26.4 / iPhone 17 Pro simulator running the Mailroom build with the rename + react-native-maps + updated prices. The user is in "Skip for now" mode (no signup), so most counters are 0. design intent is what we're reviewing.</div>
     </div>
 
     <div class="screens">
@@ -615,7 +615,7 @@
       </article>
 
       <article class="screen-card">
-        <div class="screen-image"><img src="../.screenshots/10-map-real-tiles-apple-fallback.jpg" alt="Map tab — react-native-maps with Apple Maps fallback"/></div>
+        <div class="screen-image"><img src="../.screenshots/10-map-real-tiles-apple-fallback.jpg" alt="Map tab. react-native-maps with Apple Maps fallback"/></div>
         <div class="screen-body">
           <div class="screen-tag" style="color: var(--postal-red);">TAB · MAP · LIVE BUILD</div>
           <h3 class="screen-title">Where mail travels</h3>
@@ -632,14 +632,14 @@
   </section>
 
   <section>
-    <h2 class="section-title">Map — design + how it scales</h2>
+    <h2 class="section-title">Map. design + how it scales</h2>
     <p class="section-sub">Real Apple Maps tiles under a sepia tint, custom paper-pin markers with serif uppercase city names, geodesic dashed routes. One source of truth; see the screenshot in "The five tabs" section above.</p>
     <div class="divider"></div>
 
     <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 8px 0 6px;">Why Apple Maps (not Google, not a static asset)</h3>
     <ul style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.6; padding-left: 22px; margin: 0 0 22px;">
-      <li><strong>Privacy-aligned</strong> with Mailroom's "addresses stay private" stance — no third-party map opens leaking the user's IP to Google per session.</li>
-      <li><strong>No API keys, no billing</strong> — works for any user instantly.</li>
+      <li><strong>Privacy-aligned</strong> with Mailroom's "addresses stay private" stance. no third-party map opens leaking the user's IP to Google per session.</li>
+      <li><strong>No API keys, no billing</strong>. works for any user instantly.</li>
       <li><strong>Real geography beats hand-drawn approximation.</strong> A real US coastline rendered by Apple looks better than my best SVG version of it.</li>
       <li><strong>Tradeoff accepted:</strong> Apple's labels ("NORTH AMERICA", "Toronto", "Maps Legal") bleed through the sepia tint. We mitigate with overlay decorations and a heavier tint. Acceptable for postcard-style decoration.</li>
     </ul>
@@ -667,26 +667,26 @@
         <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 4px;">CONSTELLATION · BREAKS AT ~12 FRIENDS</div>
         <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Stars crowd the orbit ring</div>
         <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">Current design places friends on a single 130pt circle. Six friends look balanced. Twelve start touching. Fifty would be illegible.</p>
-        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> two orbital rings — inner ring for "close friends" (top 6 by send/receive count), outer ring for the next 12. Anyone beyond is a faint anonymous star in the background. The "Warmest Thread / Sleeping Stars" insight cards already surface specific friends; the constellation is decoration, not navigation.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> two orbital rings. inner ring for "close friends" (top 6 by send/receive count), outer ring for the next 12. Anyone beyond is a faint anonymous star in the background. The "Warmest Thread / Sleeping Stars" insight cards already surface specific friends; the constellation is decoration, not navigation.</p>
       </div>
 
       <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
         <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-red); margin-bottom: 4px;">SEND · BREAKS AT ~15 FRIENDS</div>
         <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Recipient cycler stops being fun</div>
         <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">Right now you tap the recipient row to cycle to the next friend. Charming with 6 friends. Annoying with 30.</p>
-        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> switch to a recipient sheet — tap → modal with search + recent contacts. Keep "cycler" affordance for users with ≤8 friends as a delightful detail.</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> switch to a recipient sheet. tap → modal with search + recent contacts. Keep "cycler" affordance for users with ≤8 friends as a delightful detail.</p>
       </div>
 
       <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
         <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-blue); margin-bottom: 4px;">FRIENDS · SCALES FINE</div>
-        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Rolodex is a list — handles any count</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Rolodex is a list. handles any count</div>
         <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">200 friends would scroll. Same UX. Maybe add a search bar at the top when count &gt; 12. Maybe pin "recent contacts" to the top.</p>
         <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> SectionList grouped by recency ("This month / Earlier"). Search bar above 12 friends. Optional: tap-to-sort.</p>
       </div>
 
       <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;">
         <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: var(--postal-blue); margin-bottom: 4px;">MAIL HISTORY · SCALES FINE</div>
-        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Sheet is a paginated list — handles any count</div>
+        <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Sheet is a paginated list. handles any count</div>
         <p style="font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 8px;">200 sent cards = 200 list rows. Loads fine, scrolls fine. Eventually wants pagination (load 20 at a time) and filter by recipient/status/date.</p>
         <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 0;"><strong>Fix:</strong> already a FlatList with stable keys. Add a filter chip row + paging when count &gt; 50.</p>
       </div>
@@ -709,7 +709,7 @@
 
     <div class="callout" style="background: rgba(155,175,155,0.16); border: 1px solid rgba(155,175,155,0.6); border-radius: 10px; padding: 18px 22px; margin-top: 24px;">
       <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px; margin-bottom: 6px;">When to actually do this work</div>
-      <p style="font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.6; margin: 0;">None of these matter for TestFlight beta. With 5–20 users and 10–50 sent cards across all of them, the current design works as-is. <strong>The right time to revisit scaling is when one specific user gets to 25+ friends</strong> — they'll be the first to feel the friction. Build the fix then. Premature scaling is the same trap as premature optimization.</p>
+      <p style="font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.6; margin: 0;">None of these matter for TestFlight beta. With 5–20 users and 10–50 sent cards across all of them, the current design works as-is. <strong>The right time to revisit scaling is when one specific user gets to 25+ friends</strong>. they'll be the first to feel the friction. Build the fix then. Premature scaling is the same trap as premature optimization.</p>
     </div>
   </section>
 
@@ -724,7 +724,7 @@
         <div class="screen-image"><img src="../.screenshots/03-welcome-sheet.jpg" alt="Welcome sheet, first version"/></div>
         <div class="screen-body">
           <div class="screen-tag">v1 · early</div>
-          <h3 class="screen-title">Welcome — identity step (v1)</h3>
+          <h3 class="screen-title">Welcome. identity step (v1)</h3>
           <p class="screen-desc">Initial onboarding: name + city + state, with the 5-free-credits banner and a tiny dove stamp. Reference for what we started from.</p>
           <ul class="screen-notes">
             <li>1¢ dove stamp</li>
@@ -738,7 +738,7 @@
         <div class="screen-image"><img src="../.screenshots/04-welcome-after-codex-fixes.jpg" alt="Welcome sheet after codex fixes"/></div>
         <div class="screen-body">
           <div class="screen-tag">v2 · current</div>
-          <h3 class="screen-title">Welcome — after the codex pass</h3>
+          <h3 class="screen-title">Welcome. after the codex pass</h3>
           <p class="screen-desc">Same flow, tightened copy, fixed font scaling, KeyboardAvoidingView wraps the form. Continues to step 2 (email + password) when Supabase is wired.</p>
           <ul class="screen-notes">
             <li>"Where you're writing from" label</li>
@@ -758,7 +758,7 @@
 
     <div class="components">
       <div class="component">
-        <h3 class="component-h">SettingsSheet (every row — see full mockup below)</h3>
+        <h3 class="component-h">SettingsSheet (every row. see full mockup below)</h3>
         <p class="component-sub">Account · Mail · Privacy &amp; support · Sign out · Delete account</p>
         <div class="component-preview" style="flex-direction: column; align-items: stretch; padding: 0;">
           <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--muted-ink);">ACCOUNT</div>
@@ -778,7 +778,7 @@
 
       <div class="component">
         <h3 class="component-h">EditAboutMeSheet</h3>
-        <p class="component-sub">Update name, tagline, interests — what your mail card says about you.</p>
+        <p class="component-sub">Update name, tagline, interests. what your mail card says about you.</p>
         <div class="component-preview" style="flex-direction: column; align-items: stretch; padding: 16px;">
           <input style="background: var(--white); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-family: 'Cormorant Garamond'; font-size: 16px; color: var(--ink);" value="Scotty Lefkowitz" disabled />
           <input style="background: var(--white); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--ink); margin-top: 8px;" value="builds things, mostly slowly" disabled />
@@ -861,7 +861,7 @@
   </section>
 
   <section>
-    <h2 class="section-title">Postcard preview — front &amp; back</h2>
+    <h2 class="section-title">Postcard preview. front &amp; back</h2>
     <p class="section-sub">This is what gets printed at 4×6, wired into the Send flow. Live screenshot from the sim is below; design spec details in <code>POSTCARD_DESIGN_SPEC.md</code>.</p>
     <div class="divider"></div>
 
@@ -869,9 +869,9 @@
       <div>
         <div style="font-family: 'Inter'; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; color: var(--postal-red); margin-bottom: 8px;">LIVE FROM THE SIM · MAY 11, 2026</div>
         <img src="../.screenshots/17-postcard-preview-mailroom.jpg"
-             alt="Postcard preview, live from the sim — front + back, void mode"
+             alt="Postcard preview, live from the sim. front + back, void mode"
              style="width: 100%; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(43,33,21,0.14); display: block;" />
-        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 12px 0 0;">From the Send flow in void mode — the user sees both sides before sending. The new <code>PostcardPreview</code> renders with:</p>
+        <p style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; color: var(--muted-ink); margin: 12px 0 0;">From the Send flow in void mode. the user sees both sides before sending. The new <code>PostcardPreview</code> renders with:</p>
         <ul style="margin: 8px 0 0; padding-left: 22px; font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.55;">
           <li>Slight -0.5° rotation per card so they feel like physical objects</li>
           <li>Real perforated stamp (12 cut-out circles around perimeter) with the Mailroom dove motif</li>
@@ -892,8 +892,8 @@
           <ul style="margin: 0 0 16px; padding-left: 20px; font-family: 'Cormorant Garamond'; font-size: 14.5px; line-height: 1.55;">
             <li><code>react-native-view-shot</code> installed + native module linked</li>
             <li><code>src/services/lob.ts</code> with <code>capturePostcardForPrint</code> + <code>submitToLob</code> helpers</li>
-            <li><code>supabase/functions/lob-send-postcard/index.ts</code> Edge Function (Deno) — receives front/back URLs, forwards to Lob's <code>/v1/postcards</code> API, writes lob_id back</li>
-            <li><code>supabase/migrations/2026051205_lob_integration.sql</code> — adds lob_id, lob_status, lob_expected_delivery, lob_error to postcards; adds mailing address fields to friends + profiles</li>
+            <li><code>supabase/functions/lob-send-postcard/index.ts</code> Edge Function (Deno). receives front/back URLs, forwards to Lob's <code>/v1/postcards</code> API, writes lob_id back</li>
+            <li><code>supabase/migrations/2026051205_lob_integration.sql</code>. adds lob_id, lob_status, lob_expected_delivery, lob_error to postcards; adds mailing address fields to friends + profiles</li>
             <li>PostcardPreview components now <code>forwardRef</code> so a hidden 1875px wrapper can capture them at print scale</li>
           </ul>
           <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px; margin-bottom: 10px; color: var(--postal-red);">What you need to do</div>
@@ -935,7 +935,7 @@
 
           <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 50%; padding: 14px;">
             <div style="font-family: 'Inter'; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; color: var(--muted-ink); text-transform: uppercase; margin-bottom: 8px;">FROM: SCOTTY, DENVER CO</div>
-            <div style="font-family: 'Caveat', cursive; font-size: 17px; line-height: 1.45; color: var(--ink); letter-spacing: 0.3px;">Thinking of you. I went back to that coffee shop we found in Brooklyn — it's still terrible. Love, Scotty</div>
+            <div style="font-family: 'Caveat', cursive; font-size: 17px; line-height: 1.45; color: var(--ink); letter-spacing: 0.3px;">Thinking of you. I went back to that coffee shop we found in Brooklyn. it's still terrible. Love, Scotty</div>
           </div>
 
           <div style="position: absolute; right: 0; top: 0; bottom: 0; width: 50%; padding: 14px;">
@@ -968,7 +968,7 @@
       <ul style="margin: 6px 0 0; padding-left: 22px; font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.6;">
         <li><code>PostcardFrontPreview</code> + <code>PostcardBackPreview</code> components exist (<code>src/components/PostcardPreview.tsx</code>) and render to scale at any width.</li>
         <li>Send screen shows both sides as a live preview before you tap Send.</li>
-        <li>Postcard design spec written: 4×6 sizes, 300 DPI, bleed, USPS address rules, color profile drift — all in <code>POSTCARD_DESIGN_SPEC.md</code>.</li>
+        <li>Postcard design spec written: 4×6 sizes, 300 DPI, bleed, USPS address rules, color profile drift. all in <code>POSTCARD_DESIGN_SPEC.md</code>.</li>
         <li>Lob integration plan written: <code>LOB_INTEGRATION.md</code> with the Edge Function pattern, schema migration, webhook setup, unit economics.</li>
       </ul>
       <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px; margin: 14px 0 6px;">Still to wire</div>
@@ -981,7 +981,7 @@
   </section>
 
   <section>
-    <h2 class="section-title">Settings sheet — full mockup</h2>
+    <h2 class="section-title">Settings sheet. full mockup</h2>
     <p class="section-sub">Every row from <code>SettingsSheet.tsx</code>, rendered to scale. Slides up from the My Card / Friends tab. Pixel-accurate against the React Native source.</p>
     <div class="divider"></div>
 
@@ -1114,9 +1114,9 @@
         </table>
 
         <div class="callout" style="background: rgba(155,175,155,0.16); border: 1px solid rgba(155,175,155,0.6); border-radius: 10px; padding: 18px 20px; margin-top: 20px;">
-          <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Real screenshot from the sim — confirms the mockup is accurate</div>
+          <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 16px; margin-bottom: 6px;">Real screenshot from the sim. confirms the mockup is accurate</div>
           <div style="font-family: 'Cormorant Garamond'; font-style: italic; font-size: 14px; line-height: 1.5; color: var(--muted-ink); margin-bottom: 12px;">Captured today after the rename + build. The HTML mockup to the left is pixel-traced from <code>SettingsSheet.tsx</code>; this is the actual rendered output. Compare row by row.</div>
-          <img src="../.screenshots/15-settings-mailroom.jpg" alt="Settings sheet — live sim screenshot" style="width: 100%; max-width: 340px; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(43,33,21,0.12);" />
+          <img src="../.screenshots/15-settings-mailroom.jpg" alt="Settings sheet. live sim screenshot" style="width: 100%; max-width: 340px; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(43,33,21,0.12);" />
         </div>
       </div>
 
@@ -1182,7 +1182,7 @@
           <div class="type-stack">Caveat · Patrick Hand · cursive</div>
           <div class="type-usage">The user's handwriting. Card bodies. Not interface chrome.</div>
         </div>
-        <div class="sample-caveat">Thinking about that summer we drove the coast — wild.</div>
+        <div class="sample-caveat">Thinking about that summer we drove the coast. wild.</div>
       </div>
     </div>
   </section>
@@ -1296,8 +1296,8 @@
     <div class="divider"></div>
     <div class="flow">
       <ol>
-        <li><b>Welcome — step 1.</b> Name + city + state. Skip-for-now available.</li>
-        <li><b>Welcome — step 2.</b> Email + password. Or "I already have an account" toggle to sign in. Forgot password link in sign-in mode.</li>
+        <li><b>Welcome. step 1.</b> Name + city + state. Skip-for-now available.</li>
+        <li><b>Welcome. step 2.</b> Email + password. Or "I already have an account" toggle to sign in. Forgot password link in sign-in mode.</li>
         <li><b>Free credits banner</b> appears on My Card with the 5-credit gift. Subtle.</li>
         <li><b>My Card.</b> Shows your monogram, tagline, QR for friends to scan, mail history entry.</li>
         <li><b>Send tab.</b> Pick category (Note / Photo / Place / Custom). Compose. Pick recipient from rolodex. Tap Send.</li>
@@ -1347,27 +1347,27 @@
 
     <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 28px 0 10px;">What stayed the same on purpose</h3>
     <ul style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.7; padding-left: 22px;">
-      <li><strong>"Mail Card"</strong> as a product noun — that's the artifact inside Mailroom, like Tweets in Twitter. The card stays; the app is the room it lives in.</li>
-      <li>The Supabase project (<code>nlwnmgwylmmnaemdnzlq.supabase.co</code>) — same DB, same auth, same tables.</li>
-      <li>Internal code symbols (<code>MailClubContext</code>, <code>useMailClub</code>, file paths) — renaming these touches ~50 imports across 30 files and risks breakage. Safe to defer or land as a follow-up PR.</li>
-      <li>The project directory on disk (<code>~/Downloads/mailclub-app</code>) — Xcode worktree path. You can <code>mv</code> it whenever you want; just update your shell shortcuts.</li>
+      <li><strong>"Mail Card"</strong> as a product noun. that's the artifact inside Mailroom, like Tweets in Twitter. The card stays; the app is the room it lives in.</li>
+      <li>The Supabase project (<code>nlwnmgwylmmnaemdnzlq.supabase.co</code>). same DB, same auth, same tables.</li>
+      <li>Internal code symbols (<code>MailClubContext</code>, <code>useMailClub</code>, file paths). renaming these touches ~50 imports across 30 files and risks breakage. Safe to defer or land as a follow-up PR.</li>
+      <li>The project directory on disk (<code>~/Downloads/mailclub-app</code>). Xcode worktree path. You can <code>mv</code> it whenever you want; just update your shell shortcuts.</li>
     </ul>
 
     <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 22px; margin: 28px 0 10px;">What you need to do next</h3>
     <div style="background: rgba(217,180,110,0.16); border: 1px dashed var(--gold); border-radius: 10px; padding: 18px 22px;">
       <ol style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.75; padding-left: 22px; margin: 0;">
-        <li><strong>Regenerate the iOS folder.</strong> The native project at <code>ios/MailClub/</code> still has the old name baked into Xcode files. Run <code>npx expo prebuild --clean</code> after freeing disk space — Expo regenerates <code>ios/Mailroom/</code> from <code>app.json</code>.</li>
+        <li><strong>Regenerate the iOS folder.</strong> The native project at <code>ios/MailClub/</code> still has the old name baked into Xcode files. Run <code>npx expo prebuild --clean</code> after freeing disk space. Expo regenerates <code>ios/Mailroom/</code> from <code>app.json</code>.</li>
         <li><strong>Register the new App ID</strong> at <a href="https://developer.apple.com/account/resources/identifiers/list" style="color: var(--postal-blue);">developer.apple.com</a> using <code>com.mailroom.app</code>. Enable In-App Purchase + Push Notifications + Sign in with Apple capabilities.</li>
         <li><strong>Create the App Store Connect record</strong> at <a href="https://appstoreconnect.apple.com/apps" style="color: var(--postal-blue);">appstoreconnect.apple.com/apps</a> using the new Bundle ID. Display name: "Mailroom".</li>
         <li><strong>Re-do the IAP products</strong> with the new IDs (<code>mailroom.credits.5</code> etc.) once the App Store Connect record exists.</li>
-        <li><strong>Update your domain</strong> — if you bought <code>mailclub.app</code>, you may want <code>mailroom.app</code> too (or scotty.lasolasvc.com/mailroom). Privacy + support URLs in the App Store record point to whatever you pick.</li>
+        <li><strong>Update your domain</strong>. if you bought <code>mailclub.app</code>, you may want <code>mailroom.app</code> too (or scotty.lasolasvc.com/mailroom). Privacy + support URLs in the App Store record point to whatever you pick.</li>
       </ol>
-      <p style="font-family: 'Cormorant Garamond'; font-size: 14px; font-style: italic; color: var(--muted-ink); margin: 12px 0 0;">Full step-by-step in <code>MAILROOM_SETUP.md</code> — covers Apple Developer, App Store Connect, EAS, Supabase, Lob, GitHub Pages.</p>
+      <p style="font-family: 'Cormorant Garamond'; font-size: 14px; font-style: italic; color: var(--muted-ink); margin: 12px 0 0;">Full step-by-step in <code>MAILROOM_SETUP.md</code>. covers Apple Developer, App Store Connect, EAS, Supabase, Lob, GitHub Pages.</p>
     </div>
   </section>
 
   <section id="send-a-link">
-    <h2 class="section-title">New feature — Send a Link</h2>
+    <h2 class="section-title">New feature. Send a Link</h2>
     <p class="section-sub">The killer growth loop. Sender doesn't need to know the recipient's address. They share a magic link via iMessage, and the recipient self-serves their address on a private mobile-friendly web page. <em>Sender never sees the address. Recipient never sees the sender's address.</em></p>
     <div class="divider"></div>
 
@@ -1406,7 +1406,7 @@
         </div>
 
         <div style="margin-top: 18px; font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 14px; text-align: center;">
-          <strong style="color: var(--postal-red); font-style: normal;">"Send a link instead"</strong> sits right below the recipient card. It's an inline CTA, not a separate menu — so the option is always visible.
+          <strong style="color: var(--postal-red); font-style: normal;">"Send a link instead"</strong> sits right below the recipient card. It's an inline CTA, not a separate menu. so the option is always visible.
         </div>
 
         <div style="font-family: 'Inter'; font-size: 11px; letter-spacing: 1.4px; font-weight: 700; color: var(--postal-red); text-transform: uppercase; margin: 32px 0 14px;">2. Tap → recipient card turns into "Send a link"</div>
@@ -1420,7 +1420,7 @@
               <div style="width: 44px; height: 44px; border-radius: 22px; background: rgba(184,74,58,0.12); display: flex; align-items: center; justify-content: center; color: var(--postal-red); font-size: 18px;">🔗</div>
               <div style="flex: 1;">
                 <div style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 17px;">Send a link instead</div>
-                <div style="font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 12px; margin-top: 3px;">They'll fill in their address — you never see it</div>
+                <div style="font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 12px; margin-top: 3px;">They'll fill in their address. you never see it</div>
               </div>
               <div style="border: 1px solid rgba(184,74,58,0.45); border-radius: 6px; padding: 5px 9px; color: var(--postal-red); font-family: 'Inter'; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;">CANCEL</div>
             </div>
@@ -1462,7 +1462,7 @@
             </div>
 
             <p style="font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 12px; text-align: center; margin: 0 0 16px;">
-              Tell us where to send it. Your address stays private — Scotty will never see it.
+              Tell us where to send it. Your address stays private. Scotty will never see it.
             </p>
 
             <!-- Form (visual mock) -->
@@ -1494,7 +1494,7 @@
         </div>
 
         <div style="margin-top: 18px; font-family: 'Cormorant Garamond'; font-style: italic; color: var(--muted-ink); font-size: 14px; text-align: center;">
-          A real HTML page served by a Supabase Edge Function. No app install required. Mobile-friendly. Sender's address is <strong style="color: var(--postal-red); font-style: normal;">never returned</strong> in the response — only their name + city, snapshotted at send time.
+          A real HTML page served by a Supabase Edge Function. No app install required. Mobile-friendly. Sender's address is <strong style="color: var(--postal-red); font-style: normal;">never returned</strong> in the response. only their name + city, snapshotted at send time.
         </div>
       </div>
     </div>
@@ -1514,7 +1514,7 @@
       <div style="background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px;">
         <div style="font-family: 'Inter'; font-size: 10px; letter-spacing: 1.4px; font-weight: 700; color: var(--postal-blue); text-transform: uppercase; margin-bottom: 8px;">Recipient sees</div>
         <ul style="margin: 0; padding-left: 18px; font-family: 'Cormorant Garamond'; font-size: 15px; line-height: 1.55;">
-          <li>Sender's display name + city (frozen snapshot — survives sender's profile changes)</li>
+          <li>Sender's display name + city (frozen snapshot. survives sender's profile changes)</li>
           <li>The postcard's handwritten message (preview)</li>
           <li>A privacy-first address form</li>
           <li><strong style="color: var(--postal-blue);">Never the sender's mailing address.</strong> It isn't returned by the API.</li>
@@ -1525,10 +1525,10 @@
     <h3 style="font-family: 'Cormorant Garamond'; font-weight: 600; font-size: 26px; margin: 36px 0 16px;">Under the hood</h3>
     <div style="background: rgba(60,110,143,0.05); border: 1px solid var(--line); border-radius: 10px; padding: 20px 24px;">
       <ol style="font-family: 'Cormorant Garamond'; font-size: 16px; line-height: 1.75; padding-left: 22px; margin: 0;">
-        <li><code>send_postcard_via_claim()</code> RPC — creates a row in <code>postcard_claims</code> with an 8-char base32 token (≈1.1T combinations, 30-day expiry, single-use) + a <code>postcards</code> row in <code>awaiting_address</code> status. Credits deducted atomically.</li>
+        <li><code>send_postcard_via_claim()</code> RPC. creates a row in <code>postcard_claims</code> with an 8-char base32 token (≈1.1T combinations, 30-day expiry, single-use) + a <code>postcards</code> row in <code>awaiting_address</code> status. Credits deducted atomically.</li>
         <li>Mobile app opens iOS <code>Share.share()</code> with the URL <code>https://&lt;project&gt;.functions.supabase.co/claim?t=TOKEN</code> + a pre-filled introductory message.</li>
-        <li><code>GET /claim?t=TOKEN</code> — Edge Function calls <code>claim_lookup()</code> RPC (service-role only). Renders mobile-friendly HTML with sender's name + city snapshot + message preview + address form.</li>
-        <li><code>POST /claim?t=TOKEN</code> — accepts JSON address. Calls <code>redeem_postcard_claim()</code> RPC. Marks claim claimed (single-use), flips postcard to <code>queued</code>.</li>
+        <li><code>GET /claim?t=TOKEN</code>. Edge Function calls <code>claim_lookup()</code> RPC (service-role only). Renders mobile-friendly HTML with sender's name + city snapshot + message preview + address form.</li>
+        <li><code>POST /claim?t=TOKEN</code>. accepts JSON address. Calls <code>redeem_postcard_claim()</code> RPC. Marks claim claimed (single-use), flips postcard to <code>queued</code>.</li>
         <li><strong>Next sprint:</strong> push notification to sender's phone → app captures postcard at print scale via <code>react-native-view-shot</code> → uploads + invokes <code>lob-send-postcard</code>. Card mails.</li>
       </ol>
     </div>
@@ -1543,10 +1543,10 @@
       <ul>
         <li>Does <b>My Card</b> feel like a "front door"? Or is the QR card competing too hard with the avatar for attention?</li>
         <li>The <b>CategoryPicker</b> has 4 tiles with credit costs. Does the active state (red top bar + bold red) read clearly enough? Anything you'd change about hierarchy?</li>
-        <li><b>Constellation tab</b> — does the metaphor land, or does it feel like decoration without information?</li>
-        <li><b>Welcome step 2</b> — is "I already have an account" toggle the right pattern, or should we split into two distinct entry CTAs upfront?</li>
-        <li><b>Sign in with Apple</b> — added as third option, or replaces the email/password path entirely?</li>
-        <li>Settings → Privacy: <b>"Who can write to me"</b> — is this the right framing? Alternatives: "Mail privacy" / "Receiving" / "Who can send".</li>
+        <li><b>Constellation tab</b>. does the metaphor land, or does it feel like decoration without information?</li>
+        <li><b>Welcome step 2</b>. is "I already have an account" toggle the right pattern, or should we split into two distinct entry CTAs upfront?</li>
+        <li><b>Sign in with Apple</b>. added as third option, or replaces the email/password path entirely?</li>
+        <li>Settings → Privacy: <b>"Who can write to me"</b>. is this the right framing? Alternatives: "Mail privacy" / "Receiving" / "Who can send".</li>
         <li>Mail history copy: currently says "sits in the queue until our printing partner is live". Honest, but should we hide the row entirely pre-Lob to reduce confusion?</li>
         <li>Color: do we lean further into <b>postal blue</b> for primary CTAs, or keep the calmer <b>ink</b> fill?</li>
       </ul>
@@ -1555,7 +1555,7 @@
 
   <section>
     <h2 class="section-title">Leave feedback</h2>
-    <p class="section-sub">Scribble here — these textareas don't save anywhere; just for jotting before you message me back.</p>
+    <p class="section-sub">Scribble here. these textareas don't save anywhere; just for jotting before you message me back.</p>
     <div class="divider"></div>
     <div class="feedback-grid">
       <div class="fb"><h4>My Card</h4><textarea placeholder="What works, what doesn't…"></textarea></div>

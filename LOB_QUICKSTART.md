@@ -1,4 +1,4 @@
-# Lob quickstart — your step-by-step
+# Lob quickstart. your step-by-step
 
 This is the shortest path from "Mailroom code is wired" to "tapping Send actually puts a postcard in someone's mailbox." Every step has the direct link.
 
@@ -11,11 +11,11 @@ This is the shortest path from "Mailroom code is wired" to "tapping Send actuall
 ## 0. What you have already (no action needed)
 
 - ✅ `react-native-view-shot` installed for capturing postcard PNGs
-- ✅ `src/services/lob.ts` — uploads + invokes Edge Function
-- ✅ `src/components/PostcardPreview.tsx` — renders front + back at print scale
-- ✅ `supabase/functions/lob-send-postcard/index.ts` — Edge Function that calls Lob
-- ✅ `supabase/migrations/2026051205_lob_integration.sql` — schema for `lob_id`, `lob_status`, friend address fields
-- ✅ `supabase/migrations/2026051206_lob_postcards_trigger.sql` — postgres trigger that auto-fires the Edge Function on insert
+- ✅ `src/services/lob.ts`. uploads + invokes Edge Function
+- ✅ `src/components/PostcardPreview.tsx`. renders front + back at print scale
+- ✅ `supabase/functions/lob-send-postcard/index.ts`. Edge Function that calls Lob
+- ✅ `supabase/migrations/2026051205_lob_integration.sql`. schema for `lob_id`, `lob_status`, friend address fields
+- ✅ `supabase/migrations/2026051206_lob_postcards_trigger.sql`. postgres trigger that auto-fires the Edge Function on insert
 - ✅ AddFriendSheet now collects street + apt + city + state + zip when expanded
 
 You just need to: get a Lob key, deploy the function, create the bucket.
@@ -26,9 +26,9 @@ You just need to: get a Lob key, deploy the function, create the bucket.
 
 **Direct link:** <https://dashboard.lob.com/signup>
 
-- Sign up with your email — no credit card needed for sandbox
+- Sign up with your email. no credit card needed for sandbox
 - Confirm via email
-- You land in the Lob dashboard. Top-right corner has a **Test / Live** toggle — **leave it on Test**
+- You land in the Lob dashboard. Top-right corner has a **Test / Live** toggle. **leave it on Test**
 
 ---
 
@@ -37,8 +37,8 @@ You just need to: get a Lob key, deploy the function, create the bucket.
 **Direct link:** <https://dashboard.lob.com/settings/api-keys>
 
 You'll see four keys:
-- **Test Publishable** (`test_pub_...`) — for client-side JS, we don't use it
-- **Test Secret** (`test_...`) — **this is the one we need**
+- **Test Publishable** (`test_pub_...`). for client-side JS, we don't use it
+- **Test Secret** (`test_...`). **this is the one we need**
 - Live keys are greyed out until you add a payment method
 
 Click the eye icon next to **Test Secret** and copy the key. Looks like:
@@ -60,8 +60,8 @@ supabase db push
 ```
 
 This pushes:
-- `2026051205_lob_integration.sql` — adds `lob_id`, `lob_status`, `lob_expected_delivery`, `lob_error` columns to `postcards`; adds address columns to `friends`
-- `2026051206_lob_postcards_trigger.sql` — adds the auto-submit trigger
+- `2026051205_lob_integration.sql`. adds `lob_id`, `lob_status`, `lob_expected_delivery`, `lob_error` columns to `postcards`; adds address columns to `friends`
+- `2026051206_lob_postcards_trigger.sql`. adds the auto-submit trigger
 
 Expected output:
 ```
@@ -108,12 +108,12 @@ Scroll to **Project API keys** → **service_role** → click reveal → copy.
 
 1. Click **New bucket** (top-right)
 2. Name: `postcard-renders`
-3. Public bucket: **YES** (Lob's servers need to fetch the URLs — see explanation below)
+3. Public bucket: **YES** (Lob's servers need to fetch the URLs. see explanation below)
 4. File size limit: `10 MB`
 5. Allowed MIME types: `image/png, image/jpeg`
 6. **Save**
 
-> **Public vs private trade-off:** Lob fetches the front/back PNGs by URL. With a public bucket, any HTTP client can fetch any rendered postcard if they know the URL. The URLs include the user ID + a postcard UUID, so it's not guessable, but it's not cryptographically private either. For TestFlight beta this is fine. For public App Store launch, switch to private bucket + signed URLs with 1-hour TTL (the lob.ts service already supports this — just swap `getPublicUrl` for `createSignedUrl(path, 3600)`).
+> **Public vs private trade-off:** Lob fetches the front/back PNGs by URL. With a public bucket, any HTTP client can fetch any rendered postcard if they know the URL. The URLs include the user ID + a postcard UUID, so it's not guessable, but it's not cryptographically private either. For TestFlight beta this is fine. For public App Store launch, switch to private bucket + signed URLs with 1-hour TTL (the lob.ts service already supports this. just swap `getPublicUrl` for `createSignedUrl(path, 3600)`).
 
 Then apply the RLS policies. Same SQL editor:
 
@@ -174,7 +174,7 @@ You can invoke it at: https://nlwnmgwylmmnaemdnzlq.functions.supabase.co/lob-sen
 
 ## 8. Test the end-to-end flow (5 min)
 
-This is the moment of truth — does a tap on Send actually produce a postcard in Lob's dashboard?
+This is the moment of truth. does a tap on Send actually produce a postcard in Lob's dashboard?
 
 1. In the Mailroom app, **add yourself as a friend** via Friends → Add. Use your real mailing address.
 2. Go to **Send** → pick **Note** category → write any test message → pick yourself as recipient → tap **Send**.
@@ -190,9 +190,9 @@ Within ~10 seconds you should see a new postcard appear with:
 Click the postcard to see the rendered PDF preview. **This is what would print in live mode.** Critique the layout, fonts, alignment.
 
 If you see:
-- ✅ A postcard with your message + name in the rendered PDF — **the entire pipeline works**
-- ❌ "Test card declined: invalid front_url" — bucket isn't public or the URL was empty (the trigger fires with empty URLs in v1 because the client renders + uploads first; see Known Limitation below)
-- ❌ Nothing appearing in Lob — check Supabase Functions logs: <https://supabase.com/dashboard/project/nlwnmgwylmmnaemdnzlq/functions>
+- ✅ A postcard with your message + name in the rendered PDF. **the entire pipeline works**
+- ❌ "Test card declined: invalid front_url". bucket isn't public or the URL was empty (the trigger fires with empty URLs in v1 because the client renders + uploads first; see Known Limitation below)
+- ❌ Nothing appearing in Lob. check Supabase Functions logs: <https://supabase.com/dashboard/project/nlwnmgwylmmnaemdnzlq/functions>
 
 ---
 
@@ -206,7 +206,7 @@ This lets you push a "Card delivered!" notification when Lob marks the card deli
 2. URL: `https://nlwnmgwylmmnaemdnzlq.functions.supabase.co/lob-webhook`
 3. Events: check **all** events under "Postcards" (`postcard.created`, `postcard.rendered_pdf`, `postcard.in_transit`, `postcard.in_local_area`, `postcard.processed_for_delivery`, `postcard.delivered`, `postcard.re_routed`, `postcard.returned_to_sender`, `postcard.failed`)
 4. **Save**
-5. Copy the **Webhook Signing Secret** that appears — Lob signs every event with it.
+5. Copy the **Webhook Signing Secret** that appears. Lob signs every event with it.
 6. `supabase secrets set LOB_WEBHOOK_SECRET=<the_secret>`
 
 > Note: the `lob-webhook` Edge Function isn't written yet. I have a stub planned in `LOB_INTEGRATION.md` §5.6. Tell me when you want me to build it (~30 min); it just verifies the HMAC signature and updates `lob_status` on the matching postcard row.

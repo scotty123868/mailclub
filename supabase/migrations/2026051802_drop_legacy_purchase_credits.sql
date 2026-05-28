@@ -1,5 +1,5 @@
 -- =========================================================================
--- 2026-05-18 — Drop legacy public.purchase_credits (P0 audit closure)
+-- 2026-05-18. Drop legacy public.purchase_credits (P0 audit closure)
 -- =========================================================================
 --
 -- Background: 2026051200_initial_schema.sql defined `purchase_credits` as
@@ -26,7 +26,7 @@
 --
 -- That covers receipt validation properly. The legacy RPC just adds risk
 -- without value. Drop it and the unused client wrapper that referenced
--- it (api.purchaseCredits + MailClubContext.purchaseCreditsAction —
+-- it (api.purchaseCredits + MailClubContext.purchaseCreditsAction .
 -- neither is reachable from any UI component as of v0.7.0.49).
 --
 -- If a future credit-grant pathway is needed (gift cards, refunds, comp

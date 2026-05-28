@@ -1,5 +1,5 @@
 -- =========================================================================
--- 2026-05-19 — Drop dead RLS policies on postcard_claims + postcards
+-- 2026-05-19. Drop dead RLS policies on postcard_claims + postcards
 -- =========================================================================
 --
 -- Background: 2026051210_receiver_postcard_visibility.sql created two RLS
@@ -19,7 +19,7 @@
 -- The receiver-visibility user need is now served by the
 -- `fetch_received_postcards` SECURITY DEFINER RPC introduced later in
 -- 2026051210 and used by the client. Both dead policies are pure noise
--- — they look protective but do nothing.
+--. they look protective but do nothing.
 --
 -- Drop both. Reduces audit surface, removes the "looks like RLS is
 -- broken" confusion for anyone reading the schema.

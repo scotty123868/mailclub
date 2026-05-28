@@ -1,4 +1,4 @@
--- Receiver-side postcard visibility — Phase 3.5
+-- Receiver-side postcard visibility. Phase 3.5
 --
 -- After Phase 3, a receiver who scans the QR has the sender added to their
 -- friends rolodex, but the postcard itself isn't anywhere they can see in
@@ -6,7 +6,7 @@
 --
 --   1. Adds an RLS policy so a receiver can SELECT their own scanned
 --      postcard_claims rows.
---   2. Adds a mirror RLS for the linked postcards row — so they can read
+--   2. Adds a mirror RLS for the linked postcards row. so they can read
 --      the message + photo_path of the card they received.
 --   3. Adds `scanned_at` to postcards as a denormalized timestamp the
 --      sender's app can read to display "Marcus opened your card on Apr 12"
@@ -179,7 +179,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 5. fetch_received_postcards RPC — receiver-side feed
+-- 5. fetch_received_postcards RPC. receiver-side feed
 -- ---------------------------------------------------------------------------
 -- The app's Map "Received" filter and Constellation will call this to list
 -- the postcards the current user has received. Returns enough data to

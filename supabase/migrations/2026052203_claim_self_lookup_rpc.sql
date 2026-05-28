@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 2026-05-22 v0.7.0.59 — sender-safe claim self-link check
+-- 2026-05-22 v0.7.0.59. sender-safe claim self-link check
 -- ===========================================================================
 --
 -- The iOS /claim route needs to know whether the current signed-in user is

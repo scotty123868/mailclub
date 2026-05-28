@@ -1,4 +1,4 @@
--- v0.7.0.28 — Postcrossing-style pen pal matching.
+-- v0.7.0.28. Postcrossing-style pen pal matching.
 --
 -- User spec: "I want the stranger mechanism to be the same as
 -- Postcrossing so you get a card from a different stranger regardless."
@@ -15,7 +15,7 @@
 --   they'll see in their journal has to_profile_id = their id, and
 --   the SELECT policy below grants them read access).
 --
---   Edge case — empty queue: first sender ever. Their postcard has
+--   Edge case. empty queue: first sender ever. Their postcard has
 --   to_profile_id = null (orphan). They get queued. Next sender
 --   fulfills the orphan: that sender's card is matched to the
 --   first user, AND the first user's orphan gets retroactively
@@ -41,7 +41,7 @@ create index if not exists postcards_to_profile_id_idx
   where to_profile_id is not null;
 
 -- Queue of users waiting to receive a stranger card.
--- One row per pending receive. user_id has NO uniqueness — a user can
+-- One row per pending receive. user_id has NO uniqueness. a user can
 -- have multiple pending receives if they've sent multiple pen pals
 -- before getting matched.
 create table if not exists public.penpal_queue (
@@ -79,7 +79,7 @@ create policy postcards_select_stranger_recipient
   using (to_profile_id = auth.uid());
 
 -- ---------------------------------------------------------------------------
--- 3. Matching RPC — extends send_postcard for to_kind='void'
+-- 3. Matching RPC. extends send_postcard for to_kind='void'
 -- ---------------------------------------------------------------------------
 -- Rather than rewrite send_postcard (which has 9 parameters and is
 -- called from sendPostcardAction for friend sends too), introduce a

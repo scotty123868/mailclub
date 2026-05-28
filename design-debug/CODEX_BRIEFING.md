@@ -1,4 +1,4 @@
-# Postcard back design — handing off to Codex
+# Postcard back design. handing off to Codex
 
 ## TL;DR
 
@@ -10,7 +10,7 @@ thumbnail (100dpi)** that we display in-app as a preview before mailing.
 The print itself looks great. **The thumbnail does not.** Specifically:
 
 1. Certain lines of the handwritten message render with a visible
-   horizontal "strikethrough" band — a font anti-aliasing artifact at
+   horizontal "strikethrough" band. a font anti-aliasing artifact at
    100dpi where dense lowercase letterforms create a dark pixel row at
    the x-height midline.
 2. The postmark cancellation bars (the row of vertical rectangles next
@@ -23,9 +23,9 @@ a second opinion from Codex.
 ## The source of truth
 
 Production renderer:
-**`supabase/functions/lob-send-postcard/index.ts`** — function
+**`supabase/functions/lob-send-postcard/index.ts`**. function
 `buildBackHtml()` starts around line 110. It builds the back HTML string
-and runs it through `compactHtml()` (a minifier — Lob caps inline HTML
+and runs it through `compactHtml()` (a minifier. Lob caps inline HTML
 at 10 000 chars) before posting to Lob.
 
 Design mockup (the canonical visual reference, in pixel units for
@@ -33,18 +33,18 @@ Design mockup (the canonical visual reference, in pixel units for
 **`design-mockups/postcard-back/C2-print.html`**
 
 Test artifacts in this directory:
-- `v21-back-current-readable.html` — current state of the back HTML
+- `v21-back-current-readable.html`. current state of the back HTML
   (test data filled in, no minification, readable).
-- `v21-back-current.html` — same content, after `compactHtml()`. This
+- `v21-back-current.html`. same content, after `compactHtml()`. This
   is exactly what Lob receives (8 793 bytes, under the 10 000 cap).
-- `v20-lob-thumbnail-caveat-banding.png` — the actual Lob thumbnail
+- `v20-lob-thumbnail-caveat-banding.png`. the actual Lob thumbnail
   from v20 (Caveat font). Multiple message lines show the strikethrough
   banding very clearly. **This is what the user sees in-app.**
-- `v20-local-100dpi-caveat.png` — same HTML rendered through local
+- `v20-local-100dpi-caveat.png`. same HTML rendered through local
   headless Chrome at 100dpi. Matches Lob's output dimensions.
-- `v21-local-100dpi-patrickhand.png` — v21 with Patrick Hand instead
+- `v21-local-100dpi-patrickhand.png`. v21 with Patrick Hand instead
   of Caveat. Banding much reduced but still present on one line.
-- `v18-local-300dpi-print-fidelity.png` — what actually gets printed.
+- `v18-local-300dpi-print-fidelity.png`. what actually gets printed.
   Crisp and clean. Confirms the issue is purely a thumbnail-scale
   rendering artifact, not a design problem.
 
@@ -84,7 +84,7 @@ Iteration log (most recent first):
 |----|---|---|
 | v21 | Caveat → Patrick Hand 13pt | Banding reduced from 3 lines to 1 line. Still visible. |
 | v20 | Reverted v19 (SVG balloon flopped) back to v18 | Baseline good. Caveat banding still showed. |
-| v19 | Replaced JPG stamp with inline SVG balloon illustration | Print-resolution great. Thumbnail worse — tiny vector strokes vanished at 100dpi. **Rolled back.** |
+| v19 | Replaced JPG stamp with inline SVG balloon illustration | Print-resolution great. Thumbnail worse. tiny vector strokes vanished at 100dpi. **Rolled back.** |
 | v18 | Fixed Scotty descender clip + lightened cancellation bars + bolder frame | Improvements, but Caveat banding remained. |
 | v17 | Removed 4 corner stars, added publisher cartouche at bottom | Cleaner. Cartouche reads as authentic vintage publisher imprint. |
 | v16 | Removed POST·CARD header + CORRESPONDENCE label (user feedback: clutter) | Cleaner. |
@@ -132,10 +132,10 @@ much bolder/larger features that survive 100dpi.
    100dpi. We've assumed it's font-related but maybe there's another
    mechanism (some kind of Lob renderer quirk, baseline alignment to
    pixel grid, sub-pixel anti-aliasing strategy, etc.).
-3. **Propose a fix that works at 100dpi** specifically — because that's
+3. **Propose a fix that works at 100dpi** specifically. because that's
    the surface the user judges by. Bonus if the fix also doesn't hurt
    print fidelity.
-4. **Also look at the postmark cancellation bars** — they look like
+4. **Also look at the postmark cancellation bars**. they look like
    slightly chunky/pixelated rectangles in the thumbnail. Suggest a
    form that reads cleaner at 100dpi while still feeling like a real
    period postal cancellation.

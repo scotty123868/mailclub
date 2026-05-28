@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mailroom v0.7 — final design (sign-off)</title>
+<title>Mailroom v0.7. final design (sign-off)</title>
 <style>
   :root {
     --paper: #F8F1E3;
@@ -141,7 +141,7 @@
   }
   .phone .tab svg.tabicon { display: block; }
   /* Inline SVG icons to mirror the real Lucide icons used in
-     src/components/BottomTabs.tsx — Map, Sparkles, Send, Users, User.
+     src/components/BottomTabs.tsx. Map, Sparkles, Send, Users, User.
      Same icon family, same stroke weight, just rendered as inline SVG
      for the static mockups. */
 
@@ -679,7 +679,7 @@
 
   <div class="flow-row">
 
-    <!-- SCREEN 1: Sign in — UNCHANGED FROM v0.6.x. Same Recraft hero,
+    <!-- SCREEN 1: Sign in. UNCHANGED FROM v0.6.x. Same Recraft hero,
          same Apple Sign In primary, same email fallback. Only the
          tagline copy is the proposed change. -->
     <div class="phone-wrap">
@@ -857,7 +857,7 @@
 
   <div class="flow-row">
 
-    <!-- SCREEN 5: Their info — name + ONE smart address field -->
+    <!-- SCREEN 5: Their info. name + ONE smart address field -->
     <div class="phone-wrap">
       <div class="step-num">5</div>
       <div class="phone">
@@ -896,7 +896,7 @@
       <div class="phone-caption"><b>Recipient.</b> Two fields: their name + one smart address box. The address field uses iOS autofill (Contacts) and address autocomplete &mdash; the user types a street, the suggestions complete the city/state/ZIP. If they picked "send a link" on screen 4, this whole screen becomes one field: <i>"Their phone or email"</i>.</div>
     </div>
 
-    <!-- SCREEN 6: Your info — same shape, your turn -->
+    <!-- SCREEN 6: Your info. same shape, your turn -->
     <div class="phone-wrap">
       <div class="step-num">6</div>
       <div class="phone">
@@ -1128,7 +1128,7 @@
   </div>
 
   <!-- ====================================================== -->
-  <!-- POST-SIGNUP APP LAYOUT — single confirmed direction      -->
+  <!-- POST-SIGNUP APP LAYOUT. single confirmed direction      -->
   <!-- ====================================================== -->
   <hr>
   <div class="kicker">After the first send</div>
@@ -1145,7 +1145,7 @@
 
   <div class="flow-row" style="grid-template-columns: repeat(5, 1fr);">
 
-    <!-- Phone 1: MAP — tap pin → connecting line + bottom-sheet card -->
+    <!-- Phone 1: MAP. tap pin → connecting line + bottom-sheet card -->
     <div class="phone-wrap">
       <div class="phone">
         <div class="notch"></div>
@@ -1160,7 +1160,7 @@
                 <path d="M10 60 Q 30 50, 50 65 T 90 70 L 90 130 Q 70 145, 50 135 T 10 130 Z" fill="rgba(96,122,85,0.18)" stroke="rgba(255,255,255,0.18)" stroke-width="0.3"/>
               </svg>
 
-              <!-- the route line — the magic moment of the interaction.
+              <!-- the route line. the magic moment of the interaction.
                    When a pin is tapped, a postal-red dashed line animates
                    from the pin to its reciprocal (your home pin). -->
               <svg style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;" viewBox="0 0 100 200" preserveAspectRatio="none">
@@ -1213,14 +1213,14 @@
                       <div style="font-family:var(--serif); font-size:11px; font-weight:600;">From Maya</div>
                       <div style="font-family:var(--sans); font-size:8.5px; color:var(--muted); font-weight:600;">PORTLAND, OR</div>
                     </div>
-                    <div style="font-family:var(--script); font-size:11px; line-height:1.25; color:var(--ink-soft); margin-top:2px;">that hike we kept saying we&apos;d do —</div>
+                    <div style="font-family:var(--script); font-size:11px; line-height:1.25; color:var(--ink-soft); margin-top:2px;">that hike we kept saying we&apos;d do .</div>
                     <div style="font-family:var(--sans); font-size:8px; color:var(--muted); margin-top:4px; letter-spacing:0.05em;">DELIVERED MAY 10 &middot; 2026</div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          <!-- TAB BAR — new order: Map | Const | Send | Friends | My Card -->
+          <!-- TAB BAR. new order: Map | Const | Send | Friends | My Card -->
           <div class="tabbar">
             <div class="tab active">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
@@ -1247,7 +1247,7 @@
       <div class="phone-caption"><b>Map.</b> Full bleed. <b>Sent</b> pins are postal-red, <b>received</b> pins are postal-blue, your home is the inkstone marker. Tap a pin and a dashed line traces from that city to your home pin, and the postcard slides up from the bottom in a sheet &mdash; teteapp pattern, postcard payload.</div>
     </div>
 
-    <!-- Phone 2: CONSTELLATION — full screen, teteapp port -->
+    <!-- Phone 2: CONSTELLATION. full screen, teteapp port -->
     <div class="phone-wrap">
       <div class="phone">
         <div class="notch"></div>
@@ -1295,7 +1295,7 @@
             <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:24px; height:24px; border-radius:100px; background:linear-gradient(135deg, #d97757, #B89A60); border:2px solid white; box-shadow:0 0 24px rgba(216,150,90,0.55), 0 0 4px rgba(255,255,255,0.5);"></div>
             <div style="position:absolute; top:54%; left:50%; transform:translateX(-50%); color:white; font-family:var(--script); font-size:11px; opacity:0.9; margin-top:14px;">you</div>
 
-            <!-- friends — gold ring on Maya = reciprocation badge -->
+            <!-- friends. gold ring on Maya = reciprocation badge -->
             <div style="position:absolute; top:30%; left:28%; width:17px; height:17px; border-radius:100px; background:linear-gradient(135deg, #d97757, #B89A60); border:1.5px solid rgba(255,255,255,0.85); box-shadow:0 0 14px rgba(217,119,87,0.7), 0 0 0 2.5px rgba(184,154,96,0.5);"></div>
             <div style="position:absolute; top:34%; left:30%; color:white; font-family:var(--script); font-size:9.5px; opacity:0.95; margin-top:14px;">Maya</div>
 
@@ -1476,7 +1476,7 @@
       <div class="phone-caption"><b>Friends.</b> Address book. Each row is one tap from Mail. Pen pal CTA at bottom &mdash; <i>"Send one, get one from a stranger."</i></div>
     </div>
 
-    <!-- Phone 5: MY CARD — avatar + bio + 3 stats + journal gallery -->
+    <!-- Phone 5: MY CARD. avatar + bio + 3 stats + journal gallery -->
     <div class="phone-wrap">
       <div class="phone">
         <div class="notch"></div>
@@ -1583,7 +1583,7 @@
 
 
   <!-- ====================================================== -->
-  <!-- MAGICAL MOMENTS — THE TO-DO                              -->
+  <!-- MAGICAL MOMENTS. THE TO-DO                              -->
   <!-- ====================================================== -->
   <hr>
   <div class="kicker">Magical moments &middot; v0.7 build list</div>
@@ -1643,7 +1643,7 @@
   </p>
 
   <!-- ====================================================== -->
-  <!-- CONSTELLATION — PORT FROM TETEAPP                        -->
+  <!-- CONSTELLATION. PORT FROM TETEAPP                        -->
   <!-- ====================================================== -->
   <hr>
   <div class="kicker">Constellation &middot; not rebuilding, porting</div>

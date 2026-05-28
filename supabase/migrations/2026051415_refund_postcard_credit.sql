@@ -1,4 +1,4 @@
--- v0.7.0.16 — credit-refund RPC for failed sends.
+-- v0.7.0.16. credit-refund RPC for failed sends.
 --
 -- Bug we're fixing: send_postcard / send_postcard_via_claim atomically
 -- (1) create the postcards row AND (2) deduct credits. But Lob handoff

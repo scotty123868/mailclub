@@ -5,7 +5,7 @@
 create extension if not exists "pgcrypto";
 
 ------------------------------------------------------------
--- 1. profiles — one row per auth.user
+-- 1. profiles. one row per auth.user
 ------------------------------------------------------------
 
 create table if not exists public.profiles (
@@ -31,7 +31,7 @@ create table if not exists public.profiles (
 );
 
 ------------------------------------------------------------
--- 2. friends — user's rolodex
+-- 2. friends. user's rolodex
 ------------------------------------------------------------
 
 create table if not exists public.friends (
@@ -54,7 +54,7 @@ create table if not exists public.friends (
 create index if not exists friends_owner_id_idx on public.friends(owner_id);
 
 ------------------------------------------------------------
--- 3. postcards — every send
+-- 3. postcards. every send
 ------------------------------------------------------------
 
 create table if not exists public.postcards (
@@ -81,7 +81,7 @@ create index if not exists postcards_owner_id_idx on public.postcards(owner_id);
 create index if not exists postcards_owner_sent_at_idx on public.postcards(owner_id, sent_at desc);
 
 ------------------------------------------------------------
--- 4. void_replies — incoming from strangers (server-populated)
+-- 4. void_replies. incoming from strangers (server-populated)
 ------------------------------------------------------------
 
 create table if not exists public.void_replies (
@@ -95,7 +95,7 @@ create table if not exists public.void_replies (
 create index if not exists void_replies_owner_id_idx on public.void_replies(owner_id);
 
 ------------------------------------------------------------
--- 5. credit_transactions — audit log
+-- 5. credit_transactions. audit log
 ------------------------------------------------------------
 
 create table if not exists public.credit_transactions (
@@ -226,7 +226,7 @@ begin
     raise exception 'not authenticated';
   end if;
 
-  -- Cost map (server-authoritative — clients can't lie)
+  -- Cost map (server-authoritative. clients can't lie)
   v_cost := case p_category
     when 'handwritten' then 1
     when 'photo' then 2
@@ -330,7 +330,7 @@ begin
   end if;
 
   -- TODO: validate Apple/Stripe receipt before crediting. Until then this is
-  -- gated by the client UI (CreditsSheet shows "Coming soon" — Buy is disabled).
+  -- gated by the client UI (CreditsSheet shows "Coming soon". Buy is disabled).
   -- This RPC stays here so the client wire-up is ready when IAP lands.
 
   update public.profiles
@@ -395,7 +395,7 @@ create policy "credit_transactions_select_own" on public.credit_transactions
   for select using (owner_id = auth.uid());
 
 ------------------------------------------------------------
--- Grants — allow authenticated users to call our RPCs
+-- Grants. allow authenticated users to call our RPCs
 ------------------------------------------------------------
 
 grant execute on function public.complete_signup(text, text, text) to authenticated;

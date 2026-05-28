@@ -1,4 +1,4 @@
--- Send-a-Link — recipient self-serves their address
+-- Send-a-Link. recipient self-serves their address
 --
 -- The killer growth feature. Sender doesn't need to know the recipient's
 -- address; they just send a magic link. Recipient taps the link, sees "Scotty
@@ -88,14 +88,14 @@ exception when undefined_object then
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 3. RLS — postcard_claims
+-- 3. RLS. postcard_claims
 -- ---------------------------------------------------------------------------
 alter table public.postcard_claims enable row level security;
 
 -- Sender can SEE their own claims (without the address fields if they want)
 -- Note: we still expose the claimed_* fields to the sender for now, since
 -- they need to see "where did my card go." But the address is INFORMATIONAL
--- — sender can't edit, and we never display it in the app UI without explicit
+--. sender can't edit, and we never display it in the app UI without explicit
 -- intent.
 drop policy if exists postcard_claims_sender_select on public.postcard_claims;
 create policy postcard_claims_sender_select
@@ -202,7 +202,7 @@ grant execute on function public.send_postcard_via_claim(text, text, text, text)
 -- ---------------------------------------------------------------------------
 -- 5. redeem_postcard_claim RPC
 --    Called by the claim Edge Function (using service_role, NOT the recipient
---    user — recipient is unauthenticated). Saves the recipient's address,
+--    user. recipient is unauthenticated). Saves the recipient's address,
 --    flips postcard status to 'queued'.
 -- ---------------------------------------------------------------------------
 create or replace function public.redeem_postcard_claim(
@@ -276,7 +276,7 @@ revoke execute on function public.redeem_postcard_claim(text, text, text, text, 
 grant execute on function public.redeem_postcard_claim(text, text, text, text, text, text, text, text) to service_role;
 
 -- ---------------------------------------------------------------------------
--- 6. claim_lookup RPC — used by the claim Edge Function on GET (recipient's
+-- 6. claim_lookup RPC. used by the claim Edge Function on GET (recipient's
 --    first view of the page). Returns sender info + postcard message, but
 --    NOTHING that could leak the sender's address.
 -- ---------------------------------------------------------------------------

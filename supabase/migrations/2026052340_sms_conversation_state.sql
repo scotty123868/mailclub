@@ -1,4 +1,4 @@
--- v1.2 SMS-only flow — conversational state machine.
+-- v1.2 SMS-only flow. conversational state machine.
 --
 -- Replaces the hybrid SMS→web compose flow with an end-to-end SMS
 -- conversation. The user never leaves Messages. Each inbound text
@@ -17,7 +17,7 @@
 create table if not exists public.sms_conversation_state (
   -- One row per E.164 phone. Composite-PK alternative was {phone,
   -- conversation_id} but in practice a phone only has one in-flight
-  -- conversation at a time — newer photo = restart. Simpler.
+  -- conversation at a time. newer photo = restart. Simpler.
   phone text primary key,
   -- The state machine's current step. See sms-inbound for the full
   -- transition table.
@@ -51,7 +51,7 @@ create index if not exists sms_conversation_state_step_idx
 
 alter table public.sms_conversation_state enable row level security;
 revoke all on public.sms_conversation_state from anon, authenticated;
--- Service-role only — sms-inbound is the sole writer.
+-- Service-role only. sms-inbound is the sole writer.
 
 -- Helper RPC: atomically advance the state machine. Used by sms-inbound
 -- to set the next step + merge in new conversation_data fields in one

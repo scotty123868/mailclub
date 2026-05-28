@@ -1,4 +1,4 @@
--- v1.2 SMS magic moment prereq — add 'awaiting_sender_location' step
+-- v1.2 SMS magic moment prereq. add 'awaiting_sender_location' step
 -- to the state machine so we can capture the sender's city/state for
 -- the post-SEND delivery map confirmation page.
 --

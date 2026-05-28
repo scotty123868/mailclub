@@ -1,4 +1,4 @@
--- Reciprocation tokens — the QR-on-the-back viral loop.
+-- Reciprocation tokens. the QR-on-the-back viral loop.
 --
 -- Every Mailroom-printed postcard carries a QR code on the back. The receiver
 -- scans it with their iPhone camera, lands in the app (or web fallback), and
@@ -66,7 +66,7 @@ end $$;
 -- One claim row per send, never both flavors at once. Address-collection
 -- claims become reciprocation claims by flipping the flavor after the
 -- recipient submits their address (so the printed card still has a working
--- QR — same token, different mode).
+-- QR. same token, different mode).
 
 -- ---------------------------------------------------------------------------
 -- 1. Schema extensions
@@ -100,7 +100,7 @@ create index if not exists postcard_claims_scanned_by_user_id_idx
   where scanned_by_user_id is not null;
 
 -- ---------------------------------------------------------------------------
--- 1b. Friends table extension — track source_user_id so we know which
+-- 1b. Friends table extension. track source_user_id so we know which
 --     friends came from QR scans. Added BEFORE record_reciprocation_scan
 --     so the function compiles cleanly against the new column.
 -- ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ create index if not exists friends_source_user_id_idx
   where source_user_id is not null;
 
 -- ---------------------------------------------------------------------------
--- 2. create_reciprocation_token RPC — called from the app at send time for
+-- 2. create_reciprocation_token RPC. called from the app at send time for
 --    DIRECT-ADDRESS sends (the sender already knows the recipient's address).
 --    For magic-link sends, the existing send_postcard_via_claim already
 --    creates a row; this RPC instead flips that row's flavor to
@@ -155,7 +155,7 @@ begin
     raise exception 'NOT_OWNER';
   end if;
 
-  -- If a claim row already exists (magic-link path), no-op — that token
+  -- If a claim row already exists (magic-link path), no-op. that token
   -- will become the reciprocation token after the recipient claims their
   -- address. Return the existing token.
   if v_postcard.claim_id is not null then
@@ -222,13 +222,13 @@ $$;
 comment on function public.create_reciprocation_token is
   'App calls this for direct-address sends to mint the QR token embedded on '
   'the printed postcard back. For magic-link sends, the existing claim row '
-  'is reused — it transitions to reciprocation flavor after redemption.';
+  'is reused. it transitions to reciprocation flavor after redemption.';
 
 grant execute on function public.create_reciprocation_token(uuid)
   to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 3. lookup_reciprocation RPC — receiver app calls this with the QR token to
+-- 3. lookup_reciprocation RPC. receiver app calls this with the QR token to
 --    fetch sender display info + postcard preview. No auth required so the
 --    web fallback page can call it too.
 -- ---------------------------------------------------------------------------
@@ -257,7 +257,7 @@ begin
   end if;
 
   -- Fetch the postcard for preview. For address-collection-flavor tokens
-  -- that haven't been claimed yet, the QR isn't on a physical card yet —
+  -- that haven't been claimed yet, the QR isn't on a physical card yet .
   -- but we still surface the preview so the web claim page works.
   select message, category, photo_path, sent_at, lob_status
     into v_postcard
@@ -285,7 +285,7 @@ grant execute on function public.lookup_reciprocation(text)
   to service_role, authenticated, anon;
 
 -- ---------------------------------------------------------------------------
--- 4. record_reciprocation_scan RPC — receiver taps "Send one back" / opens
+-- 4. record_reciprocation_scan RPC. receiver taps "Send one back" / opens
 --    the app at /welcome-mail/[token]. Marks the token scanned, creates a
 --    friendship from receiver → sender (if not already friends), and
 --    inserts the postcard into the receiver's received list for their map.
@@ -341,7 +341,7 @@ begin
     );
   end if;
 
-  -- Mark scanned. First-write-wins — a token can only seed ONE friendship.
+  -- Mark scanned. First-write-wins. a token can only seed ONE friendship.
   -- Subsequent scans from other users return ALREADY_SCANNED_BY_OTHER.
   if v_claim.scanned_by_user_id is not null then
     return jsonb_build_object('ok', false, 'reason', 'ALREADY_SCANNED_BY_OTHER');
@@ -353,7 +353,7 @@ begin
     where id = v_claim.id;
 
   -- Pull the sender's current display info (may have updated since the
-  -- snapshot, in which case we prefer the latest — receiver should see the
+  -- snapshot, in which case we prefer the latest. receiver should see the
   -- sender's actual name).
   select name, city, state, avatar_initials
     into v_sender_profile
@@ -419,7 +419,7 @@ grant execute on function public.record_reciprocation_scan(text)
   to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 5. Flavor flip on redeem — when an address-collection claim is redeemed
+-- 5. Flavor flip on redeem. when an address-collection claim is redeemed
 --    (recipient submits their address), the token's flavor transitions to
 --    'reciprocation' so the QR on the eventually-printed card still works.
 --    Patch the existing redeem_postcard_claim RPC to do the flip.

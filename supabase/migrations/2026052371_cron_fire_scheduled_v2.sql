@@ -1,4 +1,4 @@
--- v1.2 follow-up — re-point fire-scheduled-postcards cron job at the
+-- v1.2 follow-up. re-point fire-scheduled-postcards cron job at the
 -- dedicated cron_trigger_secret vault entry (was mailroom_internal_secret)
 -- and switch the header name to x-cron-trigger.
 --

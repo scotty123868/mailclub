@@ -1,4 +1,4 @@
-# Mailroom — setup checklist
+# Mailroom. setup checklist
 
 Everything you need to register, configure, and ship Mailroom. Read once, then walk through in order.
 
@@ -37,8 +37,8 @@ App icon + screenshots (Figma/etc.) → ASC asset uploads
 
 You can split this into two phases:
 
-- **Phase 1 — TestFlight only** (~3-5 hours focused): items 1, 2, 3, 4, 7, 9, 10. Skips IAP, Lob, public review.
-- **Phase 2 — Public App Store** (~3-5 hours more, plus Apple review wait): items 5, 6, 8.
+- **Phase 1. TestFlight only** (~3-5 hours focused): items 1, 2, 3, 4, 7, 9, 10. Skips IAP, Lob, public review.
+- **Phase 2. Public App Store** (~3-5 hours more, plus Apple review wait): items 5, 6, 8.
 
 For your current goal ("just TestFlight for now"), do Phase 1.
 
@@ -75,7 +75,7 @@ Once enrolled, you can register App IDs, create signing certs, and access App St
 
 ## 3. Register the new Bundle ID
 
-The old `com.mailclub.app` registration (if you ever made one) doesn't carry over — Apple ties App IDs to a specific bundle string, and we've changed it.
+The old `com.mailclub.app` registration (if you ever made one) doesn't carry over. Apple ties App IDs to a specific bundle string, and we've changed it.
 
 1. Go to <https://developer.apple.com/account/resources/identifiers/list>
 2. Click **`+`** → **App IDs** → **App**
@@ -84,7 +84,7 @@ The old `com.mailclub.app` registration (if you ever made one) doesn't carry ove
 5. Capabilities to check now:
    - [x] **In-App Purchase** (for credit packs)
    - [x] **Push Notifications** (delivery + reply notifications)
-   - [x] **Sign in with Apple** (for the Apple auth flow — required by Apple Guideline 4.8 if you offer email/password)
+   - [x] **Sign in with Apple** (for the Apple auth flow. required by Apple Guideline 4.8 if you offer email/password)
 6. **Continue** → **Register**
 
 You should now see `com.mailroom.app` in the identifiers list.
@@ -114,7 +114,7 @@ This is your app record. All TestFlight builds, IAP configs, screenshots, and re
 
 ## 5. Configure EAS Build for the new bundle ID
 
-EAS Build needs to know to use the new bundle ID. Since we already changed `app.json`, the next build will pick it up — but you'll need fresh signing certs/provisioning profiles for the new bundle.
+EAS Build needs to know to use the new bundle ID. Since we already changed `app.json`, the next build will pick it up. but you'll need fresh signing certs/provisioning profiles for the new bundle.
 
 ```bash
 cd /Users/scottylefkowitz/Downloads/mailclub-app
@@ -156,13 +156,13 @@ Verify after running: `ls ios/` should show `Mailroom/`, `Mailroom.xcworkspace`,
 
 ---
 
-## 7. Authentication setup — and the magic link question
+## 7. Authentication setup. and the magic link question
 
 You asked: "we need magic link right?"
 
 **Short answer: no, you don't need magic link.** Email + password works for TestFlight. Apple Guideline 4.8 requires Sign in with Apple if you offer any third-party auth, which we're adding (see `AUTH_FLOW_PLAN.md`). Magic link is a third option, not a requirement.
 
-**Long answer — the three auth methods, ranked for Mailroom:**
+**Long answer. the three auth methods, ranked for Mailroom:**
 
 | Method | UX cost to user | UX cost to dev | When to use |
 |---|---|---|---|
@@ -192,9 +192,9 @@ await supabase.auth.signInWithOtp({
 ```
 
 You need:
-- **Deep link config** — `app.json` already has `"scheme": "mailroom"`. Add `app/auth/callback.tsx` route that calls `supabase.auth.exchangeCodeForSession()`.
-- **Supabase email template** — in dashboard → Auth → Email Templates → Magic Link, edit the HTML so the link looks like Mailroom branding (current default is "Supabase").
-- **Custom sender** — Supabase's default uses `noreply@mail.app.supabase.io`. To send from `hello@mailroom.app`, configure SMTP in the Supabase dashboard. Costs $0/mo on the Pro plan, requires DNS records.
+- **Deep link config**. `app.json` already has `"scheme": "mailroom"`. Add `app/auth/callback.tsx` route that calls `supabase.auth.exchangeCodeForSession()`.
+- **Supabase email template**. in dashboard → Auth → Email Templates → Magic Link, edit the HTML so the link looks like Mailroom branding (current default is "Supabase").
+- **Custom sender**. Supabase's default uses `noreply@mail.app.supabase.io`. To send from `hello@mailroom.app`, configure SMTP in the Supabase dashboard. Costs $0/mo on the Pro plan, requires DNS records.
 
 For TestFlight beta, all three of these are friction. Defer.
 
@@ -227,7 +227,7 @@ Required for profile photo upload to sync across devices.
 3. Public bucket: **No** (we'll use folder-scoped RLS)
 4. File size limit: 5 MB
 5. Allowed MIME types: `image/jpeg, image/png, image/webp, image/heic`
-6. Apply RLS policies — copy-paste this in SQL editor:
+6. Apply RLS policies. copy-paste this in SQL editor:
 
 ```sql
 create policy "users read all profile photos"
@@ -284,9 +284,9 @@ Required for App Store submission. You have the content in `docs/` already.
 
 After ~1 minute, your pages will live at:
 
-- `https://<your-github-username>.github.io/<repo-name>/` — landing
-- `https://<your-github-username>.github.io/<repo-name>/privacy.html` — privacy policy
-- `https://<your-github-username>.github.io/<repo-name>/support.html` — support page
+- `https://<your-github-username>.github.io/<repo-name>/`. landing
+- `https://<your-github-username>.github.io/<repo-name>/privacy.html`. privacy policy
+- `https://<your-github-username>.github.io/<repo-name>/support.html`. support page
 
 Paste those URLs into App Store Connect → App Information when prompted.
 
@@ -307,18 +307,18 @@ eas submit --platform ios --latest
 ```
 
 In App Store Connect → **TestFlight** tab:
-1. Build will show "Missing Compliance" until you answer the export question — we set `ITSAppUsesNonExemptEncryption: false` so this should auto-resolve. If not, click and answer "No, this app does not use encryption."
+1. Build will show "Missing Compliance" until you answer the export question. we set `ITSAppUsesNonExemptEncryption: false` so this should auto-resolve. If not, click and answer "No, this app does not use encryption."
 2. **Internal Testing** → create a group → add testers by Apple ID email
 3. Attach the build to the group
 4. Testers get a TestFlight email and can install immediately.
 
 No App Store review for internal testers. Limit: 100 internal testers.
 
-For more than 100 people, **External Testing** is required — adds a ~24-48h beta review by Apple. Lighter than full App Store review.
+For more than 100 people, **External Testing** is required. adds a ~24-48h beta review by Apple. Lighter than full App Store review.
 
 ---
 
-## Phase 2 — for public App Store release
+## Phase 2. for public App Store release
 
 When you decide to go beyond TestFlight, this is the additional checklist:
 
@@ -380,7 +380,7 @@ Add screenshots, description, build, IAPs. Click **Add for Review**. Wait 24h-7 
 Common first-submission rejections:
 - IAPs not properly disclosed in description
 - Privacy policy URL broken
-- Account deletion flow missing (we have it — Settings → Delete account)
+- Account deletion flow missing (we have it. Settings → Delete account)
 - Demo account credentials not working for reviewer
 - Misleading content claims
 
@@ -389,7 +389,7 @@ Common first-submission rejections:
 ## Quick-reference
 
 ```bash
-# Phase 1 — TestFlight only
+# Phase 1. TestFlight only
 df -h /                                                  # check disk space, free if <5GB
 # (manual) Apple Developer enrollment
 # (manual) Register com.mailroom.app App ID
@@ -404,7 +404,7 @@ eas submit --platform ios --latest
 # (manual) Add internal testers in ASC → TestFlight
 # (manual) Enable GitHub Pages: Settings → Pages → main /docs
 
-# Phase 2 — for public App Store later
+# Phase 2. for public App Store later
 # Configure IAP products
 # Fill out App Privacy questionnaire
 # Capture screenshots
@@ -424,7 +424,7 @@ eas submit --platform ios --latest
 - Lob dashboard: <https://dashboard.lob.com>
 - Expo / EAS: <https://expo.dev/accounts>
 - Companion docs in this repo:
-  - `APP_STORE_CONNECT.md` — the full ASC walkthrough
-  - `AUTH_FLOW_PLAN.md` — Sign in with Apple + email
-  - `LOB_INTEGRATION.md` — how to wire Lob for real postcards
-  - `POSTCARD_DESIGN_SPEC.md` — 4×6 spec, color profile, USPS rules
+  - `APP_STORE_CONNECT.md`. the full ASC walkthrough
+  - `AUTH_FLOW_PLAN.md`. Sign in with Apple + email
+  - `LOB_INTEGRATION.md`. how to wire Lob for real postcards
+  - `POSTCARD_DESIGN_SPEC.md`. 4×6 spec, color profile, USPS rules

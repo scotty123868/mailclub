@@ -1,9 +1,9 @@
--- v0.7.0.29 — reduce starter free credits from 3 → 1.
+-- v0.7.0.29. reduce starter free credits from 3 → 1.
 --
 -- Founder direction: one free card is enough to validate the product
 -- (send your first, see it arrive) without giving away so much value
 -- that users never convert to paid. Second send becomes a stamp
--- purchase — that's the real revenue loop.
+-- purchase. that's the real revenue loop.
 --
 -- Affects:
 --   - profiles.credits default: 3 → 1
@@ -22,7 +22,7 @@ alter table public.profiles
 alter table public.profiles
   alter column free_credits_remaining set default 1;
 
--- complete_signup RPC — find it + patch the hardcoded credit values.
+-- complete_signup RPC. find it + patch the hardcoded credit values.
 -- The RPC was created in 2026051200_initial_schema.sql:170-200 and
 -- modified in 2026051202_fix_complete_signup_initials.sql. The current
 -- form sets credits=3 and free_credits_remaining=5 inside the INSERT/

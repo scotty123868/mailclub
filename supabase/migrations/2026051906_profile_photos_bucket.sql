@@ -1,10 +1,10 @@
 -- =========================================================================
--- 2026-05-19 — Create profile-photos storage bucket + RLS policies
+-- 2026-05-19. Create profile-photos storage bucket + RLS policies
 -- =========================================================================
 --
 -- The 2026051204_profile_photo migration added the `profiles.photo_url`
 -- column but only left dashboard instructions for the bucket itself. The
--- bucket was never created on production — every profile-photo upload was
+-- bucket was never created on production. every profile-photo upload was
 -- failing with "Bucket not found" (caught in build 62 device testing).
 --
 -- This migration does the bucket creation in SQL so it actually runs:
@@ -13,7 +13,7 @@
 --      scoped to the bucket and to `<user_id>/...` folder ownership.
 --
 -- File size limit: 5 MB. Allowed MIME types: jpeg, png, webp, heic.
--- Bucket is PRIVATE — uploadProfilePhoto() in src/services/api.ts already
+-- Bucket is PRIVATE. uploadProfilePhoto() in src/services/api.ts already
 -- uses getPublicUrl on a non-public bucket, which Supabase Storage rewrites
 -- to a signed-URL-style path. If we ever flip the bucket public, the
 -- existing photo_url values keep working.

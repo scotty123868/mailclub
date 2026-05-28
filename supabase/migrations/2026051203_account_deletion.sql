@@ -1,4 +1,4 @@
--- Apple Guideline 5.1.1(v) — account-creation apps must allow deletion in-app.
+-- Apple Guideline 5.1.1(v). account-creation apps must allow deletion in-app.
 -- This RPC deletes the auth.users row; ON DELETE CASCADE on the foreign keys
 -- of profiles / friends / postcards / void_replies / credit_transactions
 -- wipes the rest of the user's data atomically.

@@ -4,7 +4,7 @@ Stuff we've decided is worth building but isn't on the critical path right now. 
 
 ---
 
-## "Send a link" — recipient self-serves their address
+## "Send a link". recipient self-serves their address
 
 **The pitch (user-facing copy):**
 
@@ -12,17 +12,17 @@ Stuff we've decided is worth building but isn't on the critical path right now. 
 
 **Why this is the killer feature:**
 
-Right now Mailroom hits a wall the first time someone wants to send a card to a friend whose address they don't know. The address-input form gates the entire purchase. TouchNote solved this exact problem in 2014 and it became their primary growth loop — sender invites recipient → recipient enters address + becomes a user → recipient sends their own cards. Viral coefficient > 1.
+Right now Mailroom hits a wall the first time someone wants to send a card to a friend whose address they don't know. The address-input form gates the entire purchase. TouchNote solved this exact problem in 2014 and it became their primary growth loop. sender invites recipient → recipient enters address + becomes a user → recipient sends their own cards. Viral coefficient > 1.
 
 **Flow sketch:**
 
 1. Send screen → recipient picker → tap **"They'll fill in their address"** option (or default fallback when friend has no address)
 2. Sender writes the postcard message as normal, picks a category, hits Send
 3. Credits charged immediately (we collect now, ship later)
-4. Postcard goes to a **"pending address"** state — `postcard.status = 'awaiting_address'`
+4. Postcard goes to a **"pending address"** state. `postcard.status = 'awaiting_address'`
 5. App generates a short, unguessable claim URL: `https://mailrooms.app/claim/AB7K9XQ` (8-char base32, links to a one-time claim token)
 6. Sender picks how to send the link:
-   - **iMessage** (most common — Share Sheet on iOS with pre-filled "Hey, I sent you a Mailroom postcard 👇 [link]")
+   - **iMessage** (most common. Share Sheet on iOS with pre-filled "Hey, I sent you a Mailroom postcard 👇 [link]")
    - **SMS** (Twilio fallback if they want us to send the text on their behalf)
    - **Copy link** (paste anywhere)
 7. Recipient taps link → light-weight web claim page (NOT app required):
@@ -41,7 +41,7 @@ Right now Mailroom hits a wall the first time someone wants to send a card to a 
 
 - New `postcards.status` enum value: `awaiting_address`
 - New `postcard_claims` table: `id, postcard_id, claim_token, expires_at, claimed_at, claimed_by_address`
-- New Edge Function: `claim-postcard/:token` — public endpoint, no auth
+- New Edge Function: `claim-postcard/:token`. public endpoint, no auth
 - Web claim page: simple static React + form posting to claim-postcard
 - Domain: pointing `mailrooms.app/claim/*` at a Vercel-hosted or Supabase-hosted static page
 - iMessage share sheet integration: `Share` API in RN
@@ -52,8 +52,8 @@ Right now Mailroom hits a wall the first time someone wants to send a card to a 
 
 - Send-a-link mode has a small chance the recipient never claims → we already charged the sender. Refund automatically after 30 days? Keep the credit on file? Either is fine but pick before launch.
 
-**Priority:** P1 — biggest growth lever post-launch. Build after TestFlight beta validates the basic flow works.
+**Priority:** P1. biggest growth lever post-launch. Build after TestFlight beta validates the basic flow works.
 
 ---
 
-## (other future ideas go below this line — newest at top)
+## (other future ideas go below this line. newest at top)

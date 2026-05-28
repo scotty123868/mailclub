@@ -1,4 +1,4 @@
--- v0.7.0.19 — normalize send_postcard_via_claim cost map.
+-- v0.7.0.19. normalize send_postcard_via_claim cost map.
 --
 -- Bug user hit on build 26: tapped "Share a link" on the Send tab with
 -- 1 credit in their account. UI displayed "1 stamp" required. Server

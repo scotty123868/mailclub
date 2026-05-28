@@ -19,7 +19,7 @@ deployed Supabase project + Lob test API.
 - `_internal_get_reciprocation_photo_path` granted only to service_role.
 - Dead RLS policies on `postcard_claims` + `postcards` dropped via
   `2026051901` migration.
-- `guard_against_bulk_credit_grant()` function added — future bulk
+- `guard_against_bulk_credit_grant()` function added. future bulk
   credit grants must call it to prove no paying users will be affected.
 
 ### Reliability
@@ -35,7 +35,7 @@ deployed Supabase project + Lob test API.
 - `getSignedPhotoUrl` failures now show an explicit "Photo unavailable"
   chip on the welcome-mail screen.
 - Stripe purchase polls `fetchProfile` up to 9s for webhook-applied
-  credit before showing "stamps added" — no more optimistic UI.
+  credit before showing "stamps added". no more optimistic UI.
 - `fetchPostcards` batch-signs photo URLs via `createSignedUrls()` +
   23h client cache (was N round-trips per refresh).
 
@@ -75,7 +75,7 @@ deployed Supabase project + Lob test API.
 
 ### Build hygiene
 - `bunx tsc --noEmit` clean across all changes.
-- `bunx jest` — 29 test suites, 242 passing, 1 skipped, 0 failed.
+- `bunx jest`. 29 test suites, 242 passing, 1 skipped, 0 failed.
 - 21 commits pushed to `mvp-v0.3-credits-and-categories`.
 - Working tree clean.
 
@@ -83,7 +83,7 @@ deployed Supabase project + Lob test API.
 
 - **AASA Vercel deploy**: file is updated in git, Vercel hasn't
   redeployed since 7:40 AM ET 2026-05-18. Two API keys (different
-  scopes) tried — neither could see the Mailroom project. Real fix
+  scopes) tried. neither could see the Mailroom project. Real fix
   requires Vercel dashboard access. QR scans already fire Universal
   Link via the `/welcome-mail/*` path which IS in current AASA;
   the displayed `/r/{token}` URL falls back to the web page (designed
@@ -99,9 +99,9 @@ deployed Supabase project + Lob test API.
 
 ## Action items for the user
 
-1. **Vercel redeploy** — open https://vercel.com/dashboard, find the
+1. **Vercel redeploy**. open https://vercel.com/dashboard, find the
    Mailroom project, hit Redeploy on the latest commit. Verify with
    `curl -s https://app.themailroom.club/.well-known/apple-app-site-association`
-   — response should include `/r/*` + `/claim?t=*` paths.
+  . response should include `/r/*` + `/claim?t=*` paths.
 2. **TestFlight test build 58** when it lands (~10 min after push).
 3. **Submit to App Review** once you've verified the device build.

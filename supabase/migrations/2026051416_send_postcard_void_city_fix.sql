@@ -1,4 +1,4 @@
--- v0.7.0.17 — fix null to_city for void / pen-pal sends.
+-- v0.7.0.17. fix null to_city for void / pen-pal sends.
 --
 -- Bug: the Phase 6 send_postcard RPC (2026051211) declares
 --   v_to_city text;
@@ -19,7 +19,7 @@
 --
 -- Signature MUST match Phase 6 exactly (uuid first, text second) so
 -- CREATE OR REPLACE replaces the existing function rather than creating
--- a new overload — which would re-introduce the resolver-ambiguity bug
+-- a new overload. which would re-introduce the resolver-ambiguity bug
 -- that 2026051213 fixed.
 
 create or replace function public.send_postcard(
@@ -67,7 +67,7 @@ begin
   end if;
 
   -- to_city only resolves for friend sends. Void / pen-pal / claim sends
-  -- keep the '' default — Lob doesn't read this column, it's just journal
+  -- keep the '' default. Lob doesn't read this column, it's just journal
   -- metadata for the sender's own map view.
   if p_to_friend_id is not null then
     select coalesce(city, '') into v_to_city

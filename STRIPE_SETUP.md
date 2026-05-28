@@ -1,4 +1,4 @@
-# Stripe setup — step-by-step
+# Stripe setup. step-by-step
 
 This replaces Apple IAP for credit pack purchases. We use Stripe because Mailroom sells physical mail. Apple Guideline 3.1.5(a) requires non-IAP for physical goods; the 2024 update to 3.1.1 explicitly carves out physical gift cards. Precedent: TouchNote, Felt, Postagram do this exact model on the App Store.
 
@@ -12,11 +12,11 @@ This replaces Apple IAP for credit pack purchases. We use Stripe because Mailroo
 
 - ✅ `@stripe/stripe-react-native` added to package.json
 - ✅ `<StripeProvider>` wraps the app root in `app/_layout.tsx`
-- ✅ `src/services/payments.ts` — `purchasePack(pack)` opens the Payment Sheet
-- ✅ `src/components/CreditsSheet.tsx` — tap a pack → buy → credits refresh
-- ✅ `supabase/functions/create-payment-intent/index.ts` — creates the PaymentIntent
-- ✅ `supabase/functions/stripe-webhook/index.ts` — handles success + refunds
-- ✅ `supabase/migrations/2026051207_stripe_payments.sql` — `credit_purchases` ledger + `apply_stripe_credit_purchase` RPC
+- ✅ `src/services/payments.ts`. `purchasePack(pack)` opens the Payment Sheet
+- ✅ `src/components/CreditsSheet.tsx`. tap a pack → buy → credits refresh
+- ✅ `supabase/functions/create-payment-intent/index.ts`. creates the PaymentIntent
+- ✅ `supabase/functions/stripe-webhook/index.ts`. handles success + refunds
+- ✅ `supabase/migrations/2026051207_stripe_payments.sql`. `credit_purchases` ledger + `apply_stripe_credit_purchase` RPC
 
 You just need to: get Stripe keys, push the migration, deploy 2 Edge Functions, set 2 secrets, register a webhook.
 
@@ -37,8 +37,8 @@ You just need to: get Stripe keys, push the migration, deploy 2 Edge Functions, 
 **Direct link:** <https://dashboard.stripe.com/test/apikeys>
 
 You'll see two keys:
-- **Publishable key** (`pk_test_...`) — safe to ship in the app bundle
-- **Secret key** (`sk_test_...`) — server-side only, NEVER ship in the app
+- **Publishable key** (`pk_test_...`). safe to ship in the app bundle
+- **Secret key** (`sk_test_...`). server-side only, NEVER ship in the app
 
 Copy both. Note that the secret key is shown once. If you lose it, click "Roll key."
 
@@ -110,7 +110,7 @@ You should see both `STRIPE_SECRET_KEY` and `STRIPE_PUBLISHABLE_KEY` (values mas
 supabase functions deploy create-payment-intent
 ```
 
-(No `--no-verify-jwt` here — the function expects a Supabase Auth JWT in the Authorization header. The mobile app sends it automatically via `supabase.functions.invoke()`.)
+(No `--no-verify-jwt` here. the function expects a Supabase Auth JWT in the Authorization header. The mobile app sends it automatically via `supabase.functions.invoke()`.)
 
 Expected:
 ```
@@ -131,7 +131,7 @@ The webhook is how Stripe tells your server "payment succeeded, credit the user.
 supabase functions deploy stripe-webhook --no-verify-jwt
 ```
 
-The `--no-verify-jwt` flag is required — Stripe doesn't send a Supabase JWT, it sends a Stripe HMAC signature instead (the function verifies that signature itself).
+The `--no-verify-jwt` flag is required. Stripe doesn't send a Supabase JWT, it sends a Stripe HMAC signature instead (the function verifies that signature itself).
 
 ### 7b. Register the endpoint with Stripe
 
@@ -170,11 +170,11 @@ This is the moment of truth.
 Check the data flowed:
 
 **Stripe dashboard:** <https://dashboard.stripe.com/test/payments>
-- New payment for $5.00 with description "Mailroom — 5 credits"
+- New payment for $5.00 with description "Mailroom. 5 credits"
 
 **Supabase database:** <https://supabase.com/dashboard/project/nlwnmgwylmmnaemdnzlq/editor>
-- Open the `credit_purchases` table — one new row with your user_id, pack_id=`p5`, credits_added=5, amount_cents=500
-- Open `profiles` — your row has `stripe_customer_id` filled in and `credits` bumped by 5
+- Open the `credit_purchases` table. one new row with your user_id, pack_id=`p5`, credits_added=5, amount_cents=500
+- Open `profiles`. your row has `stripe_customer_id` filled in and `credits` bumped by 5
 
 **Stripe webhook logs:** <https://dashboard.stripe.com/test/webhooks>
 - Click your endpoint → recent deliveries → 200 OK for `payment_intent.succeeded`
@@ -275,7 +275,7 @@ Every API call + webhook delivery is here, with full request/response payloads.
 - `Stripe not configured` banner stays after setting `stripePublishableKey` → you didn't rebuild the native app. Run `npx expo prebuild --clean && npx expo run:ios`.
 - 401 on `create-payment-intent` → user isn't signed in, or the auth header isn't being sent. Check `supabase.auth.getSession()` returns a session.
 - Webhook returns 400 "Signature verification failed" → wrong `STRIPE_WEBHOOK_SECRET` env var. Re-copy from the Stripe webhook page.
-- PaymentIntent succeeds but credits don't update → check the webhook delivery in Stripe dashboard. If 200 OK but credits still wrong, check the `credit_purchases` table — if no row, the RPC errored. Check function logs.
+- PaymentIntent succeeds but credits don't update → check the webhook delivery in Stripe dashboard. If 200 OK but credits still wrong, check the `credit_purchases` table. if no row, the RPC errored. Check function logs.
 
 ---
 

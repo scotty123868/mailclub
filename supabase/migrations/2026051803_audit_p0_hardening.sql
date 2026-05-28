@@ -1,5 +1,5 @@
 -- =========================================================================
--- 2026-05-18 — v0.7.0.49 deep-audit P0 hardening
+-- 2026-05-18. v0.7.0.49 deep-audit P0 hardening
 -- =========================================================================
 --
 -- Closes five P0 / P1 items from the deep-audit pass:
@@ -20,7 +20,7 @@
 -- =========================================================================
 
 -- -------------------------------------------------------------------------
--- 1. send_postcard_via_claim — atomic credit deduction
+-- 1. send_postcard_via_claim. atomic credit deduction
 --
 -- Original (2026051418): SELECT credits FOR UPDATE, check, INSERT, UPDATE.
 -- The FOR UPDATE protects against direct row contention but the credit
@@ -64,7 +64,7 @@ begin
     else 1
   end;
 
-  -- Snapshot identity (no lock — read-only).
+  -- Snapshot identity (no lock. read-only).
   select name, city
     into v_sender_name, v_sender_city
     from public.profiles
@@ -116,7 +116,7 @@ grant execute on function public.send_postcard_via_claim(text, text, text, text)
   to authenticated;
 
 -- -------------------------------------------------------------------------
--- 2. create_reciprocation_token — stronger token generation
+-- 2. create_reciprocation_token. stronger token generation
 --
 -- Returns jsonb to match the existing API (clients expect
 -- {token, reused?}). Body otherwise identical to 2026051209 except the
@@ -191,7 +191,7 @@ grant execute on function public.create_reciprocation_token(uuid)
   to authenticated;
 
 -- -------------------------------------------------------------------------
--- 3. record_reciprocation_scan — flavor check + on-conflict guard
+-- 3. record_reciprocation_scan. flavor check + on-conflict guard
 --
 -- v0.7.0.49 changes:
 --   - Reject WRONG_FLAVOR if the token's claim is still in address-
@@ -329,7 +329,7 @@ grant execute on function public.record_reciprocation_scan(text)
   to authenticated;
 
 -- -------------------------------------------------------------------------
--- 4. send_into_void_with_matching — atomic credit deduction
+-- 4. send_into_void_with_matching. atomic credit deduction
 -- -------------------------------------------------------------------------
 do $$
 declare
@@ -361,7 +361,7 @@ end $$;
 --
 -- That migration UPDATED all profiles to credits >= 25 on apply. If
 -- anyone rebuilds the DB from scratch, every existing profile gets
--- silently topped up — including paying users. Add a guard function
+-- silently topped up. including paying users. Add a guard function
 -- that future migrations or scripts MUST call before bulk-credit grants.
 -- Belt + suspenders: we can't retroactively rewrite an applied migration,
 -- so the canonical defense is "any future top-up MUST go through this

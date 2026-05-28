@@ -1,6 +1,6 @@
-# Lob — printing & mailing real postcards
+# Lob. printing & mailing real postcards
 
-This doc walks you through wiring **Mailroom** to [Lob](https://lob.com) so that tapping **Send** in the app produces a real, physical postcard in someone's mailbox a few days later. The screenshot you sent (the "Available Promotions" page) is one tab inside Lob's dashboard — it's not where we'll spend most of our time. We'll start at the top.
+This doc walks you through wiring **Mailroom** to [Lob](https://lob.com) so that tapping **Send** in the app produces a real, physical postcard in someone's mailbox a few days later. The screenshot you sent (the "Available Promotions" page) is one tab inside Lob's dashboard. it's not where we'll spend most of our time. We'll start at the top.
 
 > **TestFlight scope:** For TestFlight (your current target), we **don't actually need to mail anything yet**. Beta testers will see the success modal that says "sits in the queue until our printing partner is live." This doc is the path to flip that switch when you're ready. You can do steps 0-3 (account + sandbox) in 30 minutes and that's enough to dev/test the integration end to end without spending money or mailing real cards.
 
@@ -23,7 +23,7 @@ The "Available Promotions" tab you screenshotted is for opt-in marketing program
 
 1. Go to <https://dashboard.lob.com/signup>
 2. Sign up with your email. They'll send a verification link.
-3. After verification, you land in the dashboard. Lob defaults you into **Test mode** — the toggle is in the top-right of the dashboard. Leave it on Test for now. (Live mode is gated until you add a payment method.)
+3. After verification, you land in the dashboard. Lob defaults you into **Test mode**. the toggle is in the top-right of the dashboard. Leave it on Test for now. (Live mode is gated until you add a payment method.)
 
 ---
 
@@ -31,10 +31,10 @@ The "Available Promotions" tab you screenshotted is for opt-in marketing program
 
 1. Dashboard sidebar → **API Requests** → **API Keys** (or directly: <https://dashboard.lob.com/settings/api-keys>)
 2. You'll see two pairs:
-   - **Test Publishable Key** — starts with `test_pub_`
-   - **Test Secret Key** — starts with `test_`
-   - **Live Publishable Key** — starts with `live_pub_`
-   - **Live Secret Key** — starts with `live_` (only after you add billing)
+   - **Test Publishable Key**. starts with `test_pub_`
+   - **Test Secret Key**. starts with `test_`
+   - **Live Publishable Key**. starts with `live_pub_`
+   - **Live Secret Key**. starts with `live_` (only after you add billing)
 3. Copy the **Test Secret Key**. This is what our server-side code will use.
 
 > **Never commit Lob secret keys.** Put them in Supabase Edge Function environment variables, not in `app.json`.
@@ -64,14 +64,14 @@ Mailroom already has the right shape for this. Here's what's there:
 
 The gap is the Lob call. We have **two** good places to put it:
 
-### Option A — Supabase Edge Function (recommended)
+### Option A. Supabase Edge Function (recommended)
 
 After `send_postcard` writes the row, a Postgres trigger or queue job invokes a Supabase Edge Function. The function reads the postcard row, calls Lob, stores the returned Lob ID + status on the postcard row. This is the right long-term shape because:
 - Secrets stay server-side. The app never sees the Lob key.
 - We can retry on failure without involving the client.
 - We can rate-limit, debounce, sanity-check addresses.
 
-### Option B — Direct from the app
+### Option B. Direct from the app
 
 The app calls Lob's API directly. Faster to wire, simpler to debug. But:
 - Lob key has to ship to the device (security risk if extracted).
@@ -108,7 +108,7 @@ curl -X POST https://api.lob.com/v1/postcards \
 ```
 
 A few notes:
-- `front` and `back` can be public URLs (PNG/JPG/PDF) OR HTML strings OR file uploads. Public URLs is the easiest path — we already have signed Supabase Storage URLs.
+- `front` and `back` can be public URLs (PNG/JPG/PDF) OR HTML strings OR file uploads. Public URLs is the easiest path. we already have signed Supabase Storage URLs.
 - `size`: `4x6` (small, ~$0.65), `6x9` (medium), `6x11` (large). Start with `4x6`.
 - The response includes `id` (Lob's postcard ID) and `expected_delivery_date`.
 
@@ -265,7 +265,7 @@ Lob emits events: `postcard.created`, `postcard.rendered_pdf`, `postcard.in_tran
 2. URL: `https://<project>.functions.supabase.co/lob-webhook`
 3. Events: check all postcard events.
 4. Create another Edge Function `lob-webhook` that receives the event, looks up the postcard by `lob_id`, and updates `lob_status`.
-5. **Verify the webhook signature** — Lob signs each request with HMAC-SHA256 using a secret you can read in the dashboard. Reject any request that doesn't verify.
+5. **Verify the webhook signature**. Lob signs each request with HMAC-SHA256 using a secret you can read in the dashboard. Reject any request that doesn't verify.
 
 This is what lets you fire a push notification "Your card to Maya was delivered."
 
@@ -281,7 +281,7 @@ POST https://api.lob.com/v1/us_verifications
 
 You feed it a partial address, it returns a normalized address + a deliverability score. Run this when a friend adds an address in the app, before saving. Catches typos, invalid ZIPs, and undeliverable addresses *before* the user spends a credit.
 
-It's ~$0.10 per verification on the lowest tier — worth it.
+It's ~$0.10 per verification on the lowest tier. worth it.
 
 ---
 
@@ -324,7 +324,7 @@ If you sat down to start this tomorrow, the order would be:
 
 1. **Sign up at lob.com** (5 min)
 2. **Grab the test API key** (1 min)
-3. **Run the curl example** above with your own test address — see a fake postcard appear in the Lob dashboard (10 min)
+3. **Run the curl example** above with your own test address. see a fake postcard appear in the Lob dashboard (10 min)
 4. **Don't write any app code yet.** Look at the rendered PDF Lob produces. Decide if you like the print spec at 4×6 or want to bump to 6×9.
 5. **Then** start the schema migration + Edge Function (1-2 evenings).
 6. **Send yourself 10 real cards** before you let anyone else.

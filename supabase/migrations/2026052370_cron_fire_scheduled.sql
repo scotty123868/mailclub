@@ -1,4 +1,4 @@
--- v1.2 magic moment — cron schedule for scheduled-postcard firing.
+-- v1.2 magic moment. cron schedule for scheduled-postcard firing.
 --
 -- Runs fire-scheduled-postcards Edge Function once a day at 14:00 UTC
 -- (~9am ET, ~6am PT). The function pulls postcards with
@@ -14,11 +14,11 @@
 --     'Used by fire-scheduled-postcards pg_cron job'
 --   );
 --
--- This migration is idempotent — it unschedules any prior job by name
+-- This migration is idempotent. it unschedules any prior job by name
 -- before scheduling, so re-running is safe.
 
 ------------------------------------------------------------
--- 1. Extensions (no-ops if already enabled — Supabase usually has these)
+-- 1. Extensions (no-ops if already enabled. Supabase usually has these)
 ------------------------------------------------------------
 
 create extension if not exists pg_cron;
@@ -55,7 +55,7 @@ select cron.schedule(
 );
 
 ------------------------------------------------------------
--- 3. Helper view for ops — peek at recent cron runs
+-- 3. Helper view for ops. peek at recent cron runs
 ------------------------------------------------------------
 
 -- cron.job_run_details is the system table. This view filters it for

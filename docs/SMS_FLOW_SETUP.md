@@ -1,4 +1,4 @@
-# SMS-to-postcard flow — setup guide
+# SMS-to-postcard flow. setup guide
 
 Status: **Phase 1 scaffolded** (May 23, 2026)
 
@@ -37,18 +37,18 @@ Lob prints + mails the card
 
 ---
 
-## Setup checklist — what YOU need to do
+## Setup checklist. what YOU need to do
 
 ### 1. Twilio account + toll-free number (~10 min)
 
 1. Sign up at https://www.twilio.com if you don't have an account.
 2. **Buy a toll-free number**: Console → Phone Numbers → Buy a number → check the "Toll-free" filter → pick something memorable (877/833 area code). Cost: ~$2/mo + per-message.
-3. **Register your toll-free verification** (REQUIRED — US carriers block unregistered toll-free traffic): Console → Messaging → Compliance → Toll-Free Verification.
+3. **Register your toll-free verification** (REQUIRED. US carriers block unregistered toll-free traffic): Console → Messaging → Compliance → Toll-Free Verification.
    - Fill out the form (business info, sample messages, opt-in language).
    - Submit. Approval is usually 1-3 business days.
    - **You can test without approval but most messages will fail to deliver to real carriers until you're approved.**
 
-### 2. Supabase Storage bucket — `sms-photos`
+### 2. Supabase Storage bucket. `sms-photos`
 
 In your Supabase project dashboard → Storage → New bucket:
 - Name: `sms-photos`
@@ -67,7 +67,7 @@ supabase secrets set TWILIO_ACCOUNT_SID=AC...   # from Twilio Console → Accoun
 supabase secrets set TWILIO_AUTH_TOKEN=...      # from Twilio Console → Account
 supabase secrets set TWILIO_FROM_NUMBER=+1877...  # your toll-free in E.164
 supabase secrets set COMPOSE_BASE_URL=https://app.themailroom.club/compose
-# Optional (for local dev only — leave unset in prod):
+# Optional (for local dev only. leave unset in prod):
 # supabase secrets set SMS_INBOUND_SKIP_VERIFY=true
 ```
 
@@ -129,7 +129,7 @@ If the SMS reply doesn't come:
 
 - Full compose UI: message field with live back-of-postcard preview
 - Google Places autocomplete for recipient address (key already in app.json's `googlePlacesApiKey`)
-- Phone OTP signup at submit (Supabase Auth phone provider — needs Twilio configured as the SMS provider for OTP in Supabase Auth settings)
+- Phone OTP signup at submit (Supabase Auth phone provider. needs Twilio configured as the SMS provider for OTP in Supabase Auth settings)
 - `sms-submit` Edge Function that:
   - Resolves token → draft
   - Verifies phone matches the OTP'd user
@@ -143,7 +143,7 @@ If the SMS reply doesn't come:
 ## Phase 3 (polish)
 
 - Lob webhook → SMS the sender on `delivered` status
-- "Sent via Mailroom — themailroom.club" tiny mark on the postcard back template (lob-send-postcard reads `sms_origin` flag)
+- "Sent via Mailroom. themailroom.club" tiny mark on the postcard back template (lob-send-postcard reads `sms_origin` flag)
 - Account creation polish (link existing Apple Sign In users to their phone if they later text in)
 - Edge cases: multiple photos in one MMS, no media attached (already handled in Phase 1), repeat senders without a phone-linked account
 
@@ -173,4 +173,4 @@ The 10-pack is the better unit economics; the 4-pack is the better psychological
 - Drafts auto-expire after 24 hours; the `consumed_at` flag prevents reuse after submit.
 - Twilio signature verification is **mandatory** in production. If `SMS_INBOUND_SKIP_VERIFY` is ever set true in prod, anyone can POST fake "user texted us a photo" events and exhaust the storage bucket. Keep it unset.
 - The `sms-send` Edge Function requires the service-role JWT as auth. Anonymous callers cannot send SMS.
-- Phone numbers (`profiles.phone`, `sms_postcard_drafts.from_phone`) are PII. The drafts table has RLS that denies all anon + authenticated access — only service-role can read. Profile.phone is only readable to the owning user via existing profile RLS.
+- Phone numbers (`profiles.phone`, `sms_postcard_drafts.from_phone`) are PII. The drafts table has RLS that denies all anon + authenticated access. only service-role can read. Profile.phone is only readable to the owning user via existing profile RLS.

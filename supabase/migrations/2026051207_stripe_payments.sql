@@ -1,19 +1,19 @@
--- Stripe Payments — replaces Apple IAP for credit pack purchases.
+-- Stripe Payments. replaces Apple IAP for credit pack purchases.
 --
 -- Why: Mailroom sells physical mail. Apple Guideline 3.1.5(a) requires
 -- non-IAP for physical goods, and the 2024 update to 3.1.1 carves out
 -- physical gift cards explicitly. We use Stripe for both Apple Pay and card.
 --
 -- Tables touched:
---   profiles.stripe_customer_id (TEXT, unique-ish per user) — set on first
+--   profiles.stripe_customer_id (TEXT, unique-ish per user). set on first
 --     PaymentIntent so subsequent buys reuse the customer
---   credit_purchases (NEW) — append-only ledger of successful purchases.
+--   credit_purchases (NEW). append-only ledger of successful purchases.
 --     Indexed by stripe_payment_intent_id for idempotent webhook handling.
 --
 -- Functions:
---   apply_stripe_credit_purchase — webhook calls this on
+--   apply_stripe_credit_purchase. webhook calls this on
 --     payment_intent.succeeded. Idempotent on stripe_payment_intent_id.
---   rollback_stripe_credit_purchase — webhook calls this on charge.refunded.
+--   rollback_stripe_credit_purchase. webhook calls this on charge.refunded.
 --     Subtracts credits if the user has them; otherwise just records a
 --     negative balance event (we don't go negative locally).
 
@@ -72,7 +72,7 @@ as $$
 declare
   v_already boolean;
 begin
-  -- Idempotency check — if we already recorded this PI, no-op.
+  -- Idempotency check. if we already recorded this PI, no-op.
   select exists (
     select 1 from public.credit_purchases
     where stripe_payment_intent_id = p_stripe_payment_intent_id
@@ -140,6 +140,6 @@ comment on function public.rollback_stripe_credit_purchase is
 -- 5. Drop the old purchase_credits RPC (was Apple-IAP-shaped, no longer used)
 --    Keep it for one release in case clients haven't upgraded, then drop.
 -- ---------------------------------------------------------------------------
--- (Intentionally NOT dropping yet — the existing client still references it
+-- (Intentionally NOT dropping yet. the existing client still references it
 --  via api.purchaseCredits. We'll remove in 2026051210 once the Stripe flow
 --  is verified end-to-end.)

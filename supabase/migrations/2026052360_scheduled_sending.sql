@@ -1,4 +1,4 @@
--- v1.2 magic moment — scheduled sending.
+-- v1.2 magic moment. scheduled sending.
 --
 -- User can say "mail this for her birthday June 15" or "send in 3 days"
 -- during the SMS compose flow. We save the postcard with status='scheduled'
@@ -7,7 +7,7 @@
 -- arrived, hands them off to Lob, and flips status to 'sent'.
 --
 -- Same column drives iOS app's "Schedule for later" date picker once that's
--- built — single source of truth for delayed delivery.
+-- built. single source of truth for delayed delivery.
 
 ------------------------------------------------------------
 -- 1. postcards.scheduled_send_at column + 'scheduled' status
@@ -39,12 +39,12 @@ create index if not exists postcards_scheduled_send_at_idx
 
 comment on column public.postcards.scheduled_send_at is
   'When set, the postcard is held until this timestamp (NOT the arrival '
-  'date — this is the date we hand off to Lob). Cron job fires Lob when '
+  'date. this is the date we hand off to Lob). Cron job fires Lob when '
   'now() >= scheduled_send_at AND status = ''scheduled''. To target an '
   'arrival date, set this to arrival_date - 7 days (Lob avg transit).';
 
 ------------------------------------------------------------
--- 2. send_postcard_sms RPC — add p_scheduled_send_at param
+-- 2. send_postcard_sms RPC. add p_scheduled_send_at param
 --    If set, status starts as 'scheduled' and Lob handoff is deferred.
 ------------------------------------------------------------
 
