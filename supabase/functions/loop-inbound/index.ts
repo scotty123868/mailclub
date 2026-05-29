@@ -169,6 +169,133 @@ function mintToken(): string {
  .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
+// SAFETY: photo + text content moderation. Critical for pen pal mode —
+// a stranger's mailbox is going to receive whatever we approve, with
+// USPS as our delivery network. CSAM/nudity/violence/explicit personal
+// info would be a brand-ending event.
+//
+// Uses OpenAI's omni-moderation-latest endpoint which supports image
+// input. Returns { ok: true } if both clear, { ok: false, reason } if
+// either trips. Failure-safe: if the API is down, we ERR ON SAFETY
+// and block. Better to inconvenience a sender than mail a stranger
+// something illegal.
+interface ModerationVerdict {
+ ok: boolean;
+ reason?: string;
+ photo_flagged?: boolean;
+ text_flagged?: boolean;
+}
+
+async function moderatePhotoAndText(
+ photoUrl: string,
+ noteText: string,
+): Promise<ModerationVerdict> {
+ const key = Deno.env.get("OPENAI_API_KEY") ?? "";
+ if (!key) {
+  console.warn("[loop-inbound] OPENAI_API_KEY not set, moderation DISABLED");
+  // No API key = no moderation. For pen pal mode the caller should
+  // treat this as a fail-closed condition.
+  return { ok: false, reason: "moderation_unavailable" };
+ }
+
+ const inputs: any[] = [{ type: "image_url", image_url: { url: photoUrl } }];
+ if (noteText && noteText.trim().length > 0) {
+  inputs.push({ type: "text", text: noteText });
+ }
+
+ try {
+  const res = await fetch("https://api.openai.com/v1/moderations", {
+   method: "POST",
+   headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+   body: JSON.stringify({
+    model: "omni-moderation-latest",
+    input: inputs,
+   }),
+  });
+  if (!res.ok) {
+   const body = await res.text().catch(() => "");
+   console.error("[loop-inbound] moderation HTTP fail", res.status, body.slice(0, 200));
+   // Fail closed for safety
+   return { ok: false, reason: `moderation_http_${res.status}` };
+  }
+  const data = await res.json();
+  const results = Array.isArray(data?.results) ? data.results : [];
+  if (results.length === 0) {
+   return { ok: false, reason: "moderation_empty_results" };
+  }
+  // Multi-input: results[0] = photo, results[1] = text (if present)
+  const photoResult = results[0];
+  const textResult = results[1];
+  const photoFlagged = !!photoResult?.flagged;
+  const textFlagged = !!textResult?.flagged;
+  if (!photoFlagged && !textFlagged) {
+   return { ok: true };
+  }
+  // Identify the highest-scoring category for a useful reason string
+  const allCats = [
+   ...Object.entries(photoResult?.categories ?? {}),
+   ...Object.entries(textResult?.categories ?? {}),
+  ].filter(([, v]) => v === true).map(([k]) => k);
+  return {
+   ok: false,
+   reason: allCats.length > 0 ? allCats[0] : "flagged",
+   photo_flagged: photoFlagged,
+   text_flagged: textFlagged,
+  };
+ } catch (e: any) {
+  console.error("[loop-inbound] moderation threw", e?.message ?? e);
+  return { ok: false, reason: "moderation_exception" };
+ }
+}
+
+// SAFETY: strip EXIF metadata from a JPEG byte stream.
+// iPhone photos carry GPS coords, camera serial, original capture time.
+// If we publish the raw bytes via /c/<token> (where Lob also reads from),
+// a recipient who saves the image can derive the sender's home GPS from
+// EXIF — privacy hole especially in pen pal mode (stranger gets sender's
+// coords).
+//
+// JPEG structure: SOI marker (FFD8), then segments. EXIF lives in APP1
+// (FFE1) and sometimes APP2 (FFE2). We walk the segments and drop those,
+// copying everything else byte-for-byte to a new buffer. SOS (FFDA) marks
+// the start of pixel data — everything after is image content, untouched.
+//
+// HEIC + PNG + GIF pass through (HEIC rewriting requires box parsing,
+// PNG rarely carries GPS, GIFs are gimmicks).
+function stripJpegExif(bytes: Uint8Array): Uint8Array {
+ if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+  return bytes; // not a JPEG, pass through
+ }
+ const out: number[] = [0xff, 0xd8];
+ let i = 2;
+ while (i < bytes.length - 1) {
+  if (bytes[i] !== 0xff) break;
+  const marker = bytes[i + 1];
+  if (marker === 0xda) {
+   // SOS: copy pixel data and everything after to the end
+   for (let j = i; j < bytes.length; j++) out.push(bytes[j]);
+   break;
+  }
+  // No-length markers: RSTn (D0-D7), TEM (01), padding (FF)
+  if ((marker >= 0xd0 && marker <= 0xd9) || marker === 0x01 || marker === 0xff) {
+   out.push(bytes[i], bytes[i + 1]);
+   i += 2;
+   continue;
+  }
+  // Variable-length segment: read big-endian 16-bit length
+  if (i + 4 > bytes.length) break;
+  const segLen = (bytes[i + 2] << 8) | bytes[i + 3];
+  const segEnd = i + 2 + segLen;
+  if (segEnd > bytes.length) break;
+  // Drop APP1 (EXIF) and APP2 (ICC profile, sometimes EXIF-like).
+  if (marker !== 0xe1 && marker !== 0xe2) {
+   for (let j = i; j < segEnd; j++) out.push(bytes[j]);
+  }
+  i = segEnd;
+ }
+ return new Uint8Array(out);
+}
+
 async function downloadAndUploadPhoto(
  mediaUrl: string,
  token: string,
@@ -217,17 +344,28 @@ async function downloadAndUploadPhoto(
  }
  console.log("[loop-inbound] photo content-type detect", { rawCt, finalCt: ct, ext, magic: Array.from(bytes.slice(0, 12)).map((b) => b.toString(16).padStart(2, "0")).join(" ") });
 
+ // SAFETY: strip EXIF before storage. JPEG only for now (HEIC/PNG pass
+ // through). Drops GPS, camera serial, capture timestamp.
+ let cleanBytes = bytes;
+ if (ext === "jpg") {
+  const beforeLen = bytes.length;
+  cleanBytes = stripJpegExif(bytes);
+  if (cleanBytes.length !== beforeLen) {
+   console.log("[loop-inbound] EXIF stripped", { before: beforeLen, after: cleanBytes.length, dropped: beforeLen - cleanBytes.length });
+  }
+ }
+
  const path = `${token}/photo.${ext}`;
  const { error: uploadErr } = await admin.storage
  .from("sms-photos")
- .upload(path, bytes, { contentType: ct, upsert: false });
+ .upload(path, cleanBytes, { contentType: ct, upsert: false });
  if (uploadErr) {
  console.error("[loop-inbound] storage upload failed", {
- path, ct, bytesLen: bytes.length, error: uploadErr.message,
+ path, ct, bytesLen: cleanBytes.length, error: uploadErr.message,
  });
  return { ok: false, error: `storage: ${uploadErr.message}` };
  }
- console.log("[loop-inbound] photo uploaded OK", { path, ct, bytesLen: bytes.length });
+ console.log("[loop-inbound] photo uploaded OK", { path, ct, bytesLen: cleanBytes.length });
  return { ok: true, path };
  } catch (e: any) {
  console.error("[loop-inbound] downloadAndUploadPhoto threw", e?.message ?? e);
@@ -455,6 +593,16 @@ async function findOrCreateFriend(
 // =============================================================================
 
 async function submitToLob(postcardId: string): Promise<{ ok: boolean; expectedDelivery?: string; error?: string }> {
+ // HARD GUARD: if MAILROOM_TEST_MODE_NO_LOB is set, return a fake ok
+ // response without calling the real Lob endpoint. Prevents accidental
+ // real-money postcard mailing during integration test cycles.
+ // Production deploys leave this env var unset.
+ if (Deno.env.get("MAILROOM_TEST_MODE_NO_LOB") === "true") {
+   console.log("[loop-inbound] TEST_MODE_NO_LOB enabled, stubbing Lob call", { postcardId });
+   const fakeEta = new Date(Date.now() + 5 * 86400 * 1000).toISOString().slice(0, 10);
+   return { ok: true, expectedDelivery: fakeEta };
+ }
+
  const internalSecret = Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "";
  if (!internalSecret) return { ok: false, error: "internal secret not set" };
  const anonKey =
@@ -786,15 +934,21 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  });
  await advanceState(phone, "awaiting_recipient_name", token, {});
 
- // Warm, clear, conversational opener. full questions, not cryptic
- // arrows. The user direction: "this should be different. explain
- // the choice instead of dumping a menu."
+ // Warm, clear, conversational opener. Full questions, not cryptic
+ // arrows. Two-bubble pattern: Bubble A is the "we saw it" beat,
+ // Bubble B is the actual question. The 450ms pause makes the photo
+ // land before the bot starts asking. Reads as paced, not robotic.
  await advanceState(phone, "awaiting_send_type", token, {});
 
+ // Bubble A: instant acknowledgment that we received the photo
+ await loopSend({ contact: phone, text: "📮 Got the photo." });
+ await sleep(450);
+
+ // Bubble B: welcome + the send-type question
  if (firstTime) {
  await loopSend({
  contact: phone,
- subject: "📮 Mailroom",
+ subject: "📮 Welcome to Mailroom",
  text:
  "Who do you want to send this to? Your first postcard is on us. You can send it to a randomly matched pen pal, or to a friend.\n\n" +
  "Just tell us \"penpal\", or the name of the friend you want to send to.",
@@ -815,20 +969,25 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  const raw = body.trim();
  const lower = raw.toLowerCase();
 
- // Pen pal path. "penpal" is the primary keyword; "anywhere" / "stranger"
- // etc are aliases for backwards compat + flexibility. Pool isn't built
- // yet. frame as "early access" so we don't slam the door on the most
- // magical button.
+ // Pen pal path. NOW LIVE. The bot picks a match at SEND time (no
+ // recipient name/address asked because the user shouldn't see who
+ // they're sending to). We skip straight to the note step.
+ //
+ // Privacy model: the sender never sees the recipient's address,
+ // name, or city of the recipient. They only know "somewhere in
+ // America." The recipient gets the card with only the sender's city
+ // as a return label, and can reply via the bot.
  if (lower === "penpal" || lower === "pen pal" || lower === "anywhere" || lower === "2"
  || /\b(stranger|pen pal|penpal|random|surprise|somewhere)\b/.test(lower)) {
- await advanceState(phone, "awaiting_recipient_name", state.draft_token, {
- send_type: "stranger_requested",
+ await advanceState(phone, "awaiting_message", state.draft_token, {
+ send_type: "stranger",
  });
  await loopSend({
  contact: phone,
+ subject: "🪶 Pen pal mode",
  text:
- "Pen pal mode opens in days, not weeks. You're early. We've saved your spot in the matching pool.\n\n" +
- "In the meantime, who's a friend you'd want to send this to?",
+ "We'll match you with someone in the pool. You won't see their address. They won't see yours.\n\n" +
+ "What should your card say? (Up to 240 chars, or text SKIP for just the photo.)",
  });
  return;
  }
@@ -1004,12 +1163,17 @@ async function handleRecipientAddress(phone: string, body: string, state: any): 
  });
  const name = (state.conversation_data?.recipient_name ?? "your friend") as string;
  const firstName = name.split(/\s+/)[0];
- // Conversational confirmation, not robotic ("Y to confirm" reads botty).
- // The arrow + readback still carries the postal feel; the question
- // makes it a dialogue.
+ // Aesthetic: render the address as it'll appear on the postcard. Three
+ // indented lines (recipient name, street, city/state/zip) read like a
+ // real mailing label. Same info as before, totally different feel.
+ const line2Line = parsed.line2 ? `\n   ${parsed.line2}` : "";
+ const label =
+ `   ${firstName}\n` +
+ `   ${parsed.line1}${line2Line}\n` +
+ `   ${parsed.city}, ${parsed.state} ${parsed.zip}`;
  await loopSend({
  contact: phone,
- text: `→ ${firstName}, ${parsed.formatted}\n\nDoes this look right?`,
+ text: `${label}\n\nDoes this look right?`,
  });
 }
 
@@ -1085,12 +1249,20 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  }
 
  const truncated = message.length > 240 ? message.slice(0, 240) : message;
+ // Gate on FULL home address. line1 + city + state + zip are all required
+ // to send (so pen pal reciprocation works downstream). Users with just
+ // city/state on file from earlier rounds get re-prompted for the full
+ // address on this send. line2 is optional (apt/unit).
  const { data: profile } = await admin
- .from("profiles").select("city, state").eq("phone", phone).maybeSingle();
+ .from("profiles").select("city, state, home_line1, home_zip").eq("phone", phone).maybeSingle();
+ const hasFullAddress = !!(
+   profile?.home_line1 && profile?.home_zip &&
+   profile?.city && profile?.state
+ );
  const knownCity = (profile?.city ?? "").trim();
  const knownState = (profile?.state ?? "").trim();
 
- if (knownCity && knownState) {
+ if (hasFullAddress) {
  await advanceState(phone, "awaiting_send_confirm", state.draft_token, { message: truncated });
  const name = (state.conversation_data?.recipient_name ?? "your friend") as string;
  const firstName = name.split(/\s+/)[0];
@@ -1106,11 +1278,20 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  await loopSend({ contact: phone, text: `Got it. "${truncated}"` });
  await sleep(550);
  }
+ // Aesthetic: vertical postcard composition. Two cities flanking an
+ // em-rule + arrow reads like a postal route. The "To:" label + note
+ // sit centered below, mimicking the back of a real postcard.
+ const noteBlock = truncated.length > 0
+ ? `\n\n   "${truncated}"`
+ : "";
+ const composition =
+ `${knownCity.toUpperCase()} ──→ ${recipCity.toUpperCase()}\n\n` +
+ `   To: ${firstName}${noteBlock}`;
  await loopSend({
  contact: phone,
  text: heavy
- ? `${knownCity} → ${firstName} in ${recipCity}${truncated.length > 0 ? `\n"${truncated}"` : ""}\n\nThis one feels meaningful. SEND when you're ready, or CANCEL.${balanceTag}`
- : `${knownCity} → ${firstName} in ${recipCity}${truncated.length > 0 ? `\n"${truncated}"` : ""}\n\nSEND, schedule, or CANCEL.${balanceTag}`,
+ ? `${composition}\n\nThis one feels meaningful. SEND when you're ready, or CANCEL.${balanceTag}`
+ : `${composition}\n\nSEND, schedule, or CANCEL.${balanceTag}`,
  });
  return;
  }
@@ -1134,26 +1315,41 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  await sleep(550);
  }
 
- // Bubble 2: ask for sender location with the reciprocity framing.
- // City + state for now (full mailing address is task #23 for true
- // bidirectional pen pal). The framing ALREADY implies reciprocation
- // so the upgrade path is smooth.
+ // Bubble 2: ask for the FULL mailing address with reciprocity framing.
+ // Required to send (gates the pen pal mechanic). We keep the full
+ // address private. only the user's city shows on the postcard front.
  await loopSend({
  contact: phone,
- text: `Where are you texting from? City + state. Goes on the back so ${writeBackWho} knows where to write back.`,
+ text: `Last step. What's your full mailing address? We keep it private (only your city shows on the postcard) so ${writeBackWho} can mail one back to you.\n\nFormat: street, city, state, ZIP.`,
  });
 }
 
 async function handleSenderLocation(phone: string, body: string, state: any): Promise<void> {
- const parsed = await parseLocation(body);
- if (!parsed || parsed.confidence < 0.6 || !parsed.city || !parsed.state) {
- await loopSend({ contact: phone, text: `Just city + state. E.g. "Bethesda, MD" or "San Francisco, CA".` });
+ // Parse the FULL mailing address (same parser as recipient address).
+ // We need line1 + city + state + zip at minimum. line2 (apt/unit) optional.
+ // line1 + zip together prove this is a real mailing address, not just
+ // a city + state. Used for pen pal reciprocation (someone mails back
+ // to this exact address). Never appears on the postcard front.
+ const parsed = await parseAddress(body);
+ if (!parsed || parsed.confidence < 0.7 || !parsed.line1 || !parsed.zip || !parsed.city || !parsed.state) {
+ await loopSend({
+ contact: phone,
+ text: `That looks like just a city. I need the full mailing address. Format: street, city, state, ZIP.\n\nE.g. "123 Main St, San Francisco CA 94102".`,
+ });
  return;
  }
  const { data: existing } = await admin
  .from("profiles").select("id").eq("phone", phone).maybeSingle();
  if (existing?.id) {
- await admin.from("profiles").update({ city: parsed.city, state: parsed.state }).eq("id", existing.id);
+ // Save the FULL address privately, AND set city/state for postcard
+ // (only city shows on the postcard front; line1/line2/zip stay private).
+ await admin.from("profiles").update({
+ home_line1: parsed.line1,
+ home_line2: parsed.line2 || null,
+ home_zip: parsed.zip,
+ city: parsed.city,
+ state: parsed.state,
+ }).eq("id", existing.id);
  }
  await advanceState(phone, "awaiting_send_confirm", state.draft_token, {
  sender_city: parsed.city, sender_state: parsed.state,
@@ -1165,12 +1361,16 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
  const note = (state.conversation_data?.message ?? "") as string;
  const balanceTag = await balanceParenthetical(phone);
  const heavy = isHeavyNote(note);
- // ONE pre-send bubble. Heavy notes get the slowed framing.
+ // Vertical postcard composition (same aesthetic as handleMessage path).
+ const noteBlock = note.length > 0 ? `\n\n   "${note}"` : "";
+ const composition =
+ `${parsed.city.toUpperCase()} ──→ ${recipCity.toUpperCase()}\n\n` +
+ `   To: ${firstName}${noteBlock}`;
  await loopSend({
  contact: phone,
  text: heavy
- ? `${parsed.city} → ${firstName} in ${recipCity}\n"${note}"\n\nThis one feels meaningful. SEND when ready, or CANCEL.${balanceTag}`
- : `${parsed.city} → ${firstName} in ${recipCity}\n"${note}"\n\nSEND, schedule, or CANCEL.${balanceTag}`,
+ ? `${composition}\n\nThis one feels meaningful. SEND when ready, or CANCEL.${balanceTag}`
+ : `${composition}\n\nSEND, schedule, or CANCEL.${balanceTag}`,
  });
 }
 
@@ -1189,13 +1389,242 @@ async function handleSendConfirm(phone: string, body: string, state: any): Promi
  });
 }
 
+// PEN PAL SEND. Stranger mode forks here. We call match_pen_pal at
+// SEND time (not earlier — pool may have changed since they picked
+// pen pal mode), insert via send_postcard_sms_direct (bypasses friends
+// table for privacy), and auto-opt the sender into the pool too so the
+// loop closes.
+async function doMailStranger(phone: string, state: any): Promise<void> {
+ const data = state.conversation_data ?? {};
+ const message = (data.message ?? "") as string;
+ const draftToken = state.draft_token as string;
+
+ if (!draftToken) {
+  await resetState(phone);
+  await loopSend({ contact: phone, text: "Something's missing from your draft. Text us a fresh photo to start over." });
+  return;
+ }
+
+ // Sender setup
+ let userId: string;
+ try { userId = await findOrCreateUserByPhone(phone); }
+ catch (e: any) {
+  console.error("[loop-inbound] user create failed (stranger)", e);
+  await loopSend({ contact: phone, text: "Couldn't set up your account. Try again in a minute." });
+  return;
+ }
+
+ // Sender must have a full home address on file. Per round 14, we
+ // collect this before the SEND prompt. If it's somehow missing, route
+ // back to the address ask.
+ const { data: senderProfile } = await admin
+  .from("profiles")
+  .select("city, state, home_line1, home_zip, accepts_strangers")
+  .eq("id", userId).maybeSingle();
+ if (!senderProfile?.home_line1 || !senderProfile?.home_zip ||
+     !senderProfile?.city || !senderProfile?.state) {
+  await advanceState(phone, "awaiting_sender_location", state.draft_token, {});
+  await loopSend({
+   contact: phone,
+   text: "First, your mailing address — pen pals need somewhere to mail back. Format: street, city, state, ZIP.",
+  });
+  return;
+ }
+
+ // Auto-opt into the pool if not already (sending TO a stranger implies
+ // willingness to receive — fair-exchange model).
+ if (!senderProfile.accepts_strangers) {
+  await admin.from("profiles").update({ accepts_strangers: true }).eq("id", userId);
+ }
+
+ // Match. Call the RPC.
+ const { data: match, error: matchErr } = await admin.rpc("match_pen_pal", {
+  p_sender_id: userId,
+ });
+ if (matchErr) {
+  console.error("[loop-inbound] match_pen_pal threw", matchErr);
+  await loopSend({ contact: phone, text: "Matching's having a moment. Try SEND again in a sec." });
+  return;
+ }
+ const matchedRecipient = Array.isArray(match) && match.length > 0 ? match[0] : null;
+
+ // Empty pool — soft fail. Keep the draft, tell the user we're on it.
+ // (Later round: actual queueing. for now, drop with a graceful message
+ // so the user knows their address is in the pool.)
+ if (!matchedRecipient) {
+  await loopSend({
+   contact: phone,
+   text:
+    "📭 You're in the pool, but no eligible matches right now.\n\n" +
+    "Your card stays drafted. We'll mail it the moment a match opens up. " +
+    "Want to send to a friend instead? Reply with a name.",
+  });
+  // Reset the state machine but DON'T burn the credit or the draft —
+  // the user can come back and pick a friend.
+  // For v1 simplicity, just reset. Future: queue the draft for matching.
+  await resetState(phone);
+  return;
+ }
+
+ // Photo URL
+ const { data: draftRow } = await admin
+  .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
+ if (!draftRow?.photo_path) {
+  await resetState(phone);
+  await loopSend({ contact: phone, text: "Your photo expired. Text a new one to start over." });
+  return;
+ }
+ let photoUrl = draftRow.photo_path;
+ if (!photoUrl.startsWith("http")) {
+  const { data: signed } = await admin.storage
+   .from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 7);
+  if (!signed?.signedUrl) {
+   await loopSend({ contact: phone, text: "Couldn't access your photo. Text us another to start over." });
+   return;
+  }
+  photoUrl = signed.signedUrl;
+ }
+
+ // SAFETY GATE: pen pal cards go to a stranger's mailbox via USPS.
+ // Hard-block CSAM / nudity / violence / weapons / explicit personal
+ // info before insert. Fail-closed: if moderation is unavailable,
+ // block. Better to inconvenience a sender than mail something illegal.
+ const mod = await moderatePhotoAndText(photoUrl, message);
+ if (!mod.ok) {
+  console.warn("[loop-inbound] pen pal moderation blocked", { phone, reason: mod.reason, photo_flagged: mod.photo_flagged, text_flagged: mod.text_flagged });
+  await resetState(phone);
+  await loopSend({
+   contact: phone,
+   text:
+    "📵 We can't send this to a stranger.\n\n" +
+    "Pen pal cards go to someone we've never met, so we're conservative about " +
+    "what we mail. Try a different photo or note, or send to a friend instead.",
+  });
+  return;
+ }
+
+ // Insert the postcard via the direct-address RPC (no friend row, no PII
+ // exposed to the sender).
+ const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms_direct", {
+  p_user_id: userId,
+  p_message: message,
+  p_photo_path: photoUrl,
+  p_to_line1: matchedRecipient.recipient_line1,
+  p_to_line2: matchedRecipient.recipient_line2,
+  p_to_city: matchedRecipient.recipient_city,
+  p_to_state: matchedRecipient.recipient_state,
+  p_to_zip: matchedRecipient.recipient_zip,
+  p_from_city: senderProfile.city,
+ });
+ if (rpcErr) {
+  console.error("[loop-inbound] send_postcard_sms_direct failed", rpcErr);
+  const oom = rpcErr.message?.includes("insufficient_credits");
+  await loopSend({
+   contact: phone,
+   text: oom
+    ? "Out of cards. BUY 5, 10, or 25 to top up, then SEND."
+    : "Couldn't mail your card. Try SEND again, or text a new photo to start over.",
+  });
+  return;
+ }
+
+ // Lob handoff
+ const lob = await submitToLob(postcardId as string);
+ if (!lob.ok) {
+  const { data: cur } = await admin.from("profiles").select("credits").eq("id", userId).maybeSingle();
+  await admin.from("profiles").update({ credits: (cur?.credits ?? 0) + 1 }).eq("id", userId);
+  await admin.from("postcards").delete().eq("id", postcardId);
+  console.error("[loop-inbound] Lob failed (stranger)", lob.error);
+  await loopSend({
+   contact: phone,
+   text: `Printer's down (${lob.error?.slice(0, 60)}). Credit refunded. SEND to retry.`,
+  });
+  return;
+ }
+
+ // Pairing log + recipient cool-down update
+ await admin.from("pen_pal_pairings").insert({
+  sender_id: userId,
+  recipient_id: matchedRecipient.recipient_id,
+  postcard_id: postcardId,
+ });
+ await admin
+  .from("profiles")
+  .update({ last_received_stranger_at: new Date().toISOString() })
+  .eq("id", matchedRecipient.recipient_id);
+
+ // Consume the draft + reset
+ await admin.rpc("consume_sms_draft", { p_token: draftToken, p_postcard_id: postcardId });
+ await resetState(phone);
+
+ const eta = lob.expectedDelivery
+  ? new Date(lob.expectedDelivery).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  : "in 3-5 days";
+ const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
+
+ // 3-act celebration, stranger flavor. Recipient city kept anonymous
+ // ("somewhere new" instead of city name) so the sender doesn't know
+ // where their card landed until the recipient writes back.
+ await loopTyping(phone, 2);
+
+ // Act 1: The moment. Stranger mode gets shootingStar (the "wish"
+ // effect) regardless of note content — the pen pal vibe is wish-like
+ // by nature.
+ const postmarkDate = new Date().toLocaleDateString("en-US", {
+  month: "short", day: "numeric", year: "numeric",
+ }).toUpperCase();
+ const mailedRes = await loopSend({
+  contact: phone,
+  subject: "🪶 Sent into the wire",
+  text: `POSTMARKED · ${postmarkDate}\n\nYour card is on its way to someone, somewhere.`,
+  effect: "shootingStar",
+  passthrough: `stranger:${postcardId}`,
+ });
+ // Persist the Mailed bubble's message_id so lob-webhook can thread
+ // later status updates as in-thread replies. Also stash from_phone
+ // for the webhook to skip a profiles join.
+ if (mailedRes.ok && mailedRes.messageId) {
+  await admin.from("postcards").update({
+   mailed_imessage_id: mailedRes.messageId,
+   from_phone: phone,
+  }).eq("id", postcardId);
+ } else {
+  await admin.from("postcards").update({ from_phone: phone }).eq("id", postcardId);
+ }
+ await sleep(700);
+
+ // Act 2: Photo, still anonymous on the destination
+ await loopSend({
+  contact: phone,
+  text: `→ somewhere new`,
+  attachments: [photoUrl],
+ });
+ await sleep(450);
+
+ // Act 3: The promise. The recipient will reply (we hope).
+ await loopSend({
+  contact: phone,
+  text: `Arrives ${eta}. When they write back, you'll know.\n${confirmUrl}`,
+ });
+}
+
 async function doMail(phone: string, state: any): Promise<void> {
  const data = state.conversation_data ?? {};
- const recipientName = data.recipient_name as string;
- const recipient = data.recipient as { line1: string; line2: string; city: string; state: string; zip: string };
+ const sendType = (data.send_type ?? "friend") as string;
  const message = data.message as string;
  const draftToken = state.draft_token as string;
- if (!recipientName || !recipient || !message || !draftToken) {
+
+ // Stranger mode short-circuit. No recipient name + address gathered.
+ // We match at SEND time. Different code path entirely from friend mode.
+ if (sendType === "stranger") {
+   return await doMailStranger(phone, state);
+ }
+
+ const recipientName = data.recipient_name as string;
+ const recipient = data.recipient as { line1: string; line2: string; city: string; state: string; zip: string };
+ // SKIP-path bug fix (codex caught): empty-string message is VALID
+ // (user texted SKIP). Use null/undefined check, not truthiness.
+ if (!recipientName || !recipient || message == null || !draftToken) {
  await resetState(phone);
  await loopSend({ contact: phone, text: "Something's missing from your draft. Text us a fresh photo to start over." });
  return;
@@ -1311,15 +1740,31 @@ async function doMail(phone: string, state: any): Promise<void> {
  await loopTyping(phone, 2);
 
  // Act 1. THE MOMENT (effect picked from note's emotional content)
+ // Postmark line is the aesthetic anchor. Reads like a real cancellation
+ // stamp. CAPS + center dot separator. The user comes back to the
+ // thread a week later and sees the exact date their card was stamped.
  const effect = pickEffectForNote(message);
  const firstName = recipientName.split(/\s+/)[0];
- await loopSend({
+ const postmarkDate = new Date().toLocaleDateString("en-US", {
+   month: "short", day: "numeric", year: "numeric",
+ }).toUpperCase();
+ const mailedRes = await loopSend({
  contact: phone,
  subject: "📮 Mailed",
- text: `Card to ${firstName} is in the mail.`,
+ text: `POSTMARKED · ${postmarkDate}\n\nCard to ${firstName} is in the mail.`,
  effect,
  passthrough: `mailed:${postcardId}`,
  });
+ // Persist message_id + from_phone so lob-webhook can thread later
+ // status updates into this same bubble.
+ if (mailedRes.ok && mailedRes.messageId) {
+  await admin.from("postcards").update({
+   mailed_imessage_id: mailedRes.messageId,
+   from_phone: phone,
+  }).eq("id", postcardId);
+ } else {
+  await admin.from("postcards").update({ from_phone: phone }).eq("id", postcardId);
+ }
  await sleep(700);
 
  // Act 2. THE PROOF (photo IS the message, caption is just a tag)
@@ -1348,7 +1793,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  const recipient = data.recipient as { line1: string; line2: string; city: string; state: string; zip: string };
  const message = data.message as string;
  const draftToken = state.draft_token as string;
- if (!recipientName || !recipient || !message || !draftToken || !schedule.arrival_iso) {
+ if (!recipientName || !recipient || message == null || !draftToken || !schedule.arrival_iso) {
  await resetState(phone);
  await loopSend({ contact: phone, text: "Something's missing from your draft. Text us a fresh photo to start over." });
  return;

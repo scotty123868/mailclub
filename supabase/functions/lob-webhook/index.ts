@@ -284,17 +284,14 @@ serve(async (req) => {
  lob_status: eventType,
  // expected_delivery_date arrives on some Lob events as
  // body.expected_delivery_date. propagate when present.
- // v0.7.0.49: column name was wrong (expected_delivery_date) and
- // schema has lob_expected_delivery (see 2026051205_lob_integration.sql).
- // Every Lob event with that field was silently failing the row update,
- // so journal-feed delivery dates were never getting populated from
- // webhook callbacks. Fixed.
  ...(event?.body?.expected_delivery_date
  ? { lob_expected_delivery: event.body.expected_delivery_date }
  : {}),
  })
  .eq("lob_id", lobId)
- .select("id, status, sender_id, to_friend_id")
+ // 2026052410 added mailed_imessage_id + from_phone for in-thread
+ // reply-on-status. Pull them so we can fire a threaded iMessage.
+ .select("id, status, sender_id, to_friend_id, mailed_imessage_id, from_phone, to_city, to_address_state, to_kind")
  .maybeSingle();
 
  if (error) {
@@ -321,8 +318,99 @@ serve(async (req) => {
  eventType,
  });
 
+ // REPLY-THREADED iMessage: if this postcard was mailed via the
+ // iMessage flow (mailed_imessage_id + from_phone set by loop-inbound)
+ // AND the status change is one worth narrating, fire an iMessage
+ // back to the sender using reply_to_id so it lands in-thread.
+ //
+ // We narrate only the high-signal moments. Avoid blasting the user
+ // on every Lob micro-state.
+ await maybeFireThreadedStatusUpdate(data, newStatus, eventType);
+
  return new Response(
  JSON.stringify({ ok: true, postcard_id: data.id, status: newStatus }),
  { status: 200, headers: { "Content-Type": "application/json" } },
  );
 });
+
+// =============================================================================
+// In-thread iMessage status updates on the original "Mailed" bubble
+// =============================================================================
+
+const LOOP_API_KEY = Deno.env.get("LOOPMESSAGE_API_KEY") ?? "";
+const LOOP_SENDER_ID = Deno.env.get("LOOPMESSAGE_SENDER_ID") ?? "";
+
+/**
+ * Fire a single in-thread iMessage reply on big-moment Lob status changes:
+ *   - in_transit       → "🚚 In transit." (with effect: gentle)
+ *   - delivered        → "📬 Delivered." (with effect: love)
+ * Other status changes (created, returned_to_sender, etc.) get logged
+ * but not iMessaged to avoid notification fatigue.
+ *
+ * Requires both `mailed_imessage_id` (so we can reply IN the thread) and
+ * `from_phone` (so we know who to text). When either is missing, we
+ * silently skip — typical for older postcards or SMS-origin cards before
+ * the migration.
+ */
+async function maybeFireThreadedStatusUpdate(
+  postcard: any,
+  newStatus: string,
+  rawEvent: string,
+): Promise<void> {
+  if (!LOOP_API_KEY) return;
+  if (!postcard?.mailed_imessage_id || !postcard?.from_phone) return;
+
+  // Only the two high-signal moments. Drops "created" (we already said
+  // "Mailed!" when WE created it), "processed_for_delivery" (no value),
+  // "in_local_area" (duplicate of in_transit feel), "returned_to_sender"
+  // (rare + warrants a different copy treatment, defer).
+  let bubble: { text: string; effect?: string; subject?: string } | null = null;
+  if (rawEvent === "postcard.in_transit") {
+    bubble = {
+      subject: "🚚 In transit",
+      text: "Your card is moving. Should land in a few days.",
+      effect: "gentle",
+    };
+  } else if (rawEvent === "postcard.delivered") {
+    bubble = {
+      subject: "📬 Delivered",
+      text: "Your card just landed. 🎉",
+      effect: "love",
+    };
+  }
+  if (!bubble) return;
+
+  try {
+    const body: any = {
+      contact: postcard.from_phone,
+      text: bubble.text,
+      reply_to_id: postcard.mailed_imessage_id,
+    };
+    if (LOOP_SENDER_ID) body.sender = LOOP_SENDER_ID;
+    if (bubble.subject) body.subject = bubble.subject;
+    if (bubble.effect) body.effect = bubble.effect;
+    body.passthrough = `lob_status:${postcard.id}:${newStatus}`;
+
+    const res = await fetch("https://a.loopmessage.com/api/v1/message/send/", {
+      method: "POST",
+      headers: { Authorization: LOOP_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success === false) {
+      console.warn("[lob-webhook] threaded iMessage failed", {
+        status: res.status,
+        message: data?.message,
+        postcardId: postcard.id,
+      });
+      return;
+    }
+    console.log("[lob-webhook] threaded status fired", {
+      postcardId: postcard.id,
+      newStatus,
+      messageId: data?.message_id,
+    });
+  } catch (e: any) {
+    console.warn("[lob-webhook] threaded iMessage threw", e?.message ?? e);
+  }
+}
