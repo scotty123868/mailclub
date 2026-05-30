@@ -291,7 +291,7 @@ serve(async (req) => {
  .eq("lob_id", lobId)
  // 2026052410 added mailed_imessage_id + from_phone for in-thread
  // reply-on-status. Pull them so we can fire a threaded iMessage.
- .select("id, status, sender_id, to_friend_id, mailed_imessage_id, from_phone, to_city, to_address_state, to_kind")
+ .select("id, status, sender_id, to_friend_id, mailed_imessage_id, from_phone, to_city, to_address_state, to_kind, lob_front_thumbnail_url, lob_back_thumbnail_url, flip_gif_url, route_map_url, scheduled_send_at, lob_expected_delivery")
  .maybeSingle();
 
  if (error) {
@@ -360,12 +360,46 @@ async function maybeFireThreadedStatusUpdate(
   if (!LOOP_API_KEY) return;
   if (!postcard?.mailed_imessage_id || !postcard?.from_phone) return;
 
-  // Only the two high-signal moments. Drops "created" (we already said
-  // "Mailed!" when WE created it), "processed_for_delivery" (no value),
-  // "in_local_area" (duplicate of in_transit feel), "returned_to_sender"
-  // (rare + warrants a different copy treatment, defer).
-  let bubble: { text: string; effect?: string; subject?: string } | null = null;
-  if (rawEvent === "postcard.in_transit") {
+  // Three high-signal moments:
+  //   - "created" → narrate ONLY for scheduled cards (Sunday Drop or
+  //     user-picked date). Immediate-send already had its "Mailed!"
+  //     celebration synchronously at SEND time, so the Lob create event
+  //     is redundant noise. Scheduled cards had a "Scheduled" bubble
+  //     days/weeks ago and need a "just hit the mail" close.
+  //   - "in_transit" → always narrate, text only (no need to re-show
+  //     the card on a transitional state — would feel spammy).
+  //   - "delivered" → always narrate with the rendered card pair
+  //     (front + back) re-attached so the sender's notification is the
+  //     literal card that just landed. Visual closure inside iMessage.
+  //
+  // Drops "processed_for_delivery" (no signal), "in_local_area"
+  // (duplicates in_transit), "returned_to_sender" (rare, deferred).
+  //
+  // Attachments: the card (animated flip, or static front+back) plus
+  // the native Apple Maps route snapshot. iMessage shows them as a
+  // tidy gallery threaded under the original Mailed bubble.
+  const wasScheduled = !!postcard.scheduled_send_at;
+  const cardPair: string[] = [];
+  if (postcard.flip_gif_url) {
+    cardPair.push(postcard.flip_gif_url);
+  } else {
+    if (postcard.lob_front_thumbnail_url) cardPair.push(postcard.lob_front_thumbnail_url);
+    if (postcard.lob_back_thumbnail_url) cardPair.push(postcard.lob_back_thumbnail_url);
+  }
+  if (postcard.route_map_url) cardPair.push(postcard.route_map_url);
+
+  let bubble: { text: string; effect?: string; subject?: string; attachments?: string[] } | null = null;
+  if (rawEvent === "postcard.created" && wasScheduled) {
+    const etaLabel = postcard.lob_expected_delivery
+      ? new Date(postcard.lob_expected_delivery).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "in 3-5 days";
+    bubble = {
+      subject: "📮 Just mailed",
+      text: `Your scheduled card just hit the mail. Arrives ${etaLabel}.`,
+      effect: "confetti",
+      attachments: cardPair.length ? cardPair : undefined,
+    };
+  } else if (rawEvent === "postcard.in_transit") {
     bubble = {
       subject: "🚚 In transit",
       text: "Your card is moving. Should land in a few days.",
@@ -376,6 +410,7 @@ async function maybeFireThreadedStatusUpdate(
       subject: "📬 Delivered",
       text: "Your card just landed. 🎉",
       effect: "love",
+      attachments: cardPair.length ? cardPair : undefined,
     };
   }
   if (!bubble) return;
@@ -389,6 +424,7 @@ async function maybeFireThreadedStatusUpdate(
     if (LOOP_SENDER_ID) body.sender = LOOP_SENDER_ID;
     if (bubble.subject) body.subject = bubble.subject;
     if (bubble.effect) body.effect = bubble.effect;
+    if (bubble.attachments && bubble.attachments.length) body.attachments = bubble.attachments;
     body.passthrough = `lob_status:${postcard.id}:${newStatus}`;
 
     const res = await fetch("https://a.loopmessage.com/api/v1/message/send/", {

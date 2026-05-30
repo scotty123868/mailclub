@@ -159,10 +159,16 @@ function buildBackHtml(opts: {
  senderCity?: string;
  senderState?: string;
  reciprocationUrl?: string;
+ reciprocationShortCode?: string;
 }): string {
 
  const senderFirstName = (opts.senderName ?? "the sender").trim().split(" ")[0] || "the sender";
  const qrUrl = opts.reciprocationUrl ?? "";
+ const shortCode = (opts.reciprocationShortCode ?? "").toUpperCase();
+ // Public bot number printed on the card. Hard-coded here too so the
+ // displayed text matches the QR target. Pulled from env at the call
+ // site for consistency.
+ const printedBotNumber = "(415) 683-6457";
  // v0.7.0.43: 400x400&ecc=M → 1200x1200&ecc=H. At print scale the 0.687in
  // QR box wants ~412 print pixels of source data; 400 source pixels is
  // basically 1:1 with subpixel sampling, which is the worst case for
@@ -172,20 +178,14 @@ function buildBackHtml(opts: {
  const qrSrc = qrUrl
  ? `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&ecc=H&margin=0&data=${encodeURIComponent(qrUrl)}`
  : "";
- // Display URL under the QR. short form via Vercel /r/* rewrite which
- // 200s to the welcome-mail page. The QR encodes the full /welcome-mail/
- // path (in current AASA) so iOS Universal Link fires on scan; the
- // displayed /r/ URL is the human-readable fallback. /r/* will also
- // fire Universal Link once Vercel ships the updated AASA file from
- // `vercel-staging/.well-known/apple-app-site-association` (the file is
- // committed; the Vercel project just hasn't redeployed since 7:40 AM
- // ET 2026-05-18). Tracked in TODOS.md.
- const displayUrl = (() => {
- if (!qrUrl) return "";
- const m = qrUrl.match(/\/(?:welcome-mail|r)\/([^/?#]+)/);
- const token = m ? m[1] : "";
- return token ? `themailroom.club/r/${token}` : qrUrl.replace(/^https?:\/\//, "");
- })();
+ // The text printed BELOW the QR. New format: the short code + the
+ // bot's phone number. Recipient reads: "Text REPLY ABC123 to
+ // (415) 683-6457". Scanning the QR pre-fills the same payload in a
+ // fresh iMessage thread, so the printed text is just the human
+ // backup for people who don't scan QR codes.
+ const displayUrl = shortCode
+ ? `Text REPLY ${shortCode} to ${printedBotNumber}`
+ : "";
  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
  const now = new Date();
  const datePart = `${monthNames[now.getUTCMonth()]} ${now.getUTCDate()}`;
@@ -265,14 +265,16 @@ function buildBackHtml(opts: {
  guarantees no overflow if the token format ever changes. */
  .qr-url {
  position: absolute;
- top: 0.60in; left: 1.02in;
+ top: 0.58in; left: 1.02in;
  width: 1.50in;
- font-family: 'JetBrains Mono', monospace; font-size: 6pt;
- color: rgba(23, 34, 59, 0.6); letter-spacing: 0.04em;
+ font-family: 'JetBrains Mono', monospace; font-size: 5.5pt;
+ color: rgba(23, 34, 59, 0.7); letter-spacing: 0.02em;
  font-weight: 500;
- overflow: hidden;
- text-overflow: ellipsis;
- white-space: nowrap;
+ line-height: 1.3;
+ /* Allow the "Text REPLY CODE to (415) ..." string to wrap onto
+ two lines instead of ellipsis-truncating. The phone number and
+ code are equally important; truncation would break either. */
+ white-space: normal;
  }
 
  /* TOP-RIGHT stamp. Larger and partially off-bleed so it reads like a
@@ -372,7 +374,7 @@ function buildBackHtml(opts: {
 <body>
 
 ${qrSrc ? `<div class="qr"><img src="${qrSrc}" alt="QR" /></div>
-<p class="qr-copy">Respond to ${escapeHtml(senderFirstName)} with a postcard for free.</p>
+<p class="qr-copy">Scan to write ${escapeHtml(senderFirstName)} back with a postcard for free.</p>
 <div class="qr-url">${escapeHtml(displayUrl)}</div>` : ""}
 
 <div class="stamp">
@@ -520,9 +522,22 @@ serve(async (req: Request) => {
  );
  }
 
- const lobKey = Deno.env.get("LOB_API_KEY");
+ // Prefer LOB_API_KEY_TEST when set — Lob test keys (test_xxx prefix)
+ // run the FULL render pipeline (composing the card, generating front +
+ // back PNG thumbnails) but do NOT print or mail the physical card and
+ // do NOT charge the account. This is exactly what we want during
+ // development of the iMessage gallery: real thumbnails and real GIFs
+ // flow through, no $1 burn per test send. Set with:
+ //   supabase secrets set LOB_API_KEY_TEST=test_xxx
+ // Unset to revert to the live key:
+ //   supabase secrets unset LOB_API_KEY_TEST
+ const lobKey = Deno.env.get("LOB_API_KEY_TEST") ?? Deno.env.get("LOB_API_KEY");
+ const usingTestKey = !!Deno.env.get("LOB_API_KEY_TEST");
  if (!lobKey) {
  return json({ ok: false, error: "LOB_API_KEY env var missing" }, 500);
+ }
+ if (usingTestKey) {
+   console.log("[lob-send-postcard] using LOB_API_KEY_TEST (no real mailings)");
  }
 
  const supabase = createClient(
@@ -736,19 +751,44 @@ serve(async (req: Request) => {
  if (signed?.signedUrl) photoUrl = signed.signedUrl;
  }
  }
- // v0.7.0.12: mint a reciprocation token for the back QR so the
- // recipient can scan + reply free. If one already exists for this
- // postcard, the RPC returns the existing token (idempotent).
+ // Mint a reciprocation claim + ensure it has a short_code. The QR
+ // now encodes an sms: URL so the recipient's phone opens iMessage
+ // directly with the body prefilled, instead of a Safari detour
+ // through a /welcome-mail/ page. The printed text below the QR
+ // tells them to text "REPLY <CODE>" to our number.
  let reciprocationUrl = "";
+ let shortCode = "";
  try {
  const { data: tokenData } = await supabase.rpc("create_reciprocation_token", {
  p_postcard_id: postcard.id,
  });
- if (tokenData && typeof tokenData === "object" && (tokenData as any).url) {
- reciprocationUrl = (tokenData as any).url as string;
- } else if (tokenData && typeof tokenData === "object" && (tokenData as any).token) {
- // Some versions of the RPC return just the token; build the URL.
- reciprocationUrl = `https://app.themailroom.club/welcome-mail/${(tokenData as any).token}`;
+ if (tokenData && typeof tokenData === "object" && (tokenData as any).token) {
+ const claimToken = (tokenData as any).token as string;
+ // Ensure a short_code exists for this claim. The 2026052420
+ // migration generates one for any claim that's missing it.
+ const { data: shortRow } = await supabase
+ .from("postcard_claims")
+ .select("short_code")
+ .eq("claim_token", claimToken)
+ .maybeSingle();
+ shortCode = (shortRow as any)?.short_code ?? "";
+ // Belt + suspenders: if the row is somehow missing a short_code,
+ // generate one on the fly.
+ if (!shortCode) {
+ const { data: gen } = await supabase.rpc("generate_reciprocation_short_code");
+ shortCode = (gen as string) ?? "";
+ if (shortCode) {
+ await supabase
+ .from("postcard_claims")
+ .update({ short_code: shortCode })
+ .eq("claim_token", claimToken);
+ }
+ }
+ }
+ // sms: URL with prefilled body. iOS routes to Messages thread.
+ if (shortCode) {
+ const botNumber = Deno.env.get("MAILROOM_PUBLIC_SMS_NUMBER") ?? "+14156836457";
+ reciprocationUrl = `sms:${botNumber}&body=${encodeURIComponent(`REPLY ${shortCode}`)}`;
  }
  } catch (err) {
  // eslint-disable-next-line no-console
@@ -762,6 +802,7 @@ serve(async (req: Request) => {
  senderCity: sender?.city ?? undefined,
  senderState: sender?.state ?? undefined,
  reciprocationUrl: reciprocationUrl || undefined,
+ reciprocationShortCode: shortCode || undefined,
  });
  }
 
@@ -824,6 +865,26 @@ serve(async (req: Request) => {
  // not a parameter we can override per-send.
  });
 
+ // ===================================================================
+ // HARD NO-MAIL GUARD. If MAILROOM_TEST_MODE_NO_LOB=true and no Lob
+ // test key is configured, DO NOT hit the real Lob API from ANY path
+ // (this covers the fire-scheduled-postcards cron, which calls this
+ // function directly and bypasses loop-inbound's own guard). We
+ // synthesize a fake success so the postcard is marked sent + the
+ // lease finalizes cleanly, but nothing is printed or charged.
+ // Production leaves MAILROOM_TEST_MODE_NO_LOB unset.
+ const hardStub =
+ Deno.env.get("MAILROOM_TEST_MODE_NO_LOB") === "true" && !usingTestKey;
+
+ let lobJson: any;
+ if (hardStub) {
+ console.log("[lob-send-postcard] TEST_MODE_NO_LOB — stubbing Lob, NO real mailing", { postcardId: postcard.id });
+ lobJson = {
+ id: `test_${crypto.randomUUID().slice(0, 12)}`,
+ expected_delivery_date: new Date(Date.now() + 5 * 86400 * 1000).toISOString().slice(0, 10),
+ thumbnails: [],
+ };
+ } else {
  let lobResp: Response;
  try {
  lobResp = await fetch(LOB_API, {
@@ -849,7 +910,7 @@ serve(async (req: Request) => {
 
  // v0.7.0.20: renamed to lobJson. the previous `json` const shadowed
  // the new top-level `json()` response helper.
- const lobJson = await lobResp.json();
+ lobJson = await lobResp.json();
 
  if (!lobResp.ok) {
  const msg = lobJson?.error?.message ?? `Lob returned ${lobResp.status}`;
@@ -862,12 +923,22 @@ serve(async (req: Request) => {
  });
  return json({ ok: false, error: msg }, lobResp.status);
  }
+ }
 
- // Success. persist Lob's metadata on the postcard row.
+ // Success. persist Lob's metadata on the postcard row, including
+ // the rendered thumbnail URLs. We use front_thumbnail in c-bridge's
+ // og:image so the iMessage preview unfurls the actual rendered card
+ // (not just the raw camera-roll photo). Persisted now instead of
+ // re-fetched later because Lob doesn't have a "give me a thumbnail
+ // of this card_id" endpoint.
+ const frontThumbnailUrl = lobJson.thumbnails?.[0]?.large ?? null;
+ const backThumbnailUrl = lobJson.thumbnails?.[1]?.large ?? null;
  const update: Record<string, unknown> = {
  lob_id: lobJson.id,
  lob_status: "queued",
  lob_expected_delivery: lobJson.expected_delivery_date,
+ lob_front_thumbnail_url: frontThumbnailUrl,
+ lob_back_thumbnail_url: backThumbnailUrl,
  lob_error: null,
  };
  // v0.7.0.23 / v0.7.0.49: removed dead `if (false && ...)` branch that
@@ -889,9 +960,52 @@ serve(async (req: Request) => {
  p_lob_id: lobJson.id,
  });
 
+ // Render the celebration gallery assets: the card flip GIF + the
+ // native Apple Maps route snapshot. Synchronous because the sender's
+ // bot is waiting on this response to fire the celebration — we want
+ // the assets ready BEFORE the user sees the Mailed bubble. Adds
+ // ~2-5s of latency on top of the Lob call. Failures here are
+ // non-fatal: postcards.flip_gif_url and route_map_url stay null, and
+ // loop-inbound falls back to [photo, static front+back].
+ let flipGifUrl: string | null = null;
+ let routeMapUrl: string | null = null;
+ let routeMiles: number | null = null;
+ if (frontThumbnailUrl && backThumbnailUrl) {
+   try {
+     const gifsRes = await fetch(`${SUPABASE_URL}/functions/v1/postcard-render-gifs`, {
+       method: "POST",
+       headers: {
+         "Content-Type": "application/json",
+         "x-mailroom-internal": Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "",
+       },
+       body: JSON.stringify({ postcard_id: postcard.id }),
+     });
+     const gifsJson = await gifsRes.json().catch(() => ({}));
+     // Partial success is fine — flip may succeed while the map fails
+     // (or vice versa). Capture whatever came back.
+     flipGifUrl = gifsJson?.flip_gif_url ?? null;
+     routeMapUrl = gifsJson?.route_map_url ?? null;
+     routeMiles = gifsJson?.route_miles ?? null;
+     if (!gifsJson?.ok) {
+       console.warn("[lob-send-postcard] gallery render partial/failed", gifsJson?.errors ?? gifsJson);
+     }
+   } catch (e: any) {
+     console.warn("[lob-send-postcard] gallery render threw", e?.message ?? e);
+   }
+ }
+
+ // Expose the rendered surfaces to loop-inbound for the celebration
+ // gallery: the card flip (animated) + the native Apple Maps route
+ // snapshot, plus the great-circle distance for the caption. Same
+ // values persisted to the postcards row by postcard-render-gifs.
  return json({
  ok: true,
  lob_id: lobJson.id,
  expected_delivery_date: lobJson.expected_delivery_date,
+ front_thumbnail_url: frontThumbnailUrl,
+ back_thumbnail_url: backThumbnailUrl,
+ flip_gif_url: flipGifUrl,
+ route_map_url: routeMapUrl,
+ route_miles: routeMiles,
  });
 });

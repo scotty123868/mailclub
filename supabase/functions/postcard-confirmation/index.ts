@@ -87,7 +87,8 @@ serve(async (req) => {
  .select(`
  id, message, from_city, to_city, status, lob_id, lob_status,
  lob_expected_delivery, sent_at, scheduled_send_at,
- sender_id, to_friend_id, photo_path
+ sender_id, to_friend_id, photo_path,
+ lob_front_thumbnail_url
  `)
  .eq("id", draft.postcard_id)
  .maybeSingle();
@@ -105,10 +106,17 @@ serve(async (req) => {
  .eq("id", postcard.sender_id)
  .maybeSingle();
 
- // 3. Signed photo URL (prefer the rendered postcard PNG if Lob stored
- // one, else fall back to the draft's stored MMS photo).
+ // 3. Image priority:
+ // a. Lob's rendered front thumbnail (the actual composed card,
+ //    photo + cream frame + greeting + stamp). Best preview because
+ //    the tracking page now mirrors what the recipient holds.
+ // b. The raw camera-roll photo (postcard.photo_path), signed 24h.
+ // c. The draft's MMS photo (pre-postcard creation fallback).
  let photoUrl = "";
- if (postcard.photo_path) {
+ if (postcard.lob_front_thumbnail_url) {
+ photoUrl = postcard.lob_front_thumbnail_url;
+ }
+ if (!photoUrl && postcard.photo_path) {
  if (postcard.photo_path.startsWith("http")) {
  photoUrl = postcard.photo_path;
  } else {

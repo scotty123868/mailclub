@@ -125,6 +125,25 @@ async function loopReact(
 // Fire iMessage typing indicator for N seconds before the next bubble.
 // The "..." dots appear in the user's thread, then our actual reply lands.
 // Makes the bot feel like it's thinking, not robotically auto-replying.
+// Non-blocking typing indicator. Fires show_typing and returns
+// immediately WITHOUT sleeping — for the case where we want the "..."
+// to appear instantly and persist while we do slow work (e.g. a photo
+// download/upload) in the same handler. seconds = how long iMessage
+// shows the dots (max 60). Use loopTyping() instead when you want to
+// pace a bubble to land AFTER the dots clear.
+function fireTyping(contact: string, seconds = 12): void {
+ if (!LOOP_API_KEY) return;
+ fetch("https://a.loopmessage.com/api/v1/message/show_typing/", {
+ method: "POST",
+ headers: { Authorization: LOOP_API_KEY, "Content-Type": "application/json" },
+ body: JSON.stringify({
+ contact,
+ typing: Math.min(seconds, 60),
+ ...(LOOP_SENDER_ID ? { sender: LOOP_SENDER_ID } : {}),
+ }),
+ }).catch((e) => console.warn("[loop-inbound] fireTyping failed", e?.message ?? e));
+}
+
 async function loopTyping(contact: string, seconds = 2): Promise<void> {
  if (!LOOP_API_KEY) return;
  try {
@@ -395,6 +414,11 @@ interface ParsedSendConfirm {
 async function openaiJson(messages: Array<{ role: string; content: string }>): Promise<any | null> {
  const key = Deno.env.get("OPENAI_API_KEY") ?? "";
  if (!key) { console.warn("[loop-inbound] OPENAI_API_KEY not set"); return null; }
+ // Hard timeout so a slow/hanging OpenAI can't freeze a conversation
+ // step. On timeout (or any error) we return null and callers fall
+ // back to their regex paths.
+ const ctrl = new AbortController();
+ const timer = setTimeout(() => ctrl.abort(), 7000);
  try {
  const res = await fetch("https://api.openai.com/v1/chat/completions", {
  method: "POST",
@@ -406,6 +430,7 @@ async function openaiJson(messages: Array<{ role: string; content: string }>): P
  temperature: 0,
  max_tokens: 200,
  }),
+ signal: ctrl.signal,
  });
  if (!res.ok) { console.warn("[loop-inbound] OpenAI", res.status); return null; }
  const data = await res.json();
@@ -413,7 +438,92 @@ async function openaiJson(messages: Array<{ role: string; content: string }>): P
  } catch (e: any) {
  console.warn("[loop-inbound] OpenAI threw", e?.message ?? e);
  return null;
+ } finally {
+ clearTimeout(timer);
  }
+}
+
+// US state name → 2-letter abbreviation. Used by the heuristic address
+// fallback so "denver colorado 80218" still resolves when OpenAI is down.
+const US_STATE_ABBR: Record<string, string> = {
+ alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA",
+ colorado: "CO", connecticut: "CT", delaware: "DE", florida: "FL", georgia: "GA",
+ hawaii: "HI", idaho: "ID", illinois: "IL", indiana: "IN", iowa: "IA",
+ kansas: "KS", kentucky: "KY", louisiana: "LA", maine: "ME", maryland: "MD",
+ massachusetts: "MA", michigan: "MI", minnesota: "MN", mississippi: "MS",
+ missouri: "MO", montana: "MT", nebraska: "NE", nevada: "NV",
+ "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+ "north carolina": "NC", "north dakota": "ND", ohio: "OH", oklahoma: "OK",
+ oregon: "OR", pennsylvania: "PA", "rhode island": "RI", "south carolina": "SC",
+ "south dakota": "SD", tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT",
+ virginia: "VA", washington: "WA", "west virginia": "WV", wisconsin: "WI",
+ wyoming: "WY", "district of columbia": "DC",
+};
+const US_STATE_ABBRS = new Set(Object.values(US_STATE_ABBR));
+
+// Regex/heuristic address parser. NO network. The safety net for when
+// OpenAI is unreachable (dead key, rate limit, outage) so the address
+// step never hard-sticks on "that looks like just a city." Requires a
+// 5-digit ZIP, a resolvable state, a city, and a street number in line1.
+// Returns null when it genuinely can't find a plausible mailing address.
+function parseAddressHeuristic(input: string): ParsedAddress | null {
+ const text = input.trim().replace(/\s+/g, " ");
+ const zipM = text.match(/\b(\d{5})(?:-\d{4})?\b/);
+ if (!zipM) return null;
+ const zip = zipM[1];
+ let beforeZip = text.slice(0, zipM.index).trim().replace(/[,\s]+$/, "");
+
+ // State: 2-letter abbr or full name immediately before the ZIP.
+ let state = "";
+ const abbrM = beforeZip.match(/(?:^|[,\s])([A-Za-z]{2})$/);
+ if (abbrM && US_STATE_ABBRS.has(abbrM[1].toUpperCase())) {
+  state = abbrM[1].toUpperCase();
+  beforeZip = beforeZip.slice(0, abbrM.index).trim().replace(/[,\s]+$/, "");
+ } else {
+  const words = beforeZip.split(/[,\s]+/);
+  const last2 = words.slice(-2).join(" ").toLowerCase();
+  const last1 = (words.slice(-1)[0] ?? "").toLowerCase();
+  if (US_STATE_ABBR[last2]) {
+   state = US_STATE_ABBR[last2];
+   beforeZip = words.slice(0, -2).join(" ");
+  } else if (US_STATE_ABBR[last1]) {
+   state = US_STATE_ABBR[last1];
+   beforeZip = words.slice(0, -1).join(" ");
+  }
+ }
+ if (!state) return null;
+ beforeZip = beforeZip.replace(/[,\s]+$/, "");
+
+ // Split remaining "line1 [, ] city".
+ let line1 = "", city = "";
+ if (beforeZip.includes(",")) {
+  const segs = beforeZip.split(",").map((s) => s.trim()).filter(Boolean);
+  city = segs.pop() ?? "";
+  line1 = segs.join(", ");
+ } else {
+  const words = beforeZip.split(" ");
+  const cityWords = words.length >= 5 ? 2 : 1;
+  city = words.slice(-cityWords).join(" ");
+  line1 = words.slice(0, -cityWords).join(" ");
+ }
+ if (!line1 || !/\d/.test(line1)) return null; // need a street number
+ if (!city) return null;
+
+ // Pull apt/unit into line2.
+ let line2 = "";
+ const aptM = line1.match(/\b(?:apt|apartment|unit|suite|ste|#)\s*\.?\s*[\w-]+\b/i);
+ if (aptM) {
+  line2 = aptM[0];
+  line1 = line1.replace(aptM[0], "").trim().replace(/[,\s]+$/, "");
+ }
+
+ return {
+  line1, line2, city, state, zip,
+  confidence: 0.75, // structurally valid; clears the 0.7 gate
+  formatted: `${line1}${line2 ? " " + line2 : ""}, ${city}, ${state} ${zip}`,
+  concerns: "",
+  plausible: true,
+ };
 }
 
 async function parseAddress(input: string): Promise<ParsedAddress | null> {
@@ -448,7 +558,9 @@ async function parseAddress(input: string): Promise<ParsedAddress | null> {
  "When confidence < 0.7, 'concerns' must explain the specific problem in one short sentence." },
  { role: "user", content: input },
  ]);
- if (!r) return null;
+ // OpenAI unreachable (null) → heuristic fallback so the flow never
+ // hard-sticks on the address step when the LLM is down.
+ if (!r) return parseAddressHeuristic(input);
  // Defensive defaults so downstream code doesn't crash on missing keys.
  return {
  line1: r.line1 ?? "",
@@ -538,6 +650,92 @@ async function resetState(phone: string) {
  await admin.rpc("reset_sms_conversation", { p_phone: phone });
 }
 
+// ===================================================================
+// PEN PAL RECIPROCATION
+// ===================================================================
+// When a stranger receives a paper pen pal card, the QR code on the
+// back deep-links them to text our number. We detect that scenario at
+// photo-arrival time and offer them the path to mail back to their
+// original pen pal (closing the loop) instead of starting fresh.
+interface UnreciprocatedPairing {
+ pairingId: string;
+ senderId: string;          // the original sender, now the new recipient
+ senderFirstName: string;
+ senderCity: string;
+ senderState: string;
+ senderLine1: string;
+ senderLine2: string | null;
+ senderZip: string;
+ pairedDaysAgo: number;
+}
+
+async function findUnreciprocatedPairing(phone: string): Promise<UnreciprocatedPairing | null> {
+ // Most recent pen pal card this phone received that hasn't been
+ // responded to. 60-day window. Joins pen_pal_pairings → profiles to
+ // resolve the original sender's home address (where reply will go).
+ const { data } = await admin
+ .from("pen_pal_pairings")
+ .select(`
+ id, sender_id, paired_at, reciprocated_at,
+ recipient:profiles!pen_pal_pairings_recipient_id_fkey(phone),
+ sender:profiles!pen_pal_pairings_sender_id_fkey(
+ name, city, state, home_line1, home_line2, home_zip
+ )
+ `)
+ .eq("recipient.phone", phone)
+ .is("reciprocated_at", null)
+ .gt("paired_at", new Date(Date.now() - 60 * 86400 * 1000).toISOString())
+ .order("paired_at", { ascending: false })
+ .limit(1)
+ .maybeSingle();
+ if (!data) return null;
+ const sender = (data as any).sender;
+ if (!sender?.home_line1 || !sender?.home_zip) return null;
+ const firstName = (sender.name ?? "your pen pal").split(/\s+/)[0] || "your pen pal";
+ const pairedDaysAgo = Math.floor((Date.now() - new Date((data as any).paired_at).getTime()) / 86400 / 1000);
+ return {
+ pairingId: (data as any).id,
+ senderId: (data as any).sender_id,
+ senderFirstName: firstName,
+ senderCity: sender.city ?? "",
+ senderState: sender.state ?? "",
+ senderLine1: sender.home_line1,
+ senderLine2: sender.home_line2 ?? null,
+ senderZip: sender.home_zip,
+ pairedDaysAgo,
+ };
+}
+
+// ===================================================================
+// SUNDAY DROP
+// ===================================================================
+// Pen pal cards queue for the next Sunday at noon UTC instead of mailing
+// immediately. Anticipation + ritual: feels like a club, not a transaction.
+// The fire-scheduled-postcards cron handles the actual Sunday handoff.
+function nextSundayDropTime(): Date {
+ const now = new Date();
+ const dayOfWeek = now.getUTCDay(); // 0 = Sunday
+ const noonToday = new Date(now);
+ noonToday.setUTCHours(12, 0, 0, 0);
+ const daysUntilSunday = dayOfWeek === 0 && now < noonToday
+ ? 0
+ : (7 - dayOfWeek) % 7 || 7;
+ const sunday = new Date(now);
+ sunday.setUTCDate(sunday.getUTCDate() + daysUntilSunday);
+ sunday.setUTCHours(12, 0, 0, 0);
+ return sunday;
+}
+
+async function getSundayDropQueuePosition(dropDate: Date): Promise<number> {
+ const { count } = await admin
+ .from("postcards")
+ .select("id", { count: "exact", head: true })
+ .eq("status", "scheduled")
+ .eq("to_kind", "stranger")
+ .eq("scheduled_send_at", dropDate.toISOString());
+ return (count ?? 0) + 1;
+}
+
 async function balanceParenthetical(phone: string): Promise<string> {
  const { data: prof } = await admin
  .from("profiles").select("id, credits").eq("phone", phone).maybeSingle();
@@ -588,17 +786,125 @@ async function findOrCreateFriend(
  return created.id;
 }
 
+// Rolodex reuse. When a texting user names a friend, see if that friend
+// is already saved (in the app or from a past text send) WITH a full
+// address — so we can offer to reuse it instead of asking them to retype
+// it. Resolves the user by phone (read-only; no account is created just
+// to look up). Returns the single confident match, or null when there's
+// no profile, no match, no saved address, or the name is ambiguous (2+
+// matches) — in which case the caller falls back to asking for the
+// address, which is the safe path.
+async function findSavedFriendAddress(
+ phone: string,
+ name: string,
+): Promise<{ id: string; name: string; line1: string; line2: string; city: string; state: string; zip: string } | null> {
+ const typed = name.trim();
+ if (typed.length < 2) return null;
+ const { data: prof } = await admin
+ .from("profiles").select("id").eq("phone", phone).maybeSingle();
+ if (!prof?.id) return null;
+ const { data: rows } = await admin
+ .from("friends")
+ .select("id, name, address_line1, address_line2, address_city, address_state, address_zip")
+ .eq("owner_id", prof.id)
+ .ilike("name", `${typed}%`)
+ .not("address_line1", "is", null)
+ .not("address_zip", "is", null)
+ .limit(3);
+ const withAddr = (rows ?? []).filter(
+ (r: any) => r.address_line1 && r.address_zip && r.address_city && r.address_state,
+ );
+ if (withAddr.length !== 1) return null; // 0 or ambiguous → ask normally
+ const f: any = withAddr[0];
+ return {
+ id: f.id, name: f.name,
+ line1: f.address_line1, line2: f.address_line2 ?? "",
+ city: f.address_city, state: f.address_state, zip: f.address_zip,
+ };
+}
+
+// =============================================================================
+// Celebration gallery composition
+// =============================================================================
+//
+// The Mailed celebration's Act 2 is a 3-tile story shown inline in
+// iMessage (rendered as a photo grid — no link tap required):
+//
+//   1. their photo    the human moment (full-bleed original)
+//   2. the card       the artifact: flip GIF (front w/ photo ↔ back
+//                     w/ note), or static front+back if the flip
+//                     didn't render
+//   3. the route      the journey: native Apple Maps snapshot
+//
+// Order matters — photo first (most personal), map last (the
+// resolution). Each tile degrades independently. iMessage caps
+// attachments at 5; worst case here is 4 (photo + front + back + map).
+
+interface GallerySources {
+  frontThumbnailUrl?: string;
+  backThumbnailUrl?: string;
+  flipGifUrl?: string;
+  routeMapUrl?: string;
+}
+
+function buildCelebrationGallery(src: GallerySources, photoUrl: string): string[] {
+  const gallery: string[] = [];
+
+  // 1. The photo — always lead with it. It's the most personal frame
+  //    and grounds the whole gallery in "this is YOUR shot."
+  if (photoUrl) gallery.push(photoUrl);
+
+  // 2. The card. Prefer the animated flip; fall back to the two static
+  //    sides; if neither rendered, the photo above already stands in.
+  if (src.flipGifUrl) {
+    gallery.push(src.flipGifUrl);
+  } else {
+    if (src.frontThumbnailUrl) gallery.push(src.frontThumbnailUrl);
+    if (src.backThumbnailUrl) gallery.push(src.backThumbnailUrl);
+  }
+
+  // 3. The journey. Native Apple Maps route snapshot. Dropped silently
+  //    if geocoding/snapshot failed.
+  if (src.routeMapUrl) gallery.push(src.routeMapUrl);
+
+  // Safety: never return empty (would send a captionless bubble).
+  if (gallery.length === 0 && photoUrl) gallery.push(photoUrl);
+
+  return gallery.slice(0, 5);
+}
+
+// Act 2 caption for the gallery. Postal-label centering ("· To
+// Brooklyn, NY ·") with the great-circle distance underneath when it's
+// far enough to feel like a journey. The 25-mile floor avoids a silly
+// "3 miles by post" on same-town sends.
+function routeCaption(toLabel: string, miles?: number): string {
+  const base = `· To ${toLabel} ·`;
+  if (miles && miles > 25) {
+    return `${base}\n${miles.toLocaleString("en-US")} miles by post`;
+  }
+  return base;
+}
+
 // =============================================================================
 // Lob handoff (same internal-secret HTTP pattern as sms-inbound)
 // =============================================================================
 
-async function submitToLob(postcardId: string): Promise<{ ok: boolean; expectedDelivery?: string; error?: string }> {
- // HARD GUARD: if MAILROOM_TEST_MODE_NO_LOB is set, return a fake ok
- // response without calling the real Lob endpoint. Prevents accidental
- // real-money postcard mailing during integration test cycles.
- // Production deploys leave this env var unset.
- if (Deno.env.get("MAILROOM_TEST_MODE_NO_LOB") === "true") {
-   console.log("[loop-inbound] TEST_MODE_NO_LOB enabled, stubbing Lob call", { postcardId });
+async function submitToLob(postcardId: string): Promise<{ ok: boolean; expectedDelivery?: string; frontThumbnailUrl?: string; backThumbnailUrl?: string; flipGifUrl?: string; routeMapUrl?: string; routeMiles?: number; error?: string }> {
+ // HARD GUARD: stub the Lob call entirely if MAILROOM_TEST_MODE_NO_LOB
+ // is set AND no Lob test key is configured. The stub returns a fake
+ // ok response — no thumbnails, no GIFs, the celebration falls back to
+ // the raw camera-roll photo. Prevents real-money mailings during the
+ // earliest dev cycles when no Lob test key is wired up yet.
+ //
+ // SOFTER PATH (preferred for dev): set LOB_API_KEY_TEST in project
+ // secrets. lob-send-postcard auto-prefers it, runs the FULL Lob render
+ // pipeline (composing the card, generating PNG thumbnails) without
+ // printing or charging. This stub becomes a no-op when the test key
+ // is present, so the gallery (flip + route GIFs) renders end-to-end
+ // for visual validation without burning real cards.
+ const hasLobTestKey = !!Deno.env.get("LOB_API_KEY_TEST");
+ if (Deno.env.get("MAILROOM_TEST_MODE_NO_LOB") === "true" && !hasLobTestKey) {
+   console.log("[loop-inbound] TEST_MODE_NO_LOB enabled (no test key), stubbing Lob call", { postcardId });
    const fakeEta = new Date(Date.now() + 5 * 86400 * 1000).toISOString().slice(0, 10);
    return { ok: true, expectedDelivery: fakeEta };
  }
@@ -622,7 +928,25 @@ async function submitToLob(postcardId: string): Promise<{ ok: boolean; expectedD
  if (!data?.ok || !data?.lob_id) {
  return { ok: false, error: data?.error ?? `HTTP ${res.status}` };
  }
- return { ok: true, expectedDelivery: data.expected_delivery_date };
+ // Pass through all the rendered surfaces:
+ //   - frontThumbnailUrl / backThumbnailUrl: Lob's static PNG of
+ //     each side of the card (composed by Lob).
+ //   - flipGifUrl: front ↔ back animated flip (built by
+ //     postcard-render-gifs from the two thumbnails).
+ //   - routeMapUrl: native Apple Maps snapshot of the route.
+ //
+ // Used by Act 2 as the [photo, card flip, route map] gallery. Each
+ // degrades independently — missing flip falls back to static
+ // thumbnails, missing map just drops the third tile.
+ return {
+   ok: true,
+   expectedDelivery: data.expected_delivery_date,
+   frontThumbnailUrl: data.front_thumbnail_url ?? undefined,
+   backThumbnailUrl: data.back_thumbnail_url ?? undefined,
+   flipGifUrl: data.flip_gif_url ?? undefined,
+   routeMapUrl: data.route_map_url ?? undefined,
+   routeMiles: data.route_miles ?? undefined,
+ };
  } catch (e: any) {
  return { ok: false, error: e?.message ?? "network error" };
  }
@@ -813,19 +1137,131 @@ interface InboundCtx {
 async function handleInbound(ctx: InboundCtx): Promise<void> {
  const { from, body, attachments, messageId } = ctx;
 
- // 1. Global: a new photo restarts the conversation.
- // Drop a "love" tapback on the photo itself BEFORE we say anything .
- // user gets instant ❤️ acknowledgment of their photo while the bot's
- // welcome message is still being composed.
+ // Fetch state once at the top — used by the photo-restart guard, the
+ // loose-BUY gate, and step routing.
+ const state = await getConversationState(from);
+
+ // 1. Global: explicit reset is the universal escape hatch. First, so it
+ // works even mid-confirmation.
+ if (isRestartCommand(body)) {
+ await resetState(from);
+ await loopSend({ contact: from, text: "Cancelled." });
+ return;
+ }
+
+ // 1a. Resolve a pending "start over with this new photo?" confirmation.
+ // (Set when a photo arrived mid-draft — see the photo block below. We
+ // ask instead of silently wiping a card the user is in the middle of.)
+ const pendingNewPhotoUrl = state.conversation_data?.pending_new_photo_url as string | undefined;
+ if (pendingNewPhotoUrl) {
  if (attachments.length >= 1) {
+ // Another photo while deciding: swap in the newest and re-ask.
+ if (messageId) await loopReact(from, messageId, "love");
+ await advanceState(from, state.step, state.draft_token, {
+ ...(state.conversation_data ?? {}), pending_new_photo_url: attachments[0],
+ });
+ await loopSend({ contact: from, text: "Got the new photo. Start over with it? Reply YES to start fresh, or NO to keep your current card." });
+ return;
+ }
+ const ans = await parseConfirmation(body);
+ if (ans.intent === "yes") {
+ // startNewConversation builds a fresh draft from the new photo and
+ // replaces conversation_data, which clears the pending flag.
+ return await startNewConversation(from, pendingNewPhotoUrl);
+ }
+ if (ans.intent === "no") {
+ await advanceState(from, state.step, state.draft_token, {
+ ...(state.conversation_data ?? {}), pending_new_photo_url: null,
+ });
+ await loopSend({ contact: from, text: "Okay, keeping your card in progress. Reply to the last step above to keep going." });
+ return;
+ }
+ await loopSend({ contact: from, text: "Reply YES to start over with the new photo, or NO to keep your current card." });
+ return;
+ }
+
+ // 2. Global: a new photo. If there's a card in progress that ALREADY has
+ // a photo, a new one would wipe that work — so ask first instead of
+ // silently discarding. If idle, or in a state waiting FOR a photo (the
+ // REPLY-code reply flow has an empty draft), just start normally.
+ if (attachments.length >= 1) {
+ if (state.step !== "idle" && state.draft_token) {
+ const { data: draftRow } = await admin
+ .from("sms_postcard_drafts").select("photo_path").eq("token", state.draft_token).maybeSingle();
+ if (draftRow?.photo_path) {
+ if (messageId) await loopReact(from, messageId, "love");
+ await advanceState(from, state.step, state.draft_token, {
+ ...(state.conversation_data ?? {}), pending_new_photo_url: attachments[0],
+ });
+ await loopSend({ contact: from, text: "You've got a card in progress. Start over with this new photo? Reply YES to start fresh, or NO to keep going." });
+ return;
+ }
+ }
+ // Instant ❤️ tapback, then build the new card.
  if (messageId) await loopReact(from, messageId, "love");
  return await startNewConversation(from, attachments[0]);
  }
 
- // 2. Global: explicit reset.
- if (isRestartCommand(body)) {
- await resetState(from);
- await loopSend({ contact: from, text: "Cancelled." });
+ // 2b. Global: REPLY <code> — the QR-on-postcard deep link target.
+ // When someone scans the QR on a Mailroom postcard or types the
+ // printed instruction, the prefilled body is "REPLY ABC123".
+ // We look up the short_code, find the original sender's home
+ // address, stash pending_reply on conversation state, and ask
+ // them for a photo. The rest of the flow runs as a reciprocation
+ // send (see handleSendType + doMailReplyToPenPal).
+ const replyMatch = body.trim().match(/^REPLY\s+([A-Z0-9]{4,8})$/i);
+ if (replyMatch) {
+ const code = replyMatch[1].toUpperCase();
+ const { data: lookup } = await admin.rpc("lookup_reciprocation_short_code", {
+ p_code: code,
+ });
+ const match = Array.isArray(lookup) && lookup.length > 0 ? lookup[0] : null;
+ if (!match) {
+ await loopSend({
+ contact: from,
+ text: `Couldn't find a card with code ${code}. Double-check the code on the back of the postcard.`,
+ });
+ return;
+ }
+ if (!match.sender_line1 || !match.sender_zip) {
+ await loopSend({
+ contact: from,
+ text: `${match.sender_first_name}'s address isn't on file yet, so I can't route a card back to them right now. Sorry for the run-around.`,
+ });
+ return;
+ }
+ // Stash the pending_reply context on a fresh state and ask for a photo.
+ const token = mintToken();
+ await admin.from("sms_postcard_drafts").insert({
+ token,
+ from_phone: from,
+ caption: "",
+ photo_path: "",
+ twilio_media_url: "",
+ verified_phone: from,
+ });
+ await advanceState(from, "awaiting_send_type", token, {
+ pending_reply: {
+ pairing_id: null, // not always a pen pal pairing (could be a friend send)
+ sender_id: match.sender_id,
+ sender_first_name: match.sender_first_name,
+ sender_city: match.sender_city,
+ sender_state: match.sender_state,
+ sender_line1: match.sender_line1,
+ sender_line2: match.sender_line2,
+ sender_zip: match.sender_zip,
+ paired_days_ago: null,
+ short_code: code,
+ },
+ });
+ await loopSend({
+ contact: from,
+ subject: "💌 Writing back",
+ text:
+ `Got it. We'll write ${match.sender_first_name}` +
+ (match.sender_city ? ` in ${match.sender_city}` : "") +
+ ` back.\n\nSend me the photo you want on the card.`,
+ });
  return;
  }
 
@@ -853,7 +1289,17 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  });
  return;
  }
- if (/^buy\b/i.test(body.trim())) {
+ // Loose "buy ..." hint (e.g. "buy more credits"), but ONLY when the user
+ // is NOT mid free-text entry. In a content-entry step a message that
+ // starts with "buy" is the user's actual note/name/address (a postcard
+ // that reads "buy yourself something nice" must NOT be hijacked into the
+ // purchase menu). The exact BUY / BUY 5 / 10 / 25 command above is
+ // anchored and stays global.
+ const CONTENT_ENTRY_STEPS = new Set([
+ "awaiting_message", "awaiting_recipient_name",
+ "awaiting_recipient_address", "awaiting_sender_location",
+ ]);
+ if (/^buy\b/i.test(body.trim()) && !CONTENT_ENTRY_STEPS.has(state.step)) {
  await loopSend({
  contact: from,
  text: "BUY 5 ($5/4), BUY 10 ($10/10), or BUY 25 ($25/30). Just BUY = 10-pack.",
@@ -861,8 +1307,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  return;
  }
 
- // 4. Step-based routing.
- const state = await getConversationState(from);
+ // 5. Step-based routing.
  switch (state.step) {
  case "idle":
  return await handleIdle(from);
@@ -882,7 +1327,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  return await handleSendConfirm(from, body, state);
  default:
  await resetState(from);
- await loopSend({ contact: from, text: "Something's off on our end. Send a fresh photo to start over." });
+ await loopSend({ contact: from, text: "Let's start fresh. Text a photo to begin a new card." });
  }
 }
 
@@ -890,10 +1335,13 @@ async function handleIdle(from: string): Promise<void> {
  const { data: prof } = await admin
  .from("profiles").select("credits").eq("phone", from).maybeSingle();
  if (!prof) {
+ // Cold-open for someone who's texted us but has no profile yet.
+ // Anchor the brand (magical mail club) before the utility (send a
+ // photo). The "First one's on us" is the value prop nudge.
  await loopSend({
  contact: from,
- subject: "📮 Mailroom",
- text: "Send a photo to start. First one's on us.",
+ subject: "📮 Welcome to Mailroom",
+ text: "A magical mail club. Real paper. By text.\n\nText us a photo to send your first postcard, on us.",
  });
  return;
  }
@@ -912,9 +1360,38 @@ async function handleIdle(from: string): Promise<void> {
 }
 
 async function startNewConversation(phone: string, mediaUrl: string): Promise<void> {
- // First-time check fires BEFORE we touch the DB so we can serve the
- // vCard before our profile insert pollutes the result.
- const firstTime = await isFirstTimeContact(phone);
+ // INSTANT FEEDBACK. The photo download from LoopMessage's CDN + EXIF
+ // strip + re-upload to storage takes 10-15s for a large HEIC. Without
+ // this the thread sits dead-silent the whole time. Fire a typing
+ // indicator immediately (non-blocking) AND send the "got it" ack
+ // BEFORE the slow upload, so the user sees a response in ~1-2s. The
+ // heavy lifting happens behind the typing dots.
+ fireTyping(phone, 25);
+
+ // Two cheap lookups, parallelized: first-time status (drives the ack
+ // copy + vCard) and any stashed REPLY-code reply context. REPLY CODE
+ // continuation: if this phone is mid-flow from a recent REPLY <code>
+ // text (QR scan), they already told us who to write back to — the
+ // photo they're sending now is for THAT card, so we must NOT clobber
+ // the stashed pending_reply on the awaiting_send_type advance.
+ const [firstTime, priorStateRes] = await Promise.all([
+  isFirstTimeContact(phone),
+  admin
+   .from("sms_conversation_state")
+   .select("conversation_data")
+   .eq("phone", phone)
+   .maybeSingle(),
+ ]);
+ const carryReply = (priorStateRes.data?.conversation_data?.pending_reply ?? null) as any;
+
+ // Bubble A — sent NOW, before the upload. One clean beat for everyone
+ // (reply-code senders get a name-aware line). No fluff; the question
+ // is what matters. If the upload then fails, the "lost it on the
+ // conveyor" line below reads as an honest follow-up.
+ const ackText = carryReply
+  ? `📮 Got the photo. ${carryReply.sender_first_name}'s going to love this.`
+  : "📮 Got it.";
+ await loopSend({ contact: phone, text: ackText });
 
  const token = mintToken();
  const upload = await downloadAndUploadPhoto(mediaUrl, token);
@@ -923,7 +1400,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  console.error("[loop-inbound] photo intake failed", { mediaUrl: mediaUrl.slice(0, 200), error: upload.error });
  await loopSend({
  contact: phone,
- text: `Couldn't save that photo. Try again?`,
+ text: `Lost the photo somewhere on the conveyor. Send it again?`,
  });
  return;
  }
@@ -932,32 +1409,94 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  photo_path: upload.path, twilio_media_url: mediaUrl,
  verified_phone: phone,
  });
+
+ // REPLY CODE FAST PATH: stranger scanned a QR on a Mailroom card, texted
+ // REPLY <code>, then sent their photo. Skip the "who's this for?"
+ // question entirely — they already told us via the code. Jump straight
+ // to message capture with send_type=reply_to_pen_pal pre-set so
+ // handleSendConfirm routes to doMailReplyToPenPal at the end.
+ if (carryReply) {
+  await advanceState(phone, "awaiting_message", token, {
+   pending_reply: carryReply,
+   send_type: "reply_to_pen_pal",
+  });
+  // Ack (Bubble A) already sent above, before the upload. Go straight
+  // to the note prompt.
+  await loopSend({
+   contact: phone,
+   subject: "✍️ Write your note",
+   text: `What should we write to ${carryReply.sender_first_name}?\n\nUp to 240 chars, or text SKIP for just the photo.`,
+   contact_file: firstTime,
+  });
+  return;
+ }
+
  await advanceState(phone, "awaiting_recipient_name", token, {});
 
  // Warm, clear, conversational opener. Full questions, not cryptic
  // arrows. Two-bubble pattern: Bubble A is the "we saw it" beat,
- // Bubble B is the actual question. The 450ms pause makes the photo
- // land before the bot starts asking. Reads as paced, not robotic.
+ // Bubble B is the actual question.
+ //
+ // ACTIVE PENPAL DEEP LINK: if this phone recently received an
+ // unreciprocated pen pal card, surface that as a third option in
+ // Bubble B. The user texts back a photo and the bot says "looks
+ // like Sarah in Brooklyn sent you a card — want to write her back?"
+ // This closes the most important loop in the entire product.
  await advanceState(phone, "awaiting_send_type", token, {});
 
- // Bubble A: instant acknowledgment that we received the photo
- await loopSend({ contact: phone, text: "📮 Got the photo." });
- await sleep(450);
+ const pendingReply = await findUnreciprocatedPairing(phone);
 
- // Bubble B: welcome + the send-type question
+ // Bubble A (the "got it" ack) was already sent up top, before the
+ // upload. Now send Bubble B — the question — which lands after the
+ // upload completes (the typing dots covered the gap).
+
+ // If there's a pen pal to reply to, stash the pairing context so
+ // handleSendType / doMail can branch on it.
+ if (pendingReply) {
+ await advanceState(phone, "awaiting_send_type", token, {
+ pending_reply: {
+ pairing_id: pendingReply.pairingId,
+ sender_id: pendingReply.senderId,
+ sender_first_name: pendingReply.senderFirstName,
+ sender_city: pendingReply.senderCity,
+ sender_state: pendingReply.senderState,
+ sender_line1: pendingReply.senderLine1,
+ sender_line2: pendingReply.senderLine2,
+ sender_zip: pendingReply.senderZip,
+ paired_days_ago: pendingReply.pairedDaysAgo,
+ },
+ });
+ const daysWord = pendingReply.pairedDaysAgo <= 1 ? "yesterday"
+ : pendingReply.pairedDaysAgo < 7 ? `${pendingReply.pairedDaysAgo} days ago`
+ : `${Math.floor(pendingReply.pairedDaysAgo / 7)} week${Math.floor(pendingReply.pairedDaysAgo / 7) > 1 ? "s" : ""} ago`;
+ const locationLabel = pendingReply.senderCity
+ ? `${pendingReply.senderFirstName} in ${pendingReply.senderCity}${pendingReply.senderState ? ", " + pendingReply.senderState : ""}`
+ : pendingReply.senderFirstName;
+ await loopSend({
+ contact: phone,
+ subject: "📬 Pen pal reply waiting",
+ text:
+ `${locationLabel} sent you a card ${daysWord}.\n\n` +
+ `Want to write them back? Reply YES (close the loop), a friend's name, or "penpal" for a new match.`,
+ contact_file: firstTime,
+ });
+ return;
+ }
+
+ // Bubble B: get straight to the question. Someone texting a photo
+ // already knows what Mailroom is — no welcome spiel. First-timers get
+ // a one-clause "on us" nudge + the vCard; returning senders just get
+ // the question.
  if (firstTime) {
  await loopSend({
  contact: phone,
- subject: "📮 Welcome to Mailroom",
- text:
- "Who do you want to send this to? Your first postcard is on us. You can send it to a randomly matched pen pal, or to a friend.\n\n" +
- "Just tell us \"penpal\", or the name of the friend you want to send to.",
+ text: "Who's this card for?\n\nText a name, or \"penpal\" to be matched with someone new. First one's on us.",
  contact_file: true,
  });
  } else {
  await loopSend({
  contact: phone,
- text: "Who's this one for? Reply \"penpal\" for a random match, or just type a friend's name.",
+ text: "Who's this one for?\n\nText a name, or \"penpal\" for a new match.",
  });
  }
 }
@@ -968,6 +1507,36 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
 async function handleSendType(phone: string, body: string, state: any): Promise<void> {
  const raw = body.trim();
  const lower = raw.toLowerCase();
+
+ // ACTIVE PENPAL REPLY: if startNewConversation found an unreciprocated
+ // pairing and stashed it on conversation_data.pending_reply, YES (or
+ // equivalent) means "close the loop with that pen pal." We skip the
+ // name + address asks entirely because routing is already cached.
+ const pendingReply = (state.conversation_data?.pending_reply ?? null) as any;
+ if (pendingReply && /^(y|yes|yeah|yep|sure|do it|let's go|lets go|reply|write back|close the loop)$/i.test(raw)) {
+ // Guard: the REPLY-code deep link stashes pending_reply BEFORE any
+ // photo is sent. If someone says "yes" here without a photo on the
+ // draft, advancing to the note step would end in a Lob reject (no
+ // front image). Route them to send the photo first. (The active-pen-
+ // pal flow already has a photo on the draft, so it sails through.)
+ const { data: draftRow } = await admin
+ .from("sms_postcard_drafts").select("photo_path").eq("token", state.draft_token).maybeSingle();
+ if (!draftRow?.photo_path) {
+ await loopSend({
+ contact: phone,
+ text: `First, send me the photo you want on ${pendingReply.sender_first_name}'s card.`,
+ });
+ return;
+ }
+ await advanceState(phone, "awaiting_message", state.draft_token, {
+ send_type: "reply_to_pen_pal",
+ });
+ await loopSend({
+ contact: phone,
+ text: `Writing ${pendingReply.sender_first_name} back. What should your card say? (Up to 240 chars, or text SKIP for just the photo.)`,
+ });
+ return;
+ }
 
  // Pen pal path. NOW LIVE. The bot picks a match at SEND time (no
  // recipient name/address asked because the user shouldn't see who
@@ -1009,6 +1578,22 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  /[a-z]/i.test(raw) &&
  !/[0-9@#$%^&*<>{}\[\]\\\/]/.test(raw)
  ) {
+ // Rolodex reuse: if this friend is already saved with an address,
+ // offer to reuse it instead of asking the user to retype it.
+ const saved = await findSavedFriendAddress(phone, raw);
+ if (saved) {
+ await advanceState(phone, "awaiting_address_confirm", state.draft_token, {
+ send_type: "friend",
+ recipient_name: saved.name,
+ recipient: { line1: saved.line1, line2: saved.line2, city: saved.city, state: saved.state, zip: saved.zip },
+ });
+ const f = saved.name.split(/\s+/)[0];
+ await loopSend({
+ contact: phone,
+ text: `Found ${f} in ${saved.city}, ${saved.state} (${saved.line1}). Send there? Reply Y, or send a different address.`,
+ });
+ return;
+ }
  await advanceState(phone, "awaiting_recipient_address", state.draft_token, {
  send_type: "friend",
  recipient_name: raw,
@@ -1021,7 +1606,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  // Couldn't parse. re-prompt with the same warmth.
  await loopSend({
  contact: phone,
- text: "Reply with a friend's name, or \"penpal\" for a random match.",
+ text: "Text a friend's name, or \"penpal\" to be matched with someone new.",
  });
 }
 
@@ -1116,7 +1701,22 @@ async function getRecipientMemory(
 async function handleRecipientName(phone: string, body: string, state: any): Promise<void> {
  const name = body.trim();
  if (name.length < 1 || name.length > 80) {
- await loopSend({ contact: phone, text: "Need a real name. Try again?" });
+ await loopSend({ contact: phone, text: "That doesn't look like a name. Who's the card for?" });
+ return;
+ }
+ // Rolodex reuse: skip the address ask if this friend is already saved
+ // with one. Confirm before using (addresses go stale).
+ const saved = await findSavedFriendAddress(phone, name);
+ if (saved) {
+ await advanceState(phone, "awaiting_address_confirm", state.draft_token, {
+ recipient_name: saved.name,
+ recipient: { line1: saved.line1, line2: saved.line2, city: saved.city, state: saved.state, zip: saved.zip },
+ });
+ const f = saved.name.split(/\s+/)[0];
+ await loopSend({
+ contact: phone,
+ text: `Found ${f} in ${saved.city}, ${saved.state} (${saved.line1}). Send there? Reply Y, or send a different address.`,
+ });
  return;
  }
  await advanceState(phone, "awaiting_recipient_address", state.draft_token, { recipient_name: name });
@@ -1131,8 +1731,9 @@ async function handleRecipientName(phone: string, body: string, state: any): Pro
 }
 
 async function handleRecipientAddress(phone: string, body: string, state: any): Promise<void> {
- // No typing indicator. keep it snappy. The verify happens in well
- // under a second on average. Drama is reserved for the SEND moment.
+ // Typing dots while we parse + verify (LLM, 2-4s). The user flagged
+ // address→confirmation as feeling laggy, so show activity.
+ fireTyping(phone, 8);
  const parsed = await parseAddress(body);
 
  if (!parsed || parsed.confidence < 0.5) {
@@ -1171,14 +1772,39 @@ async function handleRecipientAddress(phone: string, body: string, state: any): 
  `   ${firstName}\n` +
  `   ${parsed.line1}${line2Line}\n` +
  `   ${parsed.city}, ${parsed.state} ${parsed.zip}`;
+ // "Mailing to:" reframes — the user's confirming a real-world
+ // action, not validating data. "Good?" is friendlier than "Does
+ // this look right?" which has a clipboard-and-checkboxes vibe.
  await loopSend({
  contact: phone,
- text: `${label}\n\nDoes this look right?`,
+ text: `Mailing to:\n${label}\n\nGood?`,
  });
 }
 
 async function handleAddressConfirm(phone: string, body: string, state: any): Promise<void> {
- const c = await parseConfirmation(body);
+ // Y/N hits a regex fast-path; anything fuzzier falls to the LLM. Show
+ // dots either way — cheap insurance against a laggy classify.
+ fireTyping(phone, 6);
+ const t = body.trim();
+ // Inline address override. If they typed a NEW address here instead of
+ // Y/N (common when a reused/saved address is stale, or they just want to
+ // correct it), parse + switch to it and re-confirm — no "no" detour. The
+ // digit gate skips the LLM for plain Y/N.
+ if (/\d/.test(t)) {
+ const newAddr = await parseAddress(t);
+ if (newAddr && newAddr.confidence >= 0.7 && newAddr.line1 && newAddr.zip && newAddr.city && newAddr.state) {
+ await advanceState(phone, "awaiting_address_confirm", state.draft_token, {
+ recipient: { line1: newAddr.line1, line2: newAddr.line2 || "", city: newAddr.city, state: newAddr.state, zip: newAddr.zip },
+ });
+ const nm = (state.conversation_data?.recipient_name ?? "your friend") as string;
+ const fn = nm.split(/\s+/)[0];
+ const l2 = newAddr.line2 ? `\n   ${newAddr.line2}` : "";
+ const label = `   ${fn}\n   ${newAddr.line1}${l2}\n   ${newAddr.city}, ${newAddr.state} ${newAddr.zip}`;
+ await loopSend({ contact: phone, text: `Mailing to:\n${label}\n\nGood?` });
+ return;
+ }
+ }
+ const c = await parseConfirmation(t);
  if (c.intent === "yes") {
  await advanceState(phone, "awaiting_message", state.draft_token, {});
 
@@ -1214,6 +1840,27 @@ async function handleAddressConfirm(phone: string, body: string, state: any): Pr
  return;
  }
  await loopSend({ contact: phone, text: "Does it look right? Reply Y, or send the correct address." });
+}
+
+// Pre-send postcard composition shown at the SEND-confirm step. Branches
+// on send type so pen pal mode reads correctly (no recipient identity —
+// it conveys the mystery) instead of the broken "CITY ──→ THEIR PLACE /
+// To: your friend" the friend-template produced for strangers.
+function buildPreSendComposition(opts: {
+ fromCity: string;
+ sendType: string;
+ recipientName?: string;
+ recipientCity?: string;
+ note: string;
+}): string {
+ const from = (opts.fromCity || "").trim().toUpperCase() || "YOUR CITY";
+ const noteBlock = opts.note.length > 0 ? `\n\n   "${opts.note}"` : "";
+ if (opts.sendType === "stranger") {
+  return `${from} ──→ ✦\n\n   To: a pen pal in the pool${noteBlock}`;
+ }
+ const firstName = (opts.recipientName ?? "").split(/\s+/)[0] || "your friend";
+ const toCity = (opts.recipientCity || "their place").toUpperCase();
+ return `${from} ──→ ${toCity}\n\n   To: ${firstName}${noteBlock}`;
 }
 
 async function handleMessage(phone: string, body: string, state: any): Promise<void> {
@@ -1264,10 +1911,8 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
 
  if (hasFullAddress) {
  await advanceState(phone, "awaiting_send_confirm", state.draft_token, { message: truncated });
- const name = (state.conversation_data?.recipient_name ?? "your friend") as string;
- const firstName = name.split(/\s+/)[0];
+ const sendType = (state.conversation_data?.send_type ?? "friend") as string;
  const recip = (state.conversation_data?.recipient ?? {}) as { city?: string; state?: string };
- const recipCity = recip.city || "their place";
  const balanceTag = await balanceParenthetical(phone);
  const heavy = isHeavyNote(truncated);
 
@@ -1278,15 +1923,13 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  await loopSend({ contact: phone, text: `Got it. "${truncated}"` });
  await sleep(550);
  }
- // Aesthetic: vertical postcard composition. Two cities flanking an
- // em-rule + arrow reads like a postal route. The "To:" label + note
- // sit centered below, mimicking the back of a real postcard.
- const noteBlock = truncated.length > 0
- ? `\n\n   "${truncated}"`
- : "";
- const composition =
- `${knownCity.toUpperCase()} ──→ ${recipCity.toUpperCase()}\n\n` +
- `   To: ${firstName}${noteBlock}`;
+ const composition = buildPreSendComposition({
+ fromCity: knownCity,
+ sendType,
+ recipientName: state.conversation_data?.recipient_name,
+ recipientCity: recip.city,
+ note: truncated,
+ });
  await loopSend({
  contact: phone,
  text: heavy
@@ -1301,10 +1944,13 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  // ask isn't "where do you live". it's "so they can write back."
  await advanceState(phone, "awaiting_sender_location", state.draft_token, { message: truncated });
 
- const recipName = (state.conversation_data?.recipient_name ?? "your friend") as string;
- const recipFirst = recipName.split(/\s+/)[0];
+ const recipName = (state.conversation_data?.recipient_name ?? "") as string;
+ const recipFirst = recipName.split(/\s+/)[0] || "your friend";
  const sendType = (state.conversation_data?.send_type ?? "friend") as string;
- const writeBackWho = sendType === "stranger_requested" ? "your pen pal" : recipFirst;
+ // Pen pal mode sets send_type "stranger" (NOT "stranger_requested" —
+ // that older value never existed here, which is why this used to read
+ // "so your can mail one back to you" when recipName was empty).
+ const writeBackWho = sendType === "stranger" ? "your pen pal" : recipFirst;
 
  // Bubble 1: acknowledge the note so the user knows we heard them
  if (truncated.length > 0) {
@@ -1325,6 +1971,9 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
 }
 
 async function handleSenderLocation(phone: string, body: string, state: any): Promise<void> {
+ // Show the typing dots while we parse + verify the address (LLM call,
+ // ~2-4s). Without this the step feels frozen.
+ fireTyping(phone, 8);
  // Parse the FULL mailing address (same parser as recipient address).
  // We need line1 + city + state + zip at minimum. line2 (apt/unit) optional.
  // line1 + zip together prove this is a real mailing address, not just
@@ -1354,18 +2003,19 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
  await advanceState(phone, "awaiting_send_confirm", state.draft_token, {
  sender_city: parsed.city, sender_state: parsed.state,
  });
- const name = (state.conversation_data?.recipient_name ?? "your friend") as string;
- const firstName = name.split(/\s+/)[0];
+ const sendType = (state.conversation_data?.send_type ?? "friend") as string;
  const recip = (state.conversation_data?.recipient ?? {}) as { city?: string; state?: string };
- const recipCity = recip.city || "their place";
  const note = (state.conversation_data?.message ?? "") as string;
  const balanceTag = await balanceParenthetical(phone);
  const heavy = isHeavyNote(note);
  // Vertical postcard composition (same aesthetic as handleMessage path).
- const noteBlock = note.length > 0 ? `\n\n   "${note}"` : "";
- const composition =
- `${parsed.city.toUpperCase()} ──→ ${recipCity.toUpperCase()}\n\n` +
- `   To: ${firstName}${noteBlock}`;
+ const composition = buildPreSendComposition({
+ fromCity: parsed.city,
+ sendType,
+ recipientName: state.conversation_data?.recipient_name,
+ recipientCity: recip.city,
+ note,
+ });
  await loopSend({
  contact: phone,
  text: heavy
@@ -1375,6 +2025,9 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
 }
 
 async function handleSendConfirm(phone: string, body: string, state: any): Promise<void> {
+ // SEND/CANCEL hit a regex fast-path; date phrasing ("June 15") falls
+ // to the LLM. Show dots so the parse never feels frozen.
+ fireTyping(phone, 6);
  const c = await parseSendConfirm(body);
  if (c.intent === "cancel") {
  await resetState(phone);
@@ -1401,7 +2054,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
 
  if (!draftToken) {
   await resetState(phone);
-  await loopSend({ contact: phone, text: "Something's missing from your draft. Text us a fresh photo to start over." });
+  await loopSend({ contact: phone, text: "We lost the thread on that card. Text a fresh photo to start over." });
   return;
  }
 
@@ -1410,7 +2063,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  try { userId = await findOrCreateUserByPhone(phone); }
  catch (e: any) {
   console.error("[loop-inbound] user create failed (stranger)", e);
-  await loopSend({ contact: phone, text: "Couldn't set up your account. Try again in a minute." });
+  await loopSend({ contact: phone, text: "Hmm, the mailroom's locked. Try again in a minute?" });
   return;
  }
 
@@ -1426,7 +2079,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   await advanceState(phone, "awaiting_sender_location", state.draft_token, {});
   await loopSend({
    contact: phone,
-   text: "First, your mailing address — pen pals need somewhere to mail back. Format: street, city, state, ZIP.",
+   text: "First, your mailing address. Pen pals need somewhere to mail back. Format: street, city, state, ZIP.",
   });
   return;
  }
@@ -1443,7 +2096,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  });
  if (matchErr) {
   console.error("[loop-inbound] match_pen_pal threw", matchErr);
-  await loopSend({ contact: phone, text: "Matching's having a moment. Try SEND again in a sec." });
+  await loopSend({ contact: phone, text: "Couldn't find a match right now. Try SEND again in a sec." });
   return;
  }
  const matchedRecipient = Array.isArray(match) && match.length > 0 ? match[0] : null;
@@ -1471,7 +2124,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
  if (!draftRow?.photo_path) {
   await resetState(phone);
-  await loopSend({ contact: phone, text: "Your photo expired. Text a new one to start over." });
+  await loopSend({ contact: phone, text: "That photo flew the coop. Send another?" });
   return;
  }
  let photoUrl = draftRow.photo_path;
@@ -1479,7 +2132,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   const { data: signed } = await admin.storage
    .from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 7);
   if (!signed?.signedUrl) {
-   await loopSend({ contact: phone, text: "Couldn't access your photo. Text us another to start over." });
+   await loopSend({ contact: phone, text: "Lost the photo somewhere in the sorting bin. Send it again?" });
    return;
   }
   photoUrl = signed.signedUrl;
@@ -1503,8 +2156,15 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   return;
  }
 
- // Insert the postcard via the direct-address RPC (no friend row, no PII
- // exposed to the sender).
+ // SUNDAY DROP: pen pal cards queue for the next Sunday at noon UTC
+ // instead of mailing immediately. The whole pool drops together,
+ // creating a ritual ("this Sunday's mail just went out") that makes
+ // pen pal mode feel like a club, not a transaction.
+ const sundayDrop = nextSundayDropTime();
+ const queuePosition = await getSundayDropQueuePosition(sundayDrop);
+
+ // Insert via direct-address RPC with scheduled_send_at set so the
+ // existing fire-scheduled-postcards cron picks it up on Sunday.
  const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms_direct", {
   p_user_id: userId,
   p_message: message,
@@ -1515,6 +2175,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   p_to_state: matchedRecipient.recipient_state,
   p_to_zip: matchedRecipient.recipient_zip,
   p_from_city: senderProfile.city,
+  p_scheduled_send_at: sundayDrop.toISOString(),  // Sunday Drop
  });
  if (rpcErr) {
   console.error("[loop-inbound] send_postcard_sms_direct failed", rpcErr);
@@ -1523,24 +2184,13 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
    contact: phone,
    text: oom
     ? "Out of cards. BUY 5, 10, or 25 to top up, then SEND."
-    : "Couldn't mail your card. Try SEND again, or text a new photo to start over.",
+    : "Couldn't queue your card. Try SEND again, or text a new photo to start over.",
   });
   return;
  }
 
- // Lob handoff
- const lob = await submitToLob(postcardId as string);
- if (!lob.ok) {
-  const { data: cur } = await admin.from("profiles").select("credits").eq("id", userId).maybeSingle();
-  await admin.from("profiles").update({ credits: (cur?.credits ?? 0) + 1 }).eq("id", userId);
-  await admin.from("postcards").delete().eq("id", postcardId);
-  console.error("[loop-inbound] Lob failed (stranger)", lob.error);
-  await loopSend({
-   contact: phone,
-   text: `Printer's down (${lob.error?.slice(0, 60)}). Credit refunded. SEND to retry.`,
-  });
-  return;
- }
+ // NO Lob handoff yet — the cron fires it on Sunday. The card sits in
+ // status='scheduled' until then.
 
  // Pairing log + recipient cool-down update
  await admin.from("pen_pal_pairings").insert({
@@ -1557,32 +2207,46 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  await admin.rpc("consume_sms_draft", { p_token: draftToken, p_postcard_id: postcardId });
  await resetState(phone);
 
- const eta = lob.expectedDelivery
-  ? new Date(lob.expectedDelivery).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-  : "in 3-5 days";
- const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
+ // c-bridge wraps /c/<token> with per-token OG meta tags so iMessage's
+ // preview shows THIS recipient + THIS photo + THIS ETA instead of the
+ // generic landing card. Real browsers get a meta-refresh to /c/<token>.
+ const confirmUrl = `https://nlwnmgwylmmnaemdnzlq.supabase.co/functions/v1/c-bridge?token=${draftToken}`;
+ const dropDateLabel = sundayDrop.toLocaleDateString("en-US", {
+  weekday: "long", month: "short", day: "numeric",
+ });
+ const ordinalSuffix = (n: number) => {
+  const j = n % 10, k = n % 100;
+  if (j === 1 && k !== 11) return "st";
+  if (j === 2 && k !== 12) return "nd";
+  if (j === 3 && k !== 13) return "rd";
+  return "th";
+ };
+ const positionLabel = `${queuePosition}${ordinalSuffix(queuePosition)}`;
 
- // 3-act celebration, stranger flavor. Recipient city kept anonymous
- // ("somewhere new" instead of city name) so the sender doesn't know
- // where their card landed until the recipient writes back.
+ // 4-act SUNDAY DROP celebration. Different vibe than friend mode.
+ // Anticipation > immediacy. The user joins a queue, the pool drops
+ // together on Sunday. Effect: shootingStar (wish-like).
+ //
+ // Act 0 ("stamping" beat): quiet line + typing indicator turn the
+ // 1-2s before the celebration from dead air into ritual.
+ // Act 1: queue position (the "where am I" answer).
+ // Act 2: the cadence promise ("flies Sunday").
+ // Act 3: anonymous photo.
+ // Act 4: the reciprocation promise.
+ await loopSend({ contact: phone, text: "🪶 Joining the pool..." });
  await loopTyping(phone, 2);
 
- // Act 1: The moment. Stranger mode gets shootingStar (the "wish"
- // effect) regardless of note content — the pen pal vibe is wish-like
- // by nature.
- const postmarkDate = new Date().toLocaleDateString("en-US", {
-  month: "short", day: "numeric", year: "numeric",
- }).toUpperCase();
+ // Act 1: queue position. Standalone — the "you're #14" beat needs
+ // its own breath, not crammed into a paragraph with the cadence.
  const mailedRes = await loopSend({
   contact: phone,
-  subject: "🪶 Sent into the wire",
-  text: `POSTMARKED · ${postmarkDate}\n\nYour card is on its way to someone, somewhere.`,
+  subject: "🪶 In Sunday's drop",
+  text: `You're the ${positionLabel} card in this week's pool.`,
   effect: "shootingStar",
   passthrough: `stranger:${postcardId}`,
  });
  // Persist the Mailed bubble's message_id so lob-webhook can thread
- // later status updates as in-thread replies. Also stash from_phone
- // for the webhook to skip a profiles join.
+ // later status updates as in-thread replies.
  if (mailedRes.ok && mailedRes.messageId) {
   await admin.from("postcards").update({
    mailed_imessage_id: mailedRes.messageId,
@@ -1593,18 +2257,240 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  }
  await sleep(700);
 
- // Act 2: Photo, still anonymous on the destination
+ // Act 2: the cadence. "Flies" carries the postal romance — cards
+ // don't "go out," they fly. The day label closes the loop on when.
  await loopSend({
   contact: phone,
-  text: `→ somewhere new`,
+  text: `We match + mail every Sunday at noon. Yours flies ${dropDateLabel}.`,
+ });
+ await sleep(550);
+
+ // Act 3: Photo — anonymous destination. "· To somewhere ·" uses
+ // postal-label centering instead of console-style arrows.
+ await loopSend({
+  contact: phone,
+  text: `· To somewhere ·`,
   attachments: [photoUrl],
  });
  await sleep(450);
 
- // Act 3: The promise. The recipient will reply (we hope).
+ // Act 4: The promise — they'll know when the loop closes
  await loopSend({
   contact: phone,
-  text: `Arrives ${eta}. When they write back, you'll know.\n${confirmUrl}`,
+  text: `When they write back, you'll know.\n${confirmUrl}`,
+ });
+}
+
+// ===================================================================
+// PEN PAL RECIPROCATION RESPONSE
+// ===================================================================
+// Sender is closing the loop with a recent pen pal. The pending_reply
+// stash on conversation_data has all the routing info. Mails IMMEDIATELY
+// (replies should feel responsive, not delayed by Sunday Drop). Marks
+// the pen_pal_pairings row as reciprocated_at = now() so the loop is
+// closed.
+async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
+ const data = state.conversation_data ?? {};
+ const pendingReply = data.pending_reply as any;
+ const message = (data.message ?? "") as string;
+ const draftToken = state.draft_token as string;
+
+ if (!pendingReply || !draftToken) {
+  await resetState(phone);
+  await loopSend({ contact: phone, text: "Couldn't find the pen pal you're replying to. Text a fresh photo to start over." });
+  return;
+ }
+
+ // Sender setup
+ let userId: string;
+ try { userId = await findOrCreateUserByPhone(phone); }
+ catch (e: any) {
+  console.error("[loop-inbound] user create failed (reciprocation)", e);
+  await loopSend({ contact: phone, text: "Hmm, the mailroom's locked. Try again in a minute?" });
+  return;
+ }
+
+ // Sender's home city (for the from_city on the postcard back)
+ const { data: senderProfile } = await admin
+  .from("profiles").select("city, state").eq("id", userId).maybeSingle();
+ const senderCity = senderProfile?.city ?? "";
+
+ // Photo URL
+ const { data: draftRow } = await admin
+  .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
+ if (!draftRow?.photo_path) {
+  await resetState(phone);
+  await loopSend({ contact: phone, text: "That photo flew the coop. Send another?" });
+  return;
+ }
+ let photoUrl = draftRow.photo_path;
+ if (!photoUrl.startsWith("http")) {
+  const { data: signed } = await admin.storage
+   .from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 7);
+  if (!signed?.signedUrl) {
+   await loopSend({ contact: phone, text: "Lost the photo somewhere in the sorting bin. Send it again?" });
+   return;
+  }
+  photoUrl = signed.signedUrl;
+ }
+
+ // Same safety gate as new-stranger sends
+ const mod = await moderatePhotoAndText(photoUrl, message);
+ if (!mod.ok) {
+  console.warn("[loop-inbound] reciprocation moderation blocked", { phone, reason: mod.reason });
+  await resetState(phone);
+  await loopSend({
+   contact: phone,
+   text:
+    "📵 We can't send this to your pen pal.\n\n" +
+    "Pen pal cards go through the mail to someone we've never met. Try a different photo or note.",
+  });
+  return;
+ }
+
+ // Insert via direct RPC. NOT scheduled — replies mail immediately so
+ // they feel responsive (you replied, your card goes out today).
+ const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms_direct", {
+  p_user_id: userId,
+  p_message: message,
+  p_photo_path: photoUrl,
+  p_to_line1: pendingReply.sender_line1,
+  p_to_line2: pendingReply.sender_line2,
+  p_to_city: pendingReply.sender_city,
+  p_to_state: pendingReply.sender_state,
+  p_to_zip: pendingReply.sender_zip,
+  p_from_city: senderCity,
+ });
+ if (rpcErr) {
+  console.error("[loop-inbound] send_postcard_sms_direct failed (reciprocation)", rpcErr);
+  const oom = rpcErr.message?.includes("insufficient_credits");
+  await loopSend({
+   contact: phone,
+   text: oom
+    ? "Out of cards. BUY 5, 10, or 25 to top up, then SEND."
+    : "The reply got stuck in the press. Try SEND again.",
+  });
+  return;
+ }
+
+ // Lob handoff
+ const lob = await submitToLob(postcardId as string);
+ if (!lob.ok) {
+  const { data: cur } = await admin.from("profiles").select("credits").eq("id", userId).maybeSingle();
+  await admin.from("profiles").update({ credits: (cur?.credits ?? 0) + 1 }).eq("id", userId);
+  await admin.from("postcards").delete().eq("id", postcardId);
+  console.error("[loop-inbound] Lob failed (reciprocation)", lob.error);
+  await loopSend({
+   contact: phone,
+   text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. SEND to retry.`,
+  });
+  return;
+ }
+
+ // Close the loop in the pairings table.
+ //
+ // Two paths get here:
+ //   a) Organic reply: user got a pen pal card, texted a NEW photo, the
+ //      bot offered them the active-reply path via findUnreciprocatedPairing.
+ //      pairing_id is set — close that exact row.
+ //   b) REPLY CODE: stranger scanned the QR, no prior pairing row in
+ //      THIS user's recipient_id. pairing_id is null. Look up the
+ //      open pairing where the OTHER side is sender (the original
+ //      pen pal) and THIS user is recipient, close it. Falls through
+ //      silently if no row (e.g., the original card was friend-mode,
+ //      not pen pal).
+ if (pendingReply.pairing_id) {
+  await admin
+   .from("pen_pal_pairings")
+   .update({ reciprocated_at: new Date().toISOString() })
+   .eq("id", pendingReply.pairing_id);
+ } else {
+  await admin
+   .from("pen_pal_pairings")
+   .update({ reciprocated_at: new Date().toISOString() })
+   .eq("sender_id", pendingReply.sender_id)
+   .eq("recipient_id", userId)
+   .is("reciprocated_at", null);
+ }
+
+ // Create a NEW pairing for the reverse direction so the original
+ // sender's NEXT photo session surfaces "this person wrote you back —
+ // want to keep the conversation going?" Without this row, the loop
+ // ends at one round-trip.
+ //
+ // ON CONFLICT DO NOTHING in case both sides race (organic reply +
+ // REPLY CODE arrival around the same time).
+ await admin
+  .from("pen_pal_pairings")
+  .insert({
+   sender_id: userId,
+   recipient_id: pendingReply.sender_id,
+   postcard_id: postcardId as string,
+   paired_at: new Date().toISOString(),
+   reciprocated_at: null,
+  })
+  .select()
+  .maybeSingle();
+
+ // Consume the draft + reset
+ await admin.rpc("consume_sms_draft", { p_token: draftToken, p_postcard_id: postcardId });
+ await resetState(phone);
+
+ const eta = lob.expectedDelivery
+  ? new Date(lob.expectedDelivery).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  : "in 3-5 days";
+ // c-bridge wraps /c/<token> with per-token OG meta tags so iMessage's
+ // preview shows THIS recipient + THIS photo + THIS ETA instead of the
+ // generic landing card. Real browsers get a meta-refresh to /c/<token>.
+ const confirmUrl = `https://nlwnmgwylmmnaemdnzlq.supabase.co/functions/v1/c-bridge?token=${draftToken}`;
+ const senderFirstName = pendingReply.sender_first_name;
+
+ // 4-act reciprocation celebration. Effect: love (closing a loop is
+ // intimate). Act 0 stamping beat turns the wait into ritual.
+ await loopSend({ contact: phone, text: "💌 Stamping the reply..." });
+ await loopTyping(phone, 2);
+
+ // Sender's home city for the FROM-STATION cancellation line.
+ const senderProfileForStation = await admin
+   .from("profiles").select("city").eq("id", userId).maybeSingle();
+ const senderStationCity = senderProfileForStation.data?.city ?? "";
+ const stationLine = senderStationCity
+   ? `${senderStationCity.toUpperCase()} STATION\n\n`
+   : "";
+
+ const postmarkDate = new Date().toLocaleDateString("en-US", {
+  month: "short", day: "numeric", year: "numeric",
+ }).toUpperCase();
+ const mailedRes = await loopSend({
+  contact: phone,
+  subject: "💌 Loop closed",
+  text: `POSTMARKED · ${postmarkDate}\n${stationLine}Off to ${senderFirstName}.`,
+  effect: "love",
+  passthrough: `reciprocation:${postcardId}`,
+ });
+ if (mailedRes.ok && mailedRes.messageId) {
+  await admin.from("postcards").update({
+   mailed_imessage_id: mailedRes.messageId,
+   from_phone: phone,
+  }).eq("id", postcardId);
+ } else {
+  await admin.from("postcards").update({ from_phone: phone }).eq("id", postcardId);
+ }
+ await sleep(700);
+
+ // Gallery: [their photo, card flip, native route map]. Same
+ // three-part story as a fresh send (see buildCelebrationGallery).
+ const gallery = buildCelebrationGallery(lob, photoUrl);
+ await loopSend({
+  contact: phone,
+  text: routeCaption(pendingReply.sender_city || "them", lob.routeMiles),
+  attachments: gallery,
+ });
+ await sleep(450);
+
+ await loopSend({
+  contact: phone,
+  text: `Lands in ${senderFirstName}'s mailbox ${eta}.\n${confirmUrl}`,
  });
 }
 
@@ -1620,13 +2506,20 @@ async function doMail(phone: string, state: any): Promise<void> {
    return await doMailStranger(phone, state);
  }
 
+ // Reciprocation reply. Sender is writing back to a recent pen pal.
+ // All routing cached in conversation_data.pending_reply. Mails
+ // immediately (replies should feel responsive, not queued).
+ if (sendType === "reply_to_pen_pal") {
+   return await doMailReplyToPenPal(phone, state);
+ }
+
  const recipientName = data.recipient_name as string;
  const recipient = data.recipient as { line1: string; line2: string; city: string; state: string; zip: string };
  // SKIP-path bug fix (codex caught): empty-string message is VALID
  // (user texted SKIP). Use null/undefined check, not truthiness.
  if (!recipientName || !recipient || message == null || !draftToken) {
  await resetState(phone);
- await loopSend({ contact: phone, text: "Something's missing from your draft. Text us a fresh photo to start over." });
+ await loopSend({ contact: phone, text: "We lost the thread on that card. Text a fresh photo to start over." });
  return;
  }
 
@@ -1634,7 +2527,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  try { userId = await findOrCreateUserByPhone(phone); }
  catch (e: any) {
  console.error("[loop-inbound] user create failed", e);
- await loopSend({ contact: phone, text: "Couldn't set up your account. Try again in a minute." });
+ await loopSend({ contact: phone, text: "Hmm, the mailroom's locked. Try again in a minute?" });
  return;
  }
 
@@ -1649,7 +2542,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  friendId = await findOrCreateFriend(userId, { ...recipient, name: recipientName });
  } catch (e: any) {
  console.error("[loop-inbound] friend create failed", e);
- await loopSend({ contact: phone, text: "Couldn't save your recipient. Try again in a minute." });
+ await loopSend({ contact: phone, text: "Hmm, the recipient drawer's stuck. Try once more?" });
  return;
  }
 
@@ -1657,7 +2550,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
  if (!draftRow?.photo_path) {
  await resetState(phone);
- await loopSend({ contact: phone, text: "Your photo expired. Text a new one to start over." });
+ await loopSend({ contact: phone, text: "That photo flew the coop. Send another?" });
  return;
  }
  let photoUrl = draftRow.photo_path;
@@ -1665,7 +2558,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  const { data: signed } = await admin.storage
  .from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 7);
  if (!signed?.signedUrl) {
- await loopSend({ contact: phone, text: "Couldn't access your photo. Text us another to start over." });
+ await loopSend({ contact: phone, text: "Lost the photo somewhere in the sorting bin. Send it again?" });
  return;
  }
  photoUrl = signed.signedUrl;
@@ -1682,7 +2575,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  contact: phone,
  text: oom
  ? "Out of cards. BUY 5, 10, or 25 to top up, then SEND."
- : "Couldn't mail your card. Try SEND again, or text a new photo to start over.",
+ : "Your card got stuck in the press. Try SEND again, or text a new photo to start over.",
  });
  return;
  }
@@ -1695,7 +2588,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  console.error("[loop-inbound] Lob failed", lob.error);
  await loopSend({
  contact: phone,
- text: `Printer's down (${lob.error?.slice(0, 60)}). Credit refunded. SEND to retry.`,
+ text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. SEND to retry.`,
  });
  return;
  }
@@ -1706,7 +2599,10 @@ async function doMail(phone: string, state: any): Promise<void> {
  const eta = lob.expectedDelivery
  ? new Date(lob.expectedDelivery).toLocaleDateString("en-US", { month: "short", day: "numeric" })
  : "in 3-5 days";
- const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
+ // c-bridge wraps /c/<token> with per-token OG meta tags so iMessage's
+ // preview shows THIS recipient + THIS photo + THIS ETA instead of the
+ // generic landing card. Real browsers get a meta-refresh to /c/<token>.
+ const confirmUrl = `https://nlwnmgwylmmnaemdnzlq.supabase.co/functions/v1/c-bridge?token=${draftToken}`;
  const recipLocLabel = [recipient.city, recipient.state].filter(Boolean).join(", ") || "their address";
 
  const { data: balRow } = await admin
@@ -1735,23 +2631,32 @@ async function doMail(phone: string, state: any): Promise<void> {
  // iMessage so it never has to be tapped to see the route.
  // ===================================================================
 
- // Dramatic pause before Act 1. The "..." builds anticipation, then
- // BOOM. confetti and the celebration drops.
+ // Act 0. STAMPING BEAT. The 6-8s of Lob + GIF rendering would
+ // otherwise be dead air. One quiet bubble + typing indicator turn
+ // dead air into ritual: "ah, my card is being stamped right now."
+ await loopSend({ contact: phone, text: "📮 Stamping..." });
  await loopTyping(phone, 2);
 
  // Act 1. THE MOMENT (effect picked from note's emotional content)
  // Postmark line is the aesthetic anchor. Reads like a real cancellation
  // stamp. CAPS + center dot separator. The user comes back to the
  // thread a week later and sees the exact date their card was stamped.
+ // The FROM-city STATION line under the date evokes a real postal
+ // station cancellation mark ("CHICAGO STATION · MAY 29, 2026").
+ // "Off to Sarah" (past tense, in motion) beats "is in the mail"
+ // (passive, administrative).
  const effect = pickEffectForNote(message);
  const firstName = recipientName.split(/\s+/)[0];
  const postmarkDate = new Date().toLocaleDateString("en-US", {
    month: "short", day: "numeric", year: "numeric",
  }).toUpperCase();
+ const stationLine = senderCity
+   ? `${senderCity.toUpperCase()} STATION\n\n`
+   : "";
  const mailedRes = await loopSend({
  contact: phone,
- subject: "📮 Mailed",
- text: `POSTMARKED · ${postmarkDate}\n\nCard to ${firstName} is in the mail.`,
+ subject: "📮 Postmarked",
+ text: `POSTMARKED · ${postmarkDate}\n${stationLine}Off to ${firstName}.`,
  effect,
  passthrough: `mailed:${postcardId}`,
  });
@@ -1767,23 +2672,46 @@ async function doMail(phone: string, state: any): Promise<void> {
  }
  await sleep(700);
 
- // Act 2. THE PROOF (photo IS the message, caption is just a tag)
+ // Act 2. THE GALLERY — the three-part story, inline in the thread,
+ // no link tap required:
+ //   1. their photo       (the human moment — full-bleed original)
+ //   2. the card flip     (the artifact — front w/ photo ↔ back w/ note)
+ //   3. the route map     (the journey — native Apple Maps snapshot)
+ // Each tile degrades independently: no flip → static front+back;
+ // no map → drop the third tile; no thumbnails at all → just photo.
+ const gallery = buildCelebrationGallery(lob, photoUrl);
  await loopSend({
  contact: phone,
- text: `→ ${recipLocLabel}`,
- attachments: [photoUrl],
+ text: routeCaption(recipLocLabel, lob.routeMiles),
+ attachments: gallery,
  });
  await sleep(450);
 
- // Act 3. THE PROMISE
- const buyTail = remaining <= 0
- ? `\n\nLast one. Reply BUY 5, BUY 10, or BUY 25 for more.`
- : remaining <= 2
- ? `\n\n${remaining} left. Reply BUY for more.`
- : "";
+ // Act 3. THE PROMISE — put the recipient in the frame. "Lands in
+ // Sarah's mailbox Jun 3" beats "Arrives Jun 3" because it makes
+ // the recipient's experience visible to the sender.
+ //
+ // Tail priority: BUY nudges (urgent — they're out of credits) WIN
+ // over MEMORIES nudges (discovery). After the 3rd card a sender
+ // crosses into "regular" territory — that's the right moment to
+ // unlock the MEMORIES word.
+ let tail = "";
+ if (remaining <= 0) {
+   tail = `\n\nLast one. Reply BUY 5, BUY 10, or BUY 25 for more.`;
+ } else if (remaining <= 2) {
+   tail = `\n\n${remaining} left. Reply BUY for more.`;
+ } else {
+   const { count: sentCount } = await admin
+     .from("postcards")
+     .select("id", { count: "exact", head: true })
+     .eq("sender_id", userId);
+   if (sentCount === 3) {
+     tail = `\n\nThat's three cards from you. Text MEMORIES anytime to see them.`;
+   }
+ }
  await loopSend({
  contact: phone,
- text: `Arrives ${eta}.\n${confirmUrl}${buyTail}`,
+ text: `Lands in ${firstName}'s mailbox ${eta}.\n${confirmUrl}${tail}`,
  });
 }
 
@@ -1795,7 +2723,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  const draftToken = state.draft_token as string;
  if (!recipientName || !recipient || message == null || !draftToken || !schedule.arrival_iso) {
  await resetState(phone);
- await loopSend({ contact: phone, text: "Something's missing from your draft. Text us a fresh photo to start over." });
+ await loopSend({ contact: phone, text: "We lost the thread on that card. Text a fresh photo to start over." });
  return;
  }
  const arrival = new Date(schedule.arrival_iso + "T12:00:00Z");
@@ -1813,7 +2741,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  try { userId = await findOrCreateUserByPhone(phone); }
  catch (e: any) {
  console.error("[loop-inbound] user create failed (schedule)", e);
- await loopSend({ contact: phone, text: "Couldn't set up your account. Try again in a minute." });
+ await loopSend({ contact: phone, text: "Hmm, the mailroom's locked. Try again in a minute?" });
  return;
  }
  const senderCity = (data.sender_city as string) || "";
@@ -1825,7 +2753,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  try { friendId = await findOrCreateFriend(userId, { ...recipient, name: recipientName }); }
  catch (e: any) {
  console.error("[loop-inbound] friend create failed (schedule)", e);
- await loopSend({ contact: phone, text: "Couldn't save your recipient. Try again in a minute." });
+ await loopSend({ contact: phone, text: "Hmm, the recipient drawer's stuck. Try once more?" });
  return;
  }
 
@@ -1833,7 +2761,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
  if (!draftRow?.photo_path) {
  await resetState(phone);
- await loopSend({ contact: phone, text: "Your photo expired. Text a new one to start over." });
+ await loopSend({ contact: phone, text: "That photo flew the coop. Send another?" });
  return;
  }
  let photoUrl = draftRow.photo_path;
@@ -1841,7 +2769,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  const { data: signed } = await admin.storage
  .from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 30);
  if (!signed?.signedUrl) {
- await loopSend({ contact: phone, text: "Couldn't access your photo. Text us another to start over." });
+ await loopSend({ contact: phone, text: "Lost the photo somewhere in the sorting bin. Send it again?" });
  return;
  }
  photoUrl = signed.signedUrl;
@@ -1867,32 +2795,40 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  await resetState(phone);
  const sendDateFmt = sendAt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
  const arrivalFmt = arrival.toLocaleDateString("en-US", { month: "short", day: "numeric" });
- const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
+ // c-bridge wraps /c/<token> with per-token OG meta tags so iMessage's
+ // preview shows THIS recipient + THIS photo + THIS ETA instead of the
+ // generic landing card. Real browsers get a meta-refresh to /c/<token>.
+ const confirmUrl = `https://nlwnmgwylmmnaemdnzlq.supabase.co/functions/v1/c-bridge?token=${draftToken}`;
  const recipLocLabel = [recipient.city, recipient.state].filter(Boolean).join(", ") || "their address";
 
  // ===================================================================
- // SCHEDULED CELEBRATION. same 3-act choreography as doMail,
- // but balloons (birthday-card vibe) instead of confetti.
+ // SCHEDULED CELEBRATION. 4-act choreography. Effect: gentle (not
+ // balloons — balloons is for IMMEDIATE celebration; scheduling
+ // creates anticipation, not party). Act 0 stamping beat turns the
+ // brief wait into a "saving it" moment.
  // ===================================================================
 
- // Dramatic pause to build anticipation
+ await loopSend({ contact: phone, text: "🗓️ Saving for later..." });
  await loopTyping(phone, 2);
 
- // Act 1. THE COMMITMENT
+ // Act 1. THE COMMITMENT — date IS the subject. Body adds the
+ // promise that we'll text when it goes. Reframes "scheduled" from
+ // calendar entry to social pact.
  const firstNameSched = recipientName.split(/\s+/)[0];
  await loopSend({
  contact: phone,
- subject: "🗓️ Scheduled",
- text: `Card to ${firstNameSched} mails ${sendDateFmt}.`,
- effect: "balloons",
+ subject: `🗓️ Saved for ${sendDateFmt}`,
+ text: `Card to ${firstNameSched} ships ${sendDateFmt}.\nWe'll text you when it goes.`,
+ effect: "gentle",
  passthrough: `scheduled:${postcardId}`,
  });
  await sleep(700);
 
- // Act 2. THE PROOF
+ // Act 2. THE PROOF — postal-label centering (no console arrow),
+ // recipient mailbox framing on arrival side.
  await loopSend({
  contact: phone,
- text: `→ ${recipLocLabel}, arriving ~${arrivalFmt}`,
+ text: `· To ${recipLocLabel} ·\nLands in ${firstNameSched}'s mailbox ~${arrivalFmt}`,
  attachments: [photoUrl],
  });
  await sleep(450);
@@ -1956,13 +2892,39 @@ serve(async (req) => {
  });
  }
 
+ // IDEMPOTENCY. LoopMessage is at-least-once: the same message_inbound can
+ // arrive twice. Record message_id; a unique-violation (23505) means we've
+ // already handled it, so ACK and skip. Without this, a redelivered photo
+ // makes two drafts + two replies, and a redelivered SEND double-charges.
+ if (payload.message_id) {
+ const { error: dupErr } = await admin
+ .from("loop_inbound_dedup")
+ .insert({ message_id: payload.message_id });
+ if (dupErr) {
+ if ((dupErr as any).code === "23505") {
+ console.log("[loop-inbound] duplicate webhook, skipping", { message_id: payload.message_id });
+ return new Response(JSON.stringify({ ok: true, deduped: true }), {
+ status: 200, headers: { "Content-Type": "application/json" },
+ });
+ }
+ // Non-duplicate DB error: log but proceed (don't drop a real message).
+ console.warn("[loop-inbound] dedup insert error (proceeding)", (dupErr as any).message ?? dupErr);
+ }
+ }
+
  // Route through the state machine. Run async so we can ACK fast. LoopMessage
  // expects 200 within 15s, and the state machine + OpenAI calls + Lob handoff
  // can take longer than that.
+ //
+ // PHOTO GATE: only message_type "attachments" carries a real image. Audio
+ // clips, stickers, and shared locations also populate `attachments` with a
+ // URL — without this gate they'd be downloaded and mailed AS the postcard
+ // photo. Treat only "attachments" as photo input; everything else is text.
+ const isPhotoMessage = payload.message_type === "attachments";
  const ctx: InboundCtx = {
  from: payload.contact,
  body: payload.text ?? "",
- attachments: payload.attachments ?? [],
+ attachments: isPhotoMessage ? (payload.attachments ?? []) : [],
  messageId: payload.message_id,
  };
 
