@@ -325,7 +325,7 @@ serve(async (req) => {
  //
  // We narrate only the high-signal moments. Avoid blasting the user
  // on every Lob micro-state.
- await maybeFireThreadedStatusUpdate(data, newStatus, eventType);
+ await maybeFireThreadedStatusUpdate(admin, data, newStatus, eventType);
 
  return new Response(
  JSON.stringify({ ok: true, postcard_id: data.id, status: newStatus }),
@@ -353,12 +353,29 @@ const LOOP_SENDER_ID = Deno.env.get("LOOPMESSAGE_SENDER_ID") ?? "";
  * the migration.
  */
 async function maybeFireThreadedStatusUpdate(
+  admin: any,
   postcard: any,
   newStatus: string,
   rawEvent: string,
 ): Promise<void> {
   if (!LOOP_API_KEY) return;
   if (!postcard?.mailed_imessage_id || !postcard?.from_phone) return;
+
+  // Recipient first name for the delivered beat. Friend sends have a
+  // named recipient; pen pal (stranger) sends are anonymous, so we fall
+  // back to the destination city ("a mailbox in Marfa") to keep the
+  // mystery while still making it concrete.
+  let recipientFirst = "";
+  if (postcard.to_kind !== "stranger" && postcard.to_friend_id) {
+    try {
+      const { data: f } = await admin
+        .from("friends").select("name").eq("id", postcard.to_friend_id).maybeSingle();
+      recipientFirst = (f?.name ?? "").split(/\s+/)[0] || "";
+    } catch (_) { /* non-fatal — fall back to city */ }
+  }
+  const landedWhere = recipientFirst
+    ? `${recipientFirst}'s mailbox`
+    : (postcard.to_city ? `a mailbox in ${postcard.to_city}` : "their mailbox");
 
   // Three high-signal moments:
   //   - "created" → narrate ONLY for scheduled cards (Sunday Drop or
@@ -406,9 +423,11 @@ async function maybeFireThreadedStatusUpdate(
       effect: "gentle",
     };
   } else if (rawEvent === "postcard.delivered") {
+    // The payoff beat. Name where it landed + re-show the card and the
+    // route it travelled, so the notification IS the arrival.
     bubble = {
-      subject: "📬 Delivered",
-      text: "Your card just landed. 🎉",
+      subject: "📬 It landed",
+      text: `It just landed in ${landedWhere}. 🎉`,
       effect: "love",
       attachments: cardPair.length ? cardPair : undefined,
     };

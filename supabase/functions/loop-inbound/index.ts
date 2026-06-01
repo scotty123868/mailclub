@@ -2492,6 +2492,30 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   contact: phone,
   text: `Lands in ${senderFirstName}'s mailbox ${eta}.\n${confirmUrl}`,
  });
+
+ // PEN-PAL REVEAL. The loop just closed: this sender wrote back to the
+ // original pen pal. Push that original sender a heads-up NOW so the
+ // reply becomes an anticipated event, not just a surprise envelope days
+ // later. Fire-and-forget: never block or fail this celebration on it.
+ // We reveal only the writer's CITY (the same return label they'll see
+ // on the physical card), preserving the mystery. Skipped when the
+ // original sender has no phone, or is the same phone (self-reply / a
+ // single tester playing both sides).
+ try {
+  const { data: original } = await admin
+   .from("profiles").select("phone").eq("id", pendingReply.sender_id).maybeSingle();
+  if (original?.phone && original.phone !== phone) {
+   const fromCityBit = senderStationCity ? ` in ${senderStationCity}` : "";
+   await loopSend({
+    contact: original.phone,
+    subject: "💌 A reply is on its way",
+    text: `Someone${fromCityBit} just wrote you back. Their card is heading to your mailbox now.`,
+    effect: "confetti",
+   });
+  }
+ } catch (e: any) {
+  console.warn("[loop-inbound] pen pal reveal failed (non-fatal)", e?.message ?? e);
+ }
 }
 
 async function doMail(phone: string, state: any): Promise<void> {
