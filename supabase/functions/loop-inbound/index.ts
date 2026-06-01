@@ -603,11 +603,82 @@ async function parseAddress(input: string): Promise<ParsedAddress | null> {
 // wait. The user reviews the parsed address at the confirm step and Lob
 // verifies deliverability at print, so skipping the LLM's geographic
 // check on the clean happy path is a safe trade for instant feel.
+// Lob US address verification. Takes a (possibly ZIP-less) address and
+// returns a CASS-verified, completed one with the real USPS ZIP — or null
+// if undeliverable / no match. Separate endpoint from mailing (no print,
+// no charge beyond the cheap lookup), so it's safe to call even while
+// MAILROOM_TEST_MODE_NO_LOB stops real cards. 6s timeout so it never
+// hangs the step.
+async function lobVerifyAddress(a: {
+ line1: string; line2?: string; city: string; state: string; zip?: string;
+}): Promise<{ line1: string; line2: string; city: string; state: string; zip: string } | null> {
+ const key = Deno.env.get("LOB_API_KEY");
+ if (!key) return null;
+ const ctrl = new AbortController();
+ const timer = setTimeout(() => ctrl.abort(), 6000);
+ try {
+ const form = new URLSearchParams();
+ form.set("primary_line", a.line1);
+ if (a.line2) form.set("secondary_line", a.line2);
+ form.set("city", a.city);
+ form.set("state", a.state);
+ if (a.zip) form.set("zip_code", a.zip);
+ const res = await fetch("https://api.lob.com/v1/us_verifications", {
+ method: "POST",
+ headers: {
+ Authorization: `Basic ${btoa(key + ":")}`,
+ "Content-Type": "application/x-www-form-urlencoded",
+ },
+ body: form,
+ signal: ctrl.signal,
+ });
+ if (!res.ok) return null;
+ const v = await res.json();
+ const deliverable = typeof v?.deliverability === "string" && v.deliverability.startsWith("deliverable");
+ const comp = v?.components ?? {};
+ const zip = comp.zip_code ?? "";
+ if (!deliverable || !zip) return null;
+ return {
+ line1: v.primary_line || a.line1,
+ line2: a.line2 || "",
+ city: comp.city || a.city,
+ state: comp.state || a.state,
+ zip,
+ };
+ } catch (e: any) {
+ console.warn("[loop-inbound] lob verify failed", e?.message ?? e);
+ return null;
+ } finally {
+ clearTimeout(timer);
+ }
+}
+
 async function resolveAddress(phone: string, input: string): Promise<ParsedAddress | null> {
- const fast = parseAddressHeuristic(input);
- if (fast) return fast;
+ let parsed = parseAddressHeuristic(input);
+ if (!parsed) {
  fireTyping(phone, 8);
- return await parseAddress(input);
+ parsed = await parseAddress(input);
+ }
+ // ZIP BACKFILL. If we got a real street + city + state but no ZIP, don't
+ // force the user to type it — ask Lob to verify + complete the address
+ // (USPS-accurate). Only runs on the missing-ZIP gap, so it's cheap. The
+ // completed address is shown at the confirm step, so the user still
+ // sees + approves the filled ZIP. If Lob can't verify, we fall through
+ // with the ZIP still empty and the handler asks for it specifically.
+ if (parsed && parsed.line1 && parsed.city && parsed.state && !parsed.zip) {
+ fireTyping(phone, 6);
+ const v = await lobVerifyAddress(parsed);
+ if (v) {
+ return {
+ ...parsed,
+ line1: v.line1, line2: v.line2, city: v.city, state: v.state, zip: v.zip,
+ confidence: Math.max(parsed.confidence, 0.85),
+ formatted: `${v.line1}, ${v.city}, ${v.state} ${v.zip}`,
+ plausible: true,
+ };
+ }
+ }
+ return parsed;
 }
 
 async function parseLocation(input: string): Promise<ParsedLocation | null> {
