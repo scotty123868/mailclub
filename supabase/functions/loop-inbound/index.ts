@@ -1446,6 +1446,8 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  return await handleMessage(from, body, state);
  case "awaiting_sender_location":
  return await handleSenderLocation(from, body, state);
+ case "awaiting_sender_address_confirm":
+ return await handleSenderAddressConfirm(from, body, state);
  case "awaiting_send_confirm":
  return await handleSendConfirm(from, body, state);
  default:
@@ -2130,30 +2132,59 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
  await loopSend({ contact: phone, text });
  return;
  }
+ // Resolved + complete. CONFIRM before committing — Lob may have filled
+ // the ZIP or corrected the street (e.g. added a directional), so the
+ // user should see + approve the exact address pen pals will write back
+ // to. Stash it; the commit happens on confirm.
+ await advanceState(phone, "awaiting_sender_address_confirm", state.draft_token, {
+ sender_resolved: {
+ line1: parsed.line1, line2: parsed.line2 || "", city: parsed.city,
+ state: parsed.state, zip: parsed.zip,
+ },
+ });
+ const senderLabel =
+ `   ${parsed.line1}${parsed.line2 ? `\n   ${parsed.line2}` : ""}\n` +
+ `   ${parsed.city}, ${parsed.state} ${parsed.zip}`;
+ await loopSend({
+ contact: phone,
+ text: `Your address (where pen pals write back):\n${senderLabel}\n\nGood? Reply Y, or send a different address.`,
+ });
+}
+
+async function handleSenderAddressConfirm(phone: string, body: string, state: any): Promise<void> {
+ const resolved = state.conversation_data?.sender_resolved as
+ { line1: string; line2: string; city: string; state: string; zip: string } | undefined;
+ if (!resolved) {
+ await advanceState(phone, "awaiting_sender_location", state.draft_token, {});
+ await loopSend({ contact: phone, text: "Let's try that again. What's your full mailing address?" });
+ return;
+ }
+ fireTyping(phone, 5);
+ const c = await parseConfirmation(body);
+
+ if (c.intent === "yes") {
+ // Commit the private home address, then proceed to the send step.
  const { data: existing } = await admin
  .from("profiles").select("id").eq("phone", phone).maybeSingle();
  if (existing?.id) {
- // Save the FULL address privately, AND set city/state for postcard
- // (only city shows on the postcard front; line1/line2/zip stay private).
  await admin.from("profiles").update({
- home_line1: parsed.line1,
- home_line2: parsed.line2 || null,
- home_zip: parsed.zip,
- city: parsed.city,
- state: parsed.state,
+ home_line1: resolved.line1,
+ home_line2: resolved.line2 || null,
+ home_zip: resolved.zip,
+ city: resolved.city,
+ state: resolved.state,
  }).eq("id", existing.id);
  }
  await advanceState(phone, "awaiting_send_confirm", state.draft_token, {
- sender_city: parsed.city, sender_state: parsed.state,
+ sender_city: resolved.city, sender_state: resolved.state,
  });
  const sendType = (state.conversation_data?.send_type ?? "friend") as string;
  const recip = (state.conversation_data?.recipient ?? {}) as { city?: string; state?: string };
  const note = (state.conversation_data?.message ?? "") as string;
  const balanceTag = await balanceParenthetical(phone);
  const heavy = isHeavyNote(note);
- // Vertical postcard composition (same aesthetic as handleMessage path).
  const composition = buildPreSendComposition({
- fromCity: parsed.city,
+ fromCity: resolved.city,
  sendType,
  recipientName: state.conversation_data?.recipient_name,
  recipientCity: recip.city,
@@ -2165,6 +2196,35 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
  ? `${composition}\n\nThis one feels meaningful. SEND when ready, or CANCEL.${balanceTag}`
  : `${composition}\n\nSEND, schedule, or CANCEL.${balanceTag}`,
  });
+ return;
+ }
+
+ if (c.intent === "no") {
+ await advanceState(phone, "awaiting_sender_location", state.draft_token, {});
+ await loopSend({ contact: phone, text: "No problem. What's the correct mailing address?" });
+ return;
+ }
+
+ // Unclear — they may have typed a corrected address instead of Y/N.
+ // Re-resolve it; if it's a complete address, re-confirm the new one.
+ const reparsed = await resolveAddress(phone, body);
+ if (reparsed && reparsed.line1 && reparsed.zip && reparsed.city && reparsed.state) {
+ await advanceState(phone, "awaiting_sender_address_confirm", state.draft_token, {
+ sender_resolved: {
+ line1: reparsed.line1, line2: reparsed.line2 || "", city: reparsed.city,
+ state: reparsed.state, zip: reparsed.zip,
+ },
+ });
+ const reLabel =
+ `   ${reparsed.line1}${reparsed.line2 ? `\n   ${reparsed.line2}` : ""}\n` +
+ `   ${reparsed.city}, ${reparsed.state} ${reparsed.zip}`;
+ await loopSend({
+ contact: phone,
+ text: `Your address (where pen pals write back):\n${reLabel}\n\nGood? Reply Y, or send a different address.`,
+ });
+ return;
+ }
+ await loopSend({ contact: phone, text: "Reply Y to confirm, or send your full mailing address." });
 }
 
 async function handleSendConfirm(phone: string, body: string, state: any): Promise<void> {
