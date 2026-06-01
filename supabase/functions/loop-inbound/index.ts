@@ -506,16 +506,19 @@ function parseAddressHeuristic(input: string): ParsedAddress | null {
   city = words.slice(-cityWords).join(" ");
   line1 = words.slice(0, -cityWords).join(" ");
  }
- if (!line1 || !/\d/.test(line1)) return null; // need a street number
- if (!city) return null;
-
- // Pull apt/unit into line2.
+ // Pull apt/unit into line2 BEFORE validating line1, so the street-name
+ // check looks at the real street, not the unit token.
  let line2 = "";
  const aptM = line1.match(/\b(?:apt|apartment|unit|suite|ste|#)\s*\.?\s*[\w-]+\b/i);
  if (aptM) {
   line2 = aptM[0];
   line1 = line1.replace(aptM[0], "").trim().replace(/[,\s]+$/, "");
  }
+ // line1 must be a real street: a house number AND at least one more
+ // token (street name). Rejects "123" alone or a bare unit. This keeps
+ // the instant fast-path honest — anything sketchier falls to the LLM.
+ if (!line1 || !/\d/.test(line1) || line1.trim().split(/\s+/).length < 2) return null;
+ if (!city) return null;
 
  return {
   line1, line2, city, state, zip,
@@ -589,6 +592,22 @@ async function parseAddress(input: string): Promise<ParsedAddress | null> {
  }
  }
  return result;
+}
+
+// Address resolution for the conversation flow. FAST PATH FIRST: a
+// structurally-complete address (house number + street + city + state +
+// ZIP) parses instantly via regex with NO network call, so the bot
+// confirms it the moment the user hits send. Only genuinely ambiguous or
+// incomplete input falls back to the LLM (gpt-4o-mini, ~2-4s) — and only
+// then do we show the typing indicator, because only then is there a
+// wait. The user reviews the parsed address at the confirm step and Lob
+// verifies deliverability at print, so skipping the LLM's geographic
+// check on the clean happy path is a safe trade for instant feel.
+async function resolveAddress(phone: string, input: string): Promise<ParsedAddress | null> {
+ const fast = parseAddressHeuristic(input);
+ if (fast) return fast;
+ fireTyping(phone, 8);
+ return await parseAddress(input);
 }
 
 async function parseLocation(input: string): Promise<ParsedLocation | null> {
@@ -1772,10 +1791,9 @@ async function handleRecipientName(phone: string, body: string, state: any): Pro
 }
 
 async function handleRecipientAddress(phone: string, body: string, state: any): Promise<void> {
- // Typing dots while we parse + verify (LLM, 2-4s). The user flagged
- // address→confirmation as feeling laggy, so show activity.
- fireTyping(phone, 8);
- const parsed = await parseAddress(body);
+ // Fast path: a clean address confirms instantly (no LLM). Only
+ // ambiguous input hits the LLM, and resolveAddress shows typing then.
+ const parsed = await resolveAddress(phone, body);
 
  if (!parsed || parsed.confidence < 0.5) {
  await loopSend({ contact: phone, text: `Didn't catch an address. Try: "123 Main St, Naples FL 34101"` });
@@ -2012,15 +2030,12 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
 }
 
 async function handleSenderLocation(phone: string, body: string, state: any): Promise<void> {
- // Show the typing dots while we parse + verify the address (LLM call,
- // ~2-4s). Without this the step feels frozen.
- fireTyping(phone, 8);
- // Parse the FULL mailing address (same parser as recipient address).
- // We need line1 + city + state + zip at minimum. line2 (apt/unit) optional.
- // line1 + zip together prove this is a real mailing address, not just
- // a city + state. Used for pen pal reciprocation (someone mails back
- // to this exact address). Never appears on the postcard front.
- const parsed = await parseAddress(body);
+ // Fast path: a clean full address confirms instantly (no LLM). Only
+ // ambiguous input hits the LLM (resolveAddress shows typing then).
+ // We need line1 + city + state + zip at minimum. Used for pen pal
+ // reciprocation (someone mails back to this exact address). Never
+ // appears on the postcard front.
+ const parsed = await resolveAddress(phone, body);
  if (!parsed || parsed.confidence < 0.7 || !parsed.line1 || !parsed.zip || !parsed.city || !parsed.state) {
  await loopSend({
  contact: phone,
