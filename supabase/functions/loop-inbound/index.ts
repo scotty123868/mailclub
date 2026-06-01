@@ -1808,13 +1808,21 @@ async function handleRecipientAddress(phone: string, body: string, state: any): 
  return;
  }
  if (!parsed.line1 || !parsed.zip || !parsed.city || !parsed.state) {
+ // No-ZIP is the common miss — name it + pre-fill the rest so they
+ // don't have to retype the whole thing.
+ let text: string;
+ if (parsed.line1 && parsed.city && parsed.state && !parsed.zip) {
+ text = `Almost there. I just need the ZIP. Resend it like:\n${parsed.line1}, ${parsed.city} ${parsed.state} <ZIP>`;
+ } else {
  const missing = [
  !parsed.line1 && "street",
  !parsed.city && "city",
  !parsed.state && "state",
  !parsed.zip && "ZIP",
  ].filter(Boolean).join(", ");
- await loopSend({ contact: phone, text: `Missing ${missing}. Full address?` });
+ text = `I'm missing the ${missing}. Full address? Format: street, city, state, ZIP.`;
+ }
+ await loopSend({ contact: phone, text });
  return;
  }
 
@@ -2037,10 +2045,18 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
  // appears on the postcard front.
  const parsed = await resolveAddress(phone, body);
  if (!parsed || parsed.confidence < 0.7 || !parsed.line1 || !parsed.zip || !parsed.city || !parsed.state) {
- await loopSend({
- contact: phone,
- text: `That looks like just a city. I need the full mailing address. Format: street, city, state, ZIP.\n\nE.g. "123 Main St, San Francisco CA 94102".`,
- });
+ // Be SPECIFIC about what's missing. The common case is a real street
+ // + city + state but no ZIP — telling them "just a city" there is
+ // wrong and traps them. Name the gap and pre-fill the rest.
+ let text: string;
+ if (parsed && parsed.line1 && parsed.city && parsed.state && !parsed.zip) {
+ text = `Almost there. I just need the ZIP code. Resend it like:\n${parsed.line1}, ${parsed.city} ${parsed.state} <ZIP>`;
+ } else if (parsed && parsed.line1 && (!parsed.city || !parsed.state)) {
+ text = `Got the street. I also need the city, state, and ZIP. Format: street, city, state, ZIP.\n\nE.g. "123 Main St, San Francisco CA 94102".`;
+ } else {
+ text = `I need the full mailing address. Format: street, city, state, ZIP.\n\nE.g. "123 Main St, San Francisco CA 94102".`;
+ }
+ await loopSend({ contact: phone, text });
  return;
  }
  const { data: existing } = await admin
