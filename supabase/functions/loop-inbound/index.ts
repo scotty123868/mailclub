@@ -1689,7 +1689,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  subject: "🪶 Pen pal mode",
  text:
  "We'll match you with someone in the pool. You won't see their address. They won't see yours.\n\n" +
- "What should your card say? (Up to 240 chars, or say "skip" for just the photo.)",
+ "What should your card say? (Up to 240 chars, or say 'skip' for just the photo.)",
  });
  return;
  }
