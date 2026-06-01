@@ -562,7 +562,7 @@ async function parseAddress(input: string): Promise<ParsedAddress | null> {
  // hard-sticks on the address step when the LLM is down.
  if (!r) return parseAddressHeuristic(input);
  // Defensive defaults so downstream code doesn't crash on missing keys.
- return {
+ const result = {
  line1: r.line1 ?? "",
  line2: r.line2 ?? "",
  city: r.city ?? "",
@@ -573,6 +573,22 @@ async function parseAddress(input: string): Promise<ParsedAddress | null> {
  concerns: r.concerns ?? "",
  plausible: r.plausible === true,
  };
+ // The LLM sometimes under-scores a perfectly valid address — e.g. a
+ // street with no "St"/"Ave" suffix like "861 Humboldt Denver Colorado
+ // 80218" — and the hard 0.7 gate then rejects a real address. If the
+ // LLM did NOT flag it implausible (so the city/state/ZIP are
+ // consistent) AND the structural regex parser independently finds all
+ // four components, trust the structure and bump confidence so it
+ // passes. Genuinely bad input still fails: implausible (wrong
+ // city/state) keeps plausible=false, and incomplete input makes the
+ // heuristic return null.
+ if (result.confidence < 0.7 && r.plausible !== false) {
+ const h = parseAddressHeuristic(input);
+ if (h && h.line1 && h.city && h.state && h.zip) {
+ return { ...result, confidence: Math.max(result.confidence, 0.75) };
+ }
+ }
+ return result;
 }
 
 async function parseLocation(input: string): Promise<ParsedLocation | null> {
@@ -2940,11 +2956,15 @@ serve(async (req) => {
  // expects 200 within 15s, and the state machine + OpenAI calls + Lob handoff
  // can take longer than that.
  //
- // PHOTO GATE: only message_type "attachments" carries a real image. Audio
- // clips, stickers, and shared locations also populate `attachments` with a
- // URL — without this gate they'd be downloaded and mailed AS the postcard
- // photo. Treat only "attachments" as photo input; everything else is text.
- const isPhotoMessage = payload.message_type === "attachments";
+ // PHOTO GATE: accept an attachment whenever one is present, EXCEPT for the
+ // explicit non-photo message types (audio clip, sticker, shared location,
+ // reaction) which also carry attachment URLs we must not mail as a photo.
+ // We intentionally do NOT require message_type === "attachments":
+ // LoopMessage does not reliably set that for image messages (it's often
+ // undefined), and requiring it silently dropped real photos.
+ const NON_PHOTO_TYPES = new Set(["reaction", "audio", "sticker", "location"]);
+ const hasAttachment = (payload.attachments?.length ?? 0) > 0;
+ const isPhotoMessage = hasAttachment && !NON_PHOTO_TYPES.has(payload.message_type ?? "");
  const ctx: InboundCtx = {
  from: payload.contact,
  body: payload.text ?? "",
