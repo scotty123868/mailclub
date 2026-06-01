@@ -703,6 +703,21 @@ serve(async (req: Request) => {
  address_zip: friend.address_zip,
  address_country: friend.address_country ?? "US",
  };
+ } else if (toKind === "stranger" && (postcard as any).to_address_line1) {
+ // Pen pal sends store the matched recipient's address INLINE on the
+ // postcard (send_postcard_sms_direct bypasses the friends table for
+ // privacy — there's no friend row, to_friend_id is null). Resolve
+ // from to_address_* / to_city. No recipient name is stored, so we
+ // address it to "Pen Pal" — on-brand, and USPS delivers by address.
+ recipient = {
+ name: "Pen Pal",
+ address_line1: (postcard as any).to_address_line1,
+ address_line2: (postcard as any).to_address_line2 ?? undefined,
+ address_city: (postcard as any).to_city ?? "",
+ address_state: (postcard as any).to_address_state ?? "",
+ address_zip: (postcard as any).to_address_zip ?? "",
+ address_country: "US",
+ };
  }
  if (!recipient || !recipient.address_line1 || !recipient.address_city || !recipient.address_state || !recipient.address_zip) {
  // v0.7.0.20: include diagnostic info so we can debug *which* field

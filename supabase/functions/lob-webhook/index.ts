@@ -48,7 +48,13 @@ const LOB_WEBHOOK_SECRETS: string[] = [
 ].filter(Boolean);
 
 const STATUS_BY_EVENT: Record<string, string | null> = {
- "postcard.created": null, // already 'sent' at insert; ignore
+ // Map created → 'sent' (idempotent for immediate cards, which are
+ // already 'sent'; the real transition for scheduled cards moving from
+ // 'scheduled' → mailed). Mapping it to a non-null status lets the
+ // handler reach maybeFireThreadedStatusUpdate, whose scheduled-card
+ // branch fires the "just hit the mail" beat. Immediate cards don't
+ // fire there (that branch requires scheduled_send_at).
+ "postcard.created": "sent",
  "postcard.rendered_pdf": null,
  "postcard.rendered_thumbnails": null,
  "postcard.in_transit": "in_transit",

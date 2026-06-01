@@ -666,6 +666,15 @@ async function resetState(phone: string) {
  await admin.rpc("reset_sms_conversation", { p_phone: phone });
 }
 
+// Release the anti-double-send claim: move the step back from "sending"
+// to "awaiting_send_confirm" so the user's "SEND to retry" works after a
+// RECOVERABLE failure (out of credits → BUY → SEND, a Lob hiccup, a pen
+// pal match miss). Without this, the claim from handleSendConfirm would
+// strand them at "sending" and the retry would silently no-op.
+async function releaseSendClaim(phone: string, draftToken: string | null) {
+ await advanceState(phone, "awaiting_send_confirm", draftToken, {});
+}
+
 // ===================================================================
 // PEN PAL RECIPROCATION
 // ===================================================================
@@ -686,19 +695,27 @@ interface UnreciprocatedPairing {
 }
 
 async function findUnreciprocatedPairing(phone: string): Promise<UnreciprocatedPairing | null> {
- // Most recent pen pal card this phone received that hasn't been
- // responded to. 60-day window. Joins pen_pal_pairings → profiles to
- // resolve the original sender's home address (where reply will go).
+ // Resolve THIS phone to its profile id FIRST, then filter pairings by
+ // recipient_id. PostgREST embedded-resource filters
+ // (.eq("recipient.phone", ...)) do NOT reliably constrain the PARENT
+ // row without !inner — the old query risked surfacing ANOTHER user's
+ // pairing and routing a reply to the wrong sender. recipient_id is exact.
+ const { data: me } = await admin
+ .from("profiles").select("id").eq("phone", phone).maybeSingle();
+ if (!me?.id) return null;
+
+ // Most recent pen pal card this user received that hasn't been
+ // responded to. 60-day window. Joins the original sender's home address
+ // (where the reply will be mailed).
  const { data } = await admin
  .from("pen_pal_pairings")
  .select(`
  id, sender_id, paired_at, reciprocated_at,
- recipient:profiles!pen_pal_pairings_recipient_id_fkey(phone),
  sender:profiles!pen_pal_pairings_sender_id_fkey(
  name, city, state, home_line1, home_line2, home_zip
  )
  `)
- .eq("recipient.phone", phone)
+ .eq("recipient_id", me.id)
  .is("reciprocated_at", null)
  .gt("paired_at", new Date(Date.now() - 60 * 86400 * 1000).toISOString())
  .order("paired_at", { ascending: false })
@@ -1426,6 +1443,14 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  verified_phone: phone,
  });
 
+ // CLEAN SLATE. advance_sms_conversation SHALLOW-MERGES conversation_data,
+ // so advancing with {} below would NOT clear stale keys from a prior
+ // conversation (old recipient_name, message, pending_reply,
+ // pending_new_photo_url, pending_ideas). Reset first so this new card
+ // starts truly fresh. carryReply was already captured above, before any
+ // reset, and is re-applied explicitly in the REPLY-code branch.
+ await resetState(phone);
+
  // REPLY CODE FAST PATH: stranger scanned a QR on a Mailroom card, texted
  // REPLY <code>, then sent their photo. Skip the "who's this for?"
  // question entirely — they already told us via the code. Jump straight
@@ -2050,8 +2075,43 @@ async function handleSendConfirm(phone: string, body: string, state: any): Promi
  await loopSend({ contact: phone, text: "Cancelled. Send a new photo when you're ready." });
  return;
  }
+
+ const sendType = (state.conversation_data?.send_type ?? "friend") as string;
+
+ // Scheduling only applies to FRIEND sends. Pen pal cards ride the Sunday
+ // drop; replies mail immediately. Routing those to doSchedule (which
+ // needs recipient_name/recipient) used to reset with "lost the thread."
+ if (c.intent === "schedule" && c.arrival_iso) {
+ if (sendType === "stranger") {
+ await loopSend({ contact: phone, text: "Pen pal cards go out in the next Sunday drop, so they can't be scheduled. Reply SEND to drop yours in, or CANCEL." });
+ return;
+ }
+ if (sendType === "reply_to_pen_pal") {
+ await loopSend({ contact: phone, text: "Replies mail right away, so there's no scheduling. Reply SEND to send it, or CANCEL." });
+ return;
+ }
+ }
+
+ if (c.intent === "send_now" || (c.intent === "schedule" && c.arrival_iso)) {
+ // ANTI-DOUBLE-SEND. A rapid second SEND is a DISTINCT message_id, so the
+ // webhook dedup doesn't catch it — both would read awaiting_send_confirm
+ // and create two postcards / double-charge. Atomically flip the step
+ // awaiting_send_confirm → sending; Postgres UPDATE...WHERE serializes,
+ // so the loser matches 0 rows and bails. resetState at the end of the
+ // send clears "sending"; a mid-send failure leaves "sending", which the
+ // step router's default case recovers ("Let's start fresh").
+ const { data: claimed } = await admin
+ .from("sms_conversation_state")
+ .update({ step: "sending", updated_at: new Date().toISOString() })
+ .eq("phone", phone).eq("step", "awaiting_send_confirm").select("phone");
+ if (!claimed || claimed.length === 0) {
+ console.log("[loop-inbound] duplicate SEND ignored (already sending)", { phone });
+ return;
+ }
  if (c.intent === "send_now") return await doMail(phone, state);
- if (c.intent === "schedule" && c.arrival_iso) return await doSchedule(phone, state, c);
+ return await doSchedule(phone, state, c);
+ }
+
  await loopSend({
  contact: phone,
  text: `Reply SEND to mail now, schedule it for later ("June 15" or "in 3 days"), or CANCEL.`,
@@ -2112,26 +2172,27 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  });
  if (matchErr) {
   console.error("[loop-inbound] match_pen_pal threw", matchErr);
+  await releaseSendClaim(phone, draftToken);
   await loopSend({ contact: phone, text: "Couldn't find a match right now. Try SEND again in a sec." });
   return;
  }
  const matchedRecipient = Array.isArray(match) && match.length > 0 ? match[0] : null;
 
- // Empty pool — soft fail. Keep the draft, tell the user we're on it.
- // (Later round: actual queueing. for now, drop with a graceful message
- // so the user knows their address is in the pool.)
+ // Empty pool — soft fail. No credit is burned yet (that happens in
+ // send_postcard_sms_direct below), so the user can retry for free.
+ // CRITICAL: keep the draft AND park the state at awaiting_send_type so
+ // their next reply (a friend's name, or "penpal" to retry) actually
+ // reuses this card. The old code resetState'd here, which stranded the
+ // draft — the user's "Sarah" landed on idle and did nothing — and the
+ // copy promised auto-matching that isn't implemented. Honest copy now.
  if (!matchedRecipient) {
+  await advanceState(phone, "awaiting_send_type", draftToken, {});
   await loopSend({
    contact: phone,
    text:
-    "📭 You're in the pool, but no eligible matches right now.\n\n" +
-    "Your card stays drafted. We'll mail it the moment a match opens up. " +
-    "Want to send to a friend instead? Reply with a name.",
+    "📭 No pen pals open right now.\n\n" +
+    "Your card's saved. Reply with a friend's name to send it to them, or text \"penpal\" to try the pool again.",
   });
-  // Reset the state machine but DON'T burn the credit or the draft —
-  // the user can come back and pick a friend.
-  // For v1 simplicity, just reset. Future: queue the draft for matching.
-  await resetState(phone);
   return;
  }
 
@@ -2196,6 +2257,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  if (rpcErr) {
   console.error("[loop-inbound] send_postcard_sms_direct failed", rpcErr);
   const oom = rpcErr.message?.includes("insufficient_credits");
+  await releaseSendClaim(phone, draftToken);
   await loopSend({
    contact: phone,
    text: oom
@@ -2380,6 +2442,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
  if (rpcErr) {
   console.error("[loop-inbound] send_postcard_sms_direct failed (reciprocation)", rpcErr);
   const oom = rpcErr.message?.includes("insufficient_credits");
+  await releaseSendClaim(phone, draftToken);
   await loopSend({
    contact: phone,
    text: oom
@@ -2396,6 +2459,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   await admin.from("profiles").update({ credits: (cur?.credits ?? 0) + 1 }).eq("id", userId);
   await admin.from("postcards").delete().eq("id", postcardId);
   console.error("[loop-inbound] Lob failed (reciprocation)", lob.error);
+  await releaseSendClaim(phone, draftToken);
   await loopSend({
    contact: phone,
    text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. SEND to retry.`,
@@ -2611,6 +2675,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  if (rpcErr) {
  console.error("[loop-inbound] send_postcard_sms failed", rpcErr);
  const oom = rpcErr.message?.includes("insufficient_credits");
+ await releaseSendClaim(phone, draftToken);
  await loopSend({
  contact: phone,
  text: oom
@@ -2626,6 +2691,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  await admin.from("profiles").update({ credits: (cur?.credits ?? 0) + 1 }).eq("id", userId);
  await admin.from("postcards").delete().eq("id", postcardId);
  console.error("[loop-inbound] Lob failed", lob.error);
+ await releaseSendClaim(phone, draftToken);
  await loopSend({
  contact: phone,
  text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. SEND to retry.`,
@@ -2770,6 +2836,8 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  const sendAt = new Date(arrival.getTime() - 7 * 24 * 60 * 60 * 1000);
  if (sendAt.getTime() < Date.now() + 24 * 60 * 60 * 1000) {
  const arrivalLabel = arrival.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+ // Release the send claim so "SEND now" / a later date actually works.
+ await releaseSendClaim(phone, state.draft_token);
  await loopSend({
  contact: phone,
  text: `${arrivalLabel} is too soon. Mail takes ~7 days. SEND now, or pick a later date.`,
@@ -2822,6 +2890,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  });
  if (rpcErr) {
  const oom = rpcErr.message?.includes("insufficient_credits");
+ await releaseSendClaim(phone, state.draft_token);
  await loopSend({
  contact: phone,
  text: oom
