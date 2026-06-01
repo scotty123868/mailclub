@@ -694,9 +694,9 @@ async function parseLocation(input: string): Promise<ParsedLocation | null> {
 
 async function parseConfirmation(input: string): Promise<ParsedConfirm> {
  const t = input.trim().toLowerCase();
- if (/^(y|yes|yep|yeah|yas|sure|ok|okay|confirm|confirmed|send|ship|do it|go|👍|✅|🚀|yeah sure|yes please|sounds good|looks good|go ahead|sure thing|that's right|thats right)$/i.test(t))
+ if (/^(y|yes|yep|yeah|yas|ya|sure|ok|okay|k|confirm|confirmed|send|send it|ship|ship it|do it|go|👍|✅|🚀|yeah sure|yes please|sounds good|looks good|looks right|look right|that looks right|go ahead|sure thing|that's right|thats right|correct|right|perfect|that's it|thats it|that's the one|good|all good)$/i.test(t))
  return { intent: "yes" };
- if (/^(n|no|nope|nah|cancel|stop|wait|hold on|not yet|no thanks)$/i.test(t))
+ if (/^(n|no|nope|nah|cancel|stop|wait|hold on|not yet|no thanks|never mind|nevermind|nvm|not right|that's wrong|thats wrong|wrong)$/i.test(t))
  return { intent: "no" };
  const r = await openaiJson([
  { role: "system", content:
@@ -708,9 +708,9 @@ async function parseConfirmation(input: string): Promise<ParsedConfirm> {
 
 async function parseSendConfirm(input: string): Promise<ParsedSendConfirm> {
  const t = input.trim().toLowerCase();
- if (/^(y|yes|yep|yeah|yas|sure|ok|okay|confirm|confirmed|send|ship|do it|go|👍|✅|🚀|yeah sure|yes please|sounds good|looks good|go ahead|sure thing|let's go|lets go)$/i.test(t))
+ if (/^(y|yes|yep|yeah|yas|ya|sure|ok|okay|k|confirm|confirmed|send|send it|send it now|send away|mail it|mail it now|ship|ship it|do it|go|go for it|👍|✅|🚀|yeah sure|yes please|sounds good|looks good|looks great|go ahead|sure thing|let's go|lets go|let's do it|lets do it|perfect|do it now)$/i.test(t))
  return { intent: "send_now" };
- if (/^(n|no|nope|nah|cancel|stop|wait|hold on|not yet|no thanks)$/i.test(t))
+ if (/^(n|no|nope|nah|cancel|stop|wait|hold on|not yet|no thanks|never mind|nevermind|nvm|not right|that's wrong|thats wrong|wrong)$/i.test(t))
  return { intent: "cancel" };
  const today = new Date().toISOString().slice(0, 10);
  const r = await openaiJson([
@@ -1225,7 +1225,7 @@ async function sendNoteIdeas(phone: string, state: any): Promise<void> {
  await sleep(350);
  await loopSend({
  contact: phone,
- text: `Reply 1, 2, or 3, or write your own.`,
+ text: `Pick 1, 2, or 3, or just write your own.`,
  });
 }
 
@@ -1283,7 +1283,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  await advanceState(from, state.step, state.draft_token, {
  ...(state.conversation_data ?? {}), pending_new_photo_url: attachments[0],
  });
- await loopSend({ contact: from, text: "Got the new photo. Start over with it? Reply YES to start fresh, or NO to keep your current card." });
+ await loopSend({ contact: from, text: "Got the new photo. Start over with it? Yes, or no to keep your current card." });
  return;
  }
  const ans = await parseConfirmation(body);
@@ -1299,7 +1299,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  await loopSend({ contact: from, text: "Okay, keeping your card in progress. Reply to the last step above to keep going." });
  return;
  }
- await loopSend({ contact: from, text: "Reply YES to start over with the new photo, or NO to keep your current card." });
+ await loopSend({ contact: from, text: "Want to start over with the new photo? Yes, or no to keep your current card." });
  return;
  }
 
@@ -1316,7 +1316,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  await advanceState(from, state.step, state.draft_token, {
  ...(state.conversation_data ?? {}), pending_new_photo_url: attachments[0],
  });
- await loopSend({ contact: from, text: "You've got a card in progress. Start over with this new photo? Reply YES to start fresh, or NO to keep going." });
+ await loopSend({ contact: from, text: "You've got a card in progress. Start over with this new photo? Yes, or no to keep going." });
  return;
  }
  }
@@ -1558,7 +1558,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
   await loopSend({
    contact: phone,
    subject: "✍️ Write your note",
-   text: `What should we write to ${carryReply.sender_first_name}?\n\nUp to 240 chars, or text SKIP for just the photo.`,
+   text: `What should we write to ${carryReply.sender_first_name}?\n\nUp to 240 chars, or say "skip" for just the photo.`,
    contact_file: firstTime,
   });
   return;
@@ -1610,7 +1610,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  subject: "📬 Pen pal reply waiting",
  text:
  `${locationLabel} sent you a card ${daysWord}.\n\n` +
- `Want to write them back? Reply YES (close the loop), a friend's name, or "penpal" for a new match.`,
+ `Want to write them back? Just say yes, or give me a friend's name, or say "penpal" for a new match.`,
  contact_file: firstTime,
  });
  return;
@@ -1623,13 +1623,13 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  if (firstTime) {
  await loopSend({
  contact: phone,
- text: "Who's this card for?\n\nText a name, or \"penpal\" to be matched with someone new. First one's on us.",
+ text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with someone new. First one's on us.",
  contact_file: true,
  });
  } else {
  await loopSend({
  contact: phone,
- text: "Who's this one for?\n\nText a name, or \"penpal\" for a new match.",
+ text: "Who's this one for?\n\nTell me a name, or say \"penpal\" for a new match.",
  });
  }
 }
@@ -1666,7 +1666,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  });
  await loopSend({
  contact: phone,
- text: `Writing ${pendingReply.sender_first_name} back. What should your card say? (Up to 240 chars, or text SKIP for just the photo.)`,
+ text: `Writing ${pendingReply.sender_first_name} back. What should your card say? (Up to 240 chars, or say "skip" for just the photo.)`,
  });
  return;
  }
@@ -1689,7 +1689,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  subject: "🪶 Pen pal mode",
  text:
  "We'll match you with someone in the pool. You won't see their address. They won't see yours.\n\n" +
- "What should your card say? (Up to 240 chars, or text SKIP for just the photo.)",
+ "What should your card say? (Up to 240 chars, or say "skip" for just the photo.)",
  });
  return;
  }
@@ -1723,7 +1723,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  const f = saved.name.split(/\s+/)[0];
  await loopSend({
  contact: phone,
- text: `Found ${f} in ${saved.city}, ${saved.state} (${saved.line1}). Send there? Reply Y, or send a different address.`,
+ text: `Found ${f} in ${saved.city}, ${saved.state} (${saved.line1}). Send there? Or give me a different address.`,
  });
  return;
  }
@@ -1739,7 +1739,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  // Couldn't parse. re-prompt with the same warmth.
  await loopSend({
  contact: phone,
- text: "Text a friend's name, or \"penpal\" to be matched with someone new.",
+ text: "Tell me a friend's name, or say \"penpal\" to be matched with someone new.",
  });
 }
 
@@ -1848,7 +1848,7 @@ async function handleRecipientName(phone: string, body: string, state: any): Pro
  const f = saved.name.split(/\s+/)[0];
  await loopSend({
  contact: phone,
- text: `Found ${f} in ${saved.city}, ${saved.state} (${saved.line1}). Send there? Reply Y, or send a different address.`,
+ text: `Found ${f} in ${saved.city}, ${saved.state} (${saved.line1}). Send there? Or give me a different address.`,
  });
  return;
  }
@@ -1917,7 +1917,7 @@ async function handleRecipientAddress(phone: string, body: string, state: any): 
  // this look right?" which has a clipboard-and-checkboxes vibe.
  await loopSend({
  contact: phone,
- text: `Mailing to:\n${label}\n\nGood?`,
+ text: `Mailing to:\n${label}\n\nLook right?`,
  });
 }
 
@@ -1961,7 +1961,7 @@ async function handleAddressConfirm(phone: string, body: string, state: any): Pr
  : memory.lastMessage;
  await loopSend({
  contact: phone,
- text: `Last time, you wrote ${firstName} (${lastDate}): "${preview}"\n\nWant me to draft a few ideas, or write your own? Reply IDEAS or just write your note.`,
+ text: `Last time, you wrote ${firstName} (${lastDate}): "${preview}"\n\nWant a few ideas to start? Just say "ideas", or go ahead and write your own.`,
  });
  return;
  }
@@ -1970,7 +1970,7 @@ async function handleAddressConfirm(phone: string, body: string, state: any): Pr
  // out for users who want just the photo with no words.
  await loopSend({
  contact: phone,
- text: "Would you like to add a note? Reply with your message (up to 240 chars), or text SKIP to mail just the photo.",
+ text: "Want to add a note? Just type it (up to 240 chars), or say \"skip\" to mail only the photo.",
  });
  return;
  }
@@ -1979,7 +1979,7 @@ async function handleAddressConfirm(phone: string, body: string, state: any): Pr
  await loopSend({ contact: phone, text: "No problem. Send me the correct address?" });
  return;
  }
- await loopSend({ contact: phone, text: "Does it look right? Reply Y, or send the correct address." });
+ await loopSend({ contact: phone, text: "Does that look right? Or just send the correct address." });
 }
 
 // Pre-send postcard composition shown at the SEND-confirm step. Branches
@@ -2073,8 +2073,8 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  await loopSend({
  contact: phone,
  text: heavy
- ? `${composition}\n\nThis one feels meaningful. SEND when you're ready, or CANCEL.${balanceTag}`
- : `${composition}\n\nSEND, schedule, or CANCEL.${balanceTag}`,
+ ? `${composition}\n\nThis one feels meaningful. Tell me to send it whenever you're ready.${balanceTag}`
+ : `${composition}\n\nReady? Tell me to send it, or name a day to mail it later.${balanceTag}`,
  });
  return;
  }
@@ -2147,7 +2147,7 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
  `   ${parsed.city}, ${parsed.state} ${parsed.zip}`;
  await loopSend({
  contact: phone,
- text: `Your address (where pen pals write back):\n${senderLabel}\n\nGood? Reply Y, or send a different address.`,
+ text: `Your address (where pen pals write back):\n${senderLabel}\n\nLook right? Or send a different one.`,
  });
 }
 
@@ -2193,8 +2193,8 @@ async function handleSenderAddressConfirm(phone: string, body: string, state: an
  await loopSend({
  contact: phone,
  text: heavy
- ? `${composition}\n\nThis one feels meaningful. SEND when ready, or CANCEL.${balanceTag}`
- : `${composition}\n\nSEND, schedule, or CANCEL.${balanceTag}`,
+ ? `${composition}\n\nThis one feels meaningful. Tell me to send it whenever you're ready.${balanceTag}`
+ : `${composition}\n\nReady? Tell me to send it, or name a day to mail it later.${balanceTag}`,
  });
  return;
  }
@@ -2220,11 +2220,11 @@ async function handleSenderAddressConfirm(phone: string, body: string, state: an
  `   ${reparsed.city}, ${reparsed.state} ${reparsed.zip}`;
  await loopSend({
  contact: phone,
- text: `Your address (where pen pals write back):\n${reLabel}\n\nGood? Reply Y, or send a different address.`,
+ text: `Your address (where pen pals write back):\n${reLabel}\n\nLook right? Or send a different one.`,
  });
  return;
  }
- await loopSend({ contact: phone, text: "Reply Y to confirm, or send your full mailing address." });
+ await loopSend({ contact: phone, text: "That look right? Or just send your full mailing address." });
 }
 
 async function handleSendConfirm(phone: string, body: string, state: any): Promise<void> {
@@ -2245,11 +2245,11 @@ async function handleSendConfirm(phone: string, body: string, state: any): Promi
  // needs recipient_name/recipient) used to reset with "lost the thread."
  if (c.intent === "schedule" && c.arrival_iso) {
  if (sendType === "stranger") {
- await loopSend({ contact: phone, text: "Pen pal cards go out in the next Sunday drop, so they can't be scheduled. Reply SEND to drop yours in, or CANCEL." });
+ await loopSend({ contact: phone, text: "Pen pal cards go out in the next Sunday drop, so they can't be scheduled. Just tell me to send it, or say never mind." });
  return;
  }
  if (sendType === "reply_to_pen_pal") {
- await loopSend({ contact: phone, text: "Replies mail right away, so there's no scheduling. Reply SEND to send it, or CANCEL." });
+ await loopSend({ contact: phone, text: "Replies mail right away, so there's no scheduling. Just tell me to send it, or say never mind." });
  return;
  }
  }
@@ -2276,7 +2276,7 @@ async function handleSendConfirm(phone: string, body: string, state: any): Promi
 
  await loopSend({
  contact: phone,
- text: `Reply SEND to mail now, schedule it for later ("June 15" or "in 3 days"), or CANCEL.`,
+ text: `Just tell me to send it, name a day to mail it later ("June 15", "in 3 days"), or say never mind.`,
  });
 }
 
@@ -2353,7 +2353,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
    contact: phone,
    text:
     "📭 No pen pals open right now.\n\n" +
-    "Your card's saved. Reply with a friend's name to send it to them, or text \"penpal\" to try the pool again.",
+    "Your card's saved. Give me a friend's name to send it to them, or say \"penpal\" to try the pool again.",
   });
   return;
  }
@@ -2424,7 +2424,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
    contact: phone,
    text: oom
     ? "Out of cards. BUY 5, 10, or 25 to top up, then SEND."
-    : "Couldn't queue your card. Try SEND again, or text a new photo to start over.",
+    : "Couldn't queue your card. Try sending again, or text a new photo to start over.",
   });
   return;
  }
@@ -2624,7 +2624,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   await releaseSendClaim(phone, draftToken);
   await loopSend({
    contact: phone,
-   text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. SEND to retry.`,
+   text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. Just tell me to send it again.`,
   });
   return;
  }
@@ -2842,7 +2842,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  contact: phone,
  text: oom
  ? "Out of cards. BUY 5, 10, or 25 to top up, then SEND."
- : "Your card got stuck in the press. Try SEND again, or text a new photo to start over.",
+ : "Your card got stuck in the press. Try sending again, or text a new photo to start over.",
  });
  return;
  }
@@ -2856,7 +2856,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  await releaseSendClaim(phone, draftToken);
  await loopSend({
  contact: phone,
- text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. SEND to retry.`,
+ text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. Just tell me to send it again.`,
  });
  return;
  }
@@ -3002,7 +3002,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  await releaseSendClaim(phone, state.draft_token);
  await loopSend({
  contact: phone,
- text: `${arrivalLabel} is too soon. Mail takes ~7 days. SEND now, or pick a later date.`,
+ text: `${arrivalLabel} is too soon. Mail takes ~7 days. Tell me to send it now, or pick a later date.`,
  });
  return;
  }
@@ -3225,7 +3225,7 @@ serve(async (req) => {
  try {
  await loopSend({
  contact: ctx.from,
- text: `Something broke on our end. (debug: ${errMsg.slice(0, 100)}) Try again, or text RESTART to reset.`,
+ text: `Something broke on our end. (debug: ${errMsg.slice(0, 100)}) Try again, or say "start over" to reset.`,
  });
  } catch (sendErr: any) {
  console.error("[loop-inbound] recovery send also failed", sendErr?.message ?? sendErr);
