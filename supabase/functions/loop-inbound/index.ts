@@ -1012,7 +1012,7 @@ function routeCaption(toLabel: string, miles?: number): string {
 // Lob handoff (same internal-secret HTTP pattern as sms-inbound)
 // =============================================================================
 
-async function submitToLob(postcardId: string): Promise<{ ok: boolean; expectedDelivery?: string; frontThumbnailUrl?: string; backThumbnailUrl?: string; flipGifUrl?: string; routeMapUrl?: string; routeMiles?: number; error?: string }> {
+async function submitToLob(postcardId: string, notifyGallery = true): Promise<{ ok: boolean; expectedDelivery?: string; frontThumbnailUrl?: string; backThumbnailUrl?: string; flipGifUrl?: string; routeMapUrl?: string; routeMiles?: number; error?: string }> {
  // HARD GUARD: stub the Lob call entirely if MAILROOM_TEST_MODE_NO_LOB
  // is set AND no Lob test key is configured. The stub returns a fake
  // ok response — no thumbnails, no GIFs, the celebration falls back to
@@ -1045,7 +1045,7 @@ async function submitToLob(postcardId: string): Promise<{ ok: boolean; expectedD
  apikey: anonKey,
  "x-mailroom-internal": internalSecret,
  },
- body: JSON.stringify({ postcard_id: postcardId, render_mode: "html", notify_gallery: true }),
+ body: JSON.stringify({ postcard_id: postcardId, render_mode: "html", notify_gallery: notifyGallery }),
  });
  const data = await res.json().catch(() => ({}));
  if (!data?.ok || !data?.lob_id) {
@@ -2416,12 +2416,12 @@ async function handleSendConfirm(phone: string, body: string, state: any): Promi
 
  const sendType = (state.conversation_data?.send_type ?? "friend") as string;
 
- // Scheduling only applies to FRIEND sends. Pen pal cards ride the Sunday
- // drop; replies mail immediately. Routing those to doSchedule (which
- // needs recipient_name/recipient) used to reset with "lost the thread."
+ // Scheduling only applies to FRIEND sends. Pen pal cards mail on match;
+ // replies mail immediately. Routing those to doSchedule (which needs
+ // recipient_name/recipient) used to reset with "lost the thread."
  if (c.intent === "schedule" && c.arrival_iso) {
  if (sendType === "stranger") {
- await loopSend({ contact: phone, text: "Pen pal cards go out in the next Sunday drop, so they can't be scheduled. Just tell me to send it, or say never mind." });
+ await loopSend({ contact: phone, text: "Pen pal cards mail as soon as they're matched, so they can't be scheduled. Just tell me to send it, or say never mind." });
  return;
  }
  if (sendType === "reply_to_pen_pal") {
@@ -2571,15 +2571,10 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   return;
  }
 
- // SUNDAY DROP: pen pal cards queue for the next Sunday at noon UTC
- // instead of mailing immediately. The whole pool drops together,
- // creating a ritual ("this Sunday's mail just went out") that makes
- // pen pal mode feel like a club, not a transaction.
- const sundayDrop = nextSundayDropTime();
- const queuePosition = await getSundayDropQueuePosition(sundayDrop);
-
- // Insert via direct-address RPC with scheduled_send_at set so the
- // existing fire-scheduled-postcards cron picks it up on Sunday.
+ // MAIL NOW. There's a match, so the card flies immediately — no day-tie.
+ // scheduled_send_at is omitted, so the RPC sets status 'sent' (not
+ // 'scheduled') and the fire-scheduled-postcards cron leaves it alone; we
+ // hand off to Lob right here, exactly like a friend send.
  const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms_direct", {
   p_user_id: userId,
   p_message: message,
@@ -2590,7 +2585,6 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   p_to_state: matchedRecipient.recipient_state,
   p_to_zip: matchedRecipient.recipient_zip,
   p_from_city: senderProfile.city,
-  p_scheduled_send_at: sundayDrop.toISOString(),  // Sunday Drop
  });
  if (rpcErr) {
   console.error("[loop-inbound] send_postcard_sms_direct failed", rpcErr);
@@ -2600,15 +2594,34 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
    contact: phone,
    text: oom
     ? "Out of cards. Text \"buy\" to top up, then tell me to send it."
-    : "Couldn't queue your card. Try sending again, or text a new photo to start over.",
+    : "Couldn't send your card. Try sending again, or text a new photo to start over.",
   });
   return;
  }
 
- // NO Lob handoff yet — the cron fires it on Sunday. The card sits in
- // status='scheduled' until then.
+ // Set from_phone before the Lob hand-off so lob-webhook can thread later
+ // status updates into this conversation.
+ await admin.from("postcards").update({ from_phone: phone }).eq("id", postcardId);
 
- // Pairing log + recipient cool-down update
+ // Hand off to Lob NOW. notifyGallery=false: NO flip/map follow-up — the
+ // route map would reveal the recipient's city and break pen-pal anonymity.
+ const lob = await submitToLob(postcardId as string, false);
+ if (!lob.ok) {
+  // Mirror friend mode: refund the credit, delete the card, let them retry.
+  const { data: cur } = await admin.from("profiles").select("credits").eq("id", userId).maybeSingle();
+  await admin.from("profiles").update({ credits: (cur?.credits ?? 0) + 1 }).eq("id", userId);
+  await admin.from("postcards").delete().eq("id", postcardId);
+  console.error("[loop-inbound] Lob failed (pen pal)", lob.error);
+  await releaseSendClaim(phone, draftToken);
+  await loopSend({
+   contact: phone,
+   text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. Just tell me to send it again.`,
+  });
+  return;
+ }
+
+ // Mailed. Log the pairing + cool the recipient down ONLY now, so a failed
+ // hand-off above never cools down a recipient whose card never flew.
  await admin.from("pen_pal_pairings").insert({
   sender_id: userId,
   recipient_id: matchedRecipient.recipient_id,
@@ -2623,66 +2636,41 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  await admin.rpc("consume_sms_draft", { p_token: draftToken, p_postcard_id: postcardId });
  await resetState(phone);
 
- // c-bridge wraps /c/<token> with per-token OG meta tags so iMessage's
- // preview shows THIS recipient + THIS photo + THIS ETA instead of the
- // generic landing card. Real browsers get a meta-refresh to /c/<token>.
+ // c-bridge wraps /c/<token> with per-token OG meta tags for the link's
+ // rich preview. Real browsers get a meta-refresh to /c/<token>.
  const confirmUrl = `https://nlwnmgwylmmnaemdnzlq.supabase.co/functions/v1/c-bridge?token=${draftToken}`;
- const dropDateLabel = sundayDrop.toLocaleDateString("en-US", {
-  weekday: "long", month: "short", day: "numeric",
- });
- const ordinalSuffix = (n: number) => {
-  const j = n % 10, k = n % 100;
-  if (j === 1 && k !== 11) return "st";
-  if (j === 2 && k !== 12) return "nd";
-  if (j === 3 && k !== 13) return "rd";
-  return "th";
- };
- const positionLabel = `${queuePosition}${ordinalSuffix(queuePosition)}`;
 
- // 4-act SUNDAY DROP celebration. Different vibe than friend mode.
- // Anticipation > immediacy. The user joins a queue, the pool drops
- // together on Sunday. Effect: shootingStar (wish-like).
+ // CELEBRATION — pen pal mode. The recipient is anonymous and stays that
+ // way: photo-only reveal, NO route map (it would leak their city). Mails
+ // immediately now, so it's a "postmarked" beat, not a Sunday-queue wait.
+ // Effect: shootingStar (wish-like).
  //
- // Act 0 ("stamping" beat): quiet line + typing indicator turn the
- // 1-2s before the celebration from dead air into ritual.
- // Act 1: queue position (the "where am I" answer).
- // Act 2: the cadence promise ("flies Sunday").
- // Act 3: anonymous photo.
- // Act 4: the reciprocation promise.
- await loopSend({ contact: phone, text: "🪶 Joining the pool..." });
+ // Act 0: stamping beat — turns the Lob hand-off into ritual, not dead air.
+ // Act 1: the postmark stamp — "Off to a pen pal" (no name, no city).
+ // Act 2: the photo, "· To somewhere ·" (anonymous destination).
+ // Act 3: the promise — they'll know when the loop closes.
+ await loopSend({ contact: phone, text: "🪶 Matched. Stamping your card..." });
  await loopTyping(phone, 2);
 
- // Act 1: queue position. Standalone — the "you're #14" beat needs
- // its own breath, not crammed into a paragraph with the cadence.
+ const postmarkDate = new Date().toLocaleDateString("en-US", {
+  month: "short", day: "numeric", year: "numeric",
+ }).toUpperCase();
+ const stationLine = senderProfile.city
+  ? `${String(senderProfile.city).toUpperCase()} STATION\n\n`
+  : "";
  const mailedRes = await loopSend({
   contact: phone,
-  subject: "🪶 In Sunday's drop",
-  text: `You're the ${positionLabel} card in this week's pool.`,
+  subject: "🪶 Postmarked",
+  text: `POSTMARKED · ${postmarkDate}\n${stationLine}Off to a pen pal.`,
   effect: "shootingStar",
   passthrough: `stranger:${postcardId}`,
  });
- // Persist the Mailed bubble's message_id so lob-webhook can thread
- // later status updates as in-thread replies.
  if (mailedRes.ok && mailedRes.messageId) {
-  await admin.from("postcards").update({
-   mailed_imessage_id: mailedRes.messageId,
-   from_phone: phone,
-  }).eq("id", postcardId);
- } else {
-  await admin.from("postcards").update({ from_phone: phone }).eq("id", postcardId);
+  await admin.from("postcards").update({ mailed_imessage_id: mailedRes.messageId }).eq("id", postcardId);
  }
  await sleep(700);
 
- // Act 2: the cadence. "Flies" carries the postal romance — cards
- // don't "go out," they fly. The day label closes the loop on when.
- await loopSend({
-  contact: phone,
-  text: `We match + mail every Sunday at noon. Yours flies ${dropDateLabel}.`,
- });
- await sleep(550);
-
- // Act 3: Photo — anonymous destination. "· To somewhere ·" uses
- // postal-label centering instead of console-style arrows.
+ // Act 2: the photo — anonymous destination. Postal-label centering.
  await loopSend({
   contact: phone,
   text: `· To somewhere ·`,
@@ -2690,7 +2678,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  });
  await sleep(450);
 
- // Act 4: The promise — they'll know when the loop closes
+ // Act 3: the promise — they'll know when the loop closes.
  await loopSend({
   contact: phone,
   text: `When they write back, you'll know.\n${confirmUrl}`,
@@ -2902,11 +2890,11 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
 
  // Gallery: [their photo, card flip, native route map]. Same
  // three-part story as a fresh send (see buildCelebrationGallery).
- const gallery = buildCelebrationGallery(lob, photoUrl);
+ // Flip-as-hero: photo-only instant bubble; the flip + map land next.
  await loopSend({
   contact: phone,
   text: routeCaption(pendingReply.sender_city || "them", lob.routeMiles),
-  attachments: gallery,
+  attachments: photoUrl ? [photoUrl] : buildCelebrationGallery(lob, photoUrl),
  });
  await sleep(450);
 
@@ -3131,11 +3119,12 @@ async function doMail(phone: string, state: any): Promise<void> {
  //   3. the route map     (the journey — native Apple Maps snapshot)
  // Each tile degrades independently: no flip → static front+back;
  // no map → drop the third tile; no thumbnails at all → just photo.
- const gallery = buildCelebrationGallery(lob, photoUrl);
+ // Flip-as-hero: the instant bubble is the photo only. The animated card
+ // flip + route map arrive in the render-gifs follow-up as the one reveal.
  await loopSend({
  contact: phone,
  text: routeCaption(recipLocLabel, lob.routeMiles),
- attachments: gallery,
+ attachments: photoUrl ? [photoUrl] : buildCelebrationGallery(lob, photoUrl),
  });
  await sleep(450);
 

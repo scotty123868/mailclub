@@ -580,8 +580,17 @@ serve(async (req) => {
   // gets the rich reveal. Threaded under the Mailed bubble when we have it.
   const LOOP_API_KEY = Deno.env.get("LOOPMESSAGE_API_KEY") ?? "";
   const LOOP_SENDER_ID = Deno.env.get("LOOPMESSAGE_SENDER_ID") ?? "";
+  // Flip-as-hero: the instant iMessage bubble was the photo only, so this
+  // follow-up carries the card reveal. Prefer the animated flip; if it
+  // failed to render, fall back to Lob's static front/back so the card
+  // still shows. Then the route map.
   const gallery: string[] = [];
-  if (results.flip_gif_url) gallery.push(results.flip_gif_url);
+  if (results.flip_gif_url) {
+    gallery.push(results.flip_gif_url);
+  } else {
+    if (postcard.lob_front_thumbnail_url) gallery.push(postcard.lob_front_thumbnail_url);
+    if (postcard.lob_back_thumbnail_url) gallery.push(postcard.lob_back_thumbnail_url);
+  }
   if (results.route_map_url) gallery.push(results.route_map_url);
   if (notify && LOOP_API_KEY && postcard.from_phone && gallery.length) {
     try {
