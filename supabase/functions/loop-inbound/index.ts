@@ -1381,9 +1381,8 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  contact: from,
  subject: "💌 Writing back",
  text:
- `Got it. We'll write ${match.sender_first_name}` +
- (match.sender_city ? ` in ${match.sender_city}` : "") +
- ` back.\n\nSend me the photo you want on the card.`,
+ `Send me the photo you want on ${match.sender_first_name}'s card` +
+ (match.sender_city ? ` in ${match.sender_city}` : "") + `.`,
  });
  return;
  }
@@ -1514,7 +1513,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  // is what matters. If the upload then fails, the "lost it on the
  // conveyor" line below reads as an honest follow-up.
  const ackText = carryReply
-  ? `📮 Got the photo. ${carryReply.sender_first_name}'s going to love this.`
+  ? `📮 Got it.`
   : "📮 Got it.";
  await loopSend({ contact: phone, text: ackText });
 
@@ -1525,7 +1524,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  console.error("[loop-inbound] photo intake failed", { mediaUrl: mediaUrl.slice(0, 200), error: upload.error });
  await loopSend({
  contact: phone,
- text: `Lost the photo somewhere on the conveyor. Send it again?`,
+ text: `Couldn't download that photo. Send it again?`,
  });
  return;
  }
@@ -1558,7 +1557,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
   await loopSend({
    contact: phone,
    subject: "✍️ Write your note",
-   text: `What should we write to ${carryReply.sender_first_name}?\n\nUp to 240 chars, or say "skip" for just the photo.`,
+   text: `What should the card say?\n\nUp to 240 characters, or say "skip" for just the photo.`,
    contact_file: firstTime,
   });
   return;
@@ -1623,7 +1622,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  if (firstTime) {
  await loopSend({
  contact: phone,
- text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with someone new. First one's on us.",
+ text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with someone new. First one's free.",
  contact_file: true,
  });
  } else {
@@ -2035,7 +2034,14 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  return;
  }
 
- const truncated = message.length > 240 ? message.slice(0, 240) : message;
+ // A postcard back only holds so much, so we cap the note at 240. If
+ // they wrote more, trim it AND tell them (so they see exactly what
+ // will print, never a silent cut).
+ const wasTrimmed = message.length > 240;
+ const truncated = wasTrimmed ? message.slice(0, 240) : message;
+ const echoText = wasTrimmed
+ ? `That's a little long for a postcard, so I trimmed it to fit (240 characters). Here's what'll print:\n"${truncated}"`
+ : `Got it. "${truncated}"`;
  // Gate on FULL home address. line1 + city + state + zip are all required
  // to send (so pen pal reciprocation works downstream). Users with just
  // city/state on file from earlier rounds get re-prompted for the full
@@ -2060,7 +2066,7 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  // its own bubble first. confirms we heard them, builds the dialogue
  // beat. then drop the pre-send summary.
  if (truncated.length > 0) {
- await loopSend({ contact: phone, text: `Got it. "${truncated}"` });
+ await loopSend({ contact: phone, text: echoText });
  await sleep(550);
  }
  const composition = buildPreSendComposition({
@@ -2094,7 +2100,7 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
 
  // Bubble 1: acknowledge the note so the user knows we heard them
  if (truncated.length > 0) {
- await loopSend({ contact: phone, text: `Got it. "${truncated}"` });
+ await loopSend({ contact: phone, text: echoText });
  await sleep(550);
  } else {
  await loopSend({ contact: phone, text: "Got it. No note, just the photo." });
@@ -2292,7 +2298,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
 
  if (!draftToken) {
   await resetState(phone);
-  await loopSend({ contact: phone, text: "We lost the thread on that card. Text a fresh photo to start over." });
+  await loopSend({ contact: phone, text: "That draft expired. Text a new photo to start over." });
   return;
  }
 
@@ -2301,7 +2307,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  try { userId = await findOrCreateUserByPhone(phone); }
  catch (e: any) {
   console.error("[loop-inbound] user create failed (stranger)", e);
-  await loopSend({ contact: phone, text: "Hmm, the mailroom's locked. Try again in a minute?" });
+  await loopSend({ contact: phone, text: "Something went wrong on our end. Try again in a minute?" });
   return;
  }
 
@@ -2363,7 +2369,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
  if (!draftRow?.photo_path) {
   await resetState(phone);
-  await loopSend({ contact: phone, text: "That photo flew the coop. Send another?" });
+  await loopSend({ contact: phone, text: "Couldn't read that photo. Send another?" });
   return;
  }
  let photoUrl = draftRow.photo_path;
@@ -2371,7 +2377,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   const { data: signed } = await admin.storage
    .from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 7);
   if (!signed?.signedUrl) {
-   await loopSend({ contact: phone, text: "Lost the photo somewhere in the sorting bin. Send it again?" });
+   await loopSend({ contact: phone, text: "That photo didn't upload. Send it again?" });
    return;
   }
   photoUrl = signed.signedUrl;
@@ -2546,7 +2552,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
  try { userId = await findOrCreateUserByPhone(phone); }
  catch (e: any) {
   console.error("[loop-inbound] user create failed (reciprocation)", e);
-  await loopSend({ contact: phone, text: "Hmm, the mailroom's locked. Try again in a minute?" });
+  await loopSend({ contact: phone, text: "Something went wrong on our end. Try again in a minute?" });
   return;
  }
 
@@ -2560,7 +2566,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
  if (!draftRow?.photo_path) {
   await resetState(phone);
-  await loopSend({ contact: phone, text: "That photo flew the coop. Send another?" });
+  await loopSend({ contact: phone, text: "Couldn't read that photo. Send another?" });
   return;
  }
  let photoUrl = draftRow.photo_path;
@@ -2568,7 +2574,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   const { data: signed } = await admin.storage
    .from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 7);
   if (!signed?.signedUrl) {
-   await loopSend({ contact: phone, text: "Lost the photo somewhere in the sorting bin. Send it again?" });
+   await loopSend({ contact: phone, text: "That photo didn't upload. Send it again?" });
    return;
   }
   photoUrl = signed.signedUrl;
@@ -2609,7 +2615,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
    contact: phone,
    text: oom
     ? "Out of cards. Text \"buy\" to top up, then tell me to send it."
-    : "The reply got stuck in the press. Tell me to send it again.",
+    : "Couldn't print your reply. Tell me to send it again.",
   });
   return;
  }
@@ -2624,7 +2630,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   await releaseSendClaim(phone, draftToken);
   await loopSend({
    contact: phone,
-   text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. Just tell me to send it again.`,
+   text: `Couldn't print your card (${lob.error?.slice(0, 60)}). Your credit's back. Tell me to send it again.`,
   });
   return;
  }
@@ -2705,7 +2711,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
  }).toUpperCase();
  const mailedRes = await loopSend({
   contact: phone,
-  subject: "💌 Loop closed",
+  subject: "💌 Postmarked",
   text: `POSTMARKED · ${postmarkDate}\n${stationLine}Off to ${senderFirstName}.`,
   effect: "love",
   passthrough: `reciprocation:${postcardId}`,
@@ -2785,7 +2791,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  // (user texted SKIP). Use null/undefined check, not truthiness.
  if (!recipientName || !recipient || message == null || !draftToken) {
  await resetState(phone);
- await loopSend({ contact: phone, text: "We lost the thread on that card. Text a fresh photo to start over." });
+ await loopSend({ contact: phone, text: "That draft expired. Text a new photo to start over." });
  return;
  }
 
@@ -2793,7 +2799,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  try { userId = await findOrCreateUserByPhone(phone); }
  catch (e: any) {
  console.error("[loop-inbound] user create failed", e);
- await loopSend({ contact: phone, text: "Hmm, the mailroom's locked. Try again in a minute?" });
+ await loopSend({ contact: phone, text: "Something went wrong on our end. Try again in a minute?" });
  return;
  }
 
@@ -2808,7 +2814,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  friendId = await findOrCreateFriend(userId, { ...recipient, name: recipientName });
  } catch (e: any) {
  console.error("[loop-inbound] friend create failed", e);
- await loopSend({ contact: phone, text: "Hmm, the recipient drawer's stuck. Try once more?" });
+ await loopSend({ contact: phone, text: "Couldn't save that. Try once more?" });
  return;
  }
 
@@ -2816,7 +2822,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
  if (!draftRow?.photo_path) {
  await resetState(phone);
- await loopSend({ contact: phone, text: "That photo flew the coop. Send another?" });
+ await loopSend({ contact: phone, text: "Couldn't read that photo. Send another?" });
  return;
  }
  let photoUrl = draftRow.photo_path;
@@ -2824,7 +2830,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  const { data: signed } = await admin.storage
  .from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 7);
  if (!signed?.signedUrl) {
- await loopSend({ contact: phone, text: "Lost the photo somewhere in the sorting bin. Send it again?" });
+ await loopSend({ contact: phone, text: "That photo didn't upload. Send it again?" });
  return;
  }
  photoUrl = signed.signedUrl;
@@ -2842,7 +2848,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  contact: phone,
  text: oom
  ? "Out of cards. Text \"buy\" to top up, then tell me to send it."
- : "Your card got stuck in the press. Try sending again, or text a new photo to start over.",
+ : "Couldn't print your card. Try sending again, or text a new photo to start over.",
  });
  return;
  }
@@ -2991,7 +2997,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  const draftToken = state.draft_token as string;
  if (!recipientName || !recipient || message == null || !draftToken || !schedule.arrival_iso) {
  await resetState(phone);
- await loopSend({ contact: phone, text: "We lost the thread on that card. Text a fresh photo to start over." });
+ await loopSend({ contact: phone, text: "That draft expired. Text a new photo to start over." });
  return;
  }
  const arrival = new Date(schedule.arrival_iso + "T12:00:00Z");
@@ -3011,7 +3017,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  try { userId = await findOrCreateUserByPhone(phone); }
  catch (e: any) {
  console.error("[loop-inbound] user create failed (schedule)", e);
- await loopSend({ contact: phone, text: "Hmm, the mailroom's locked. Try again in a minute?" });
+ await loopSend({ contact: phone, text: "Something went wrong on our end. Try again in a minute?" });
  return;
  }
  const senderCity = (data.sender_city as string) || "";
@@ -3023,7 +3029,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  try { friendId = await findOrCreateFriend(userId, { ...recipient, name: recipientName }); }
  catch (e: any) {
  console.error("[loop-inbound] friend create failed (schedule)", e);
- await loopSend({ contact: phone, text: "Hmm, the recipient drawer's stuck. Try once more?" });
+ await loopSend({ contact: phone, text: "Couldn't save that. Try once more?" });
  return;
  }
 
@@ -3031,7 +3037,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
  if (!draftRow?.photo_path) {
  await resetState(phone);
- await loopSend({ contact: phone, text: "That photo flew the coop. Send another?" });
+ await loopSend({ contact: phone, text: "Couldn't read that photo. Send another?" });
  return;
  }
  let photoUrl = draftRow.photo_path;
@@ -3039,7 +3045,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  const { data: signed } = await admin.storage
  .from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 30);
  if (!signed?.signedUrl) {
- await loopSend({ contact: phone, text: "Lost the photo somewhere in the sorting bin. Send it again?" });
+ await loopSend({ contact: phone, text: "That photo didn't upload. Send it again?" });
  return;
  }
  photoUrl = signed.signedUrl;
