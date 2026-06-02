@@ -747,9 +747,12 @@ async function getConversationState(phone: string) {
 }
 
 async function advanceState(phone: string, step: string, draftToken: string | null, patch: Record<string, unknown>) {
- await admin.rpc("advance_sms_conversation", {
+ const { error } = await admin.rpc("advance_sms_conversation", {
  p_phone: phone, p_step: step, p_draft_token: draftToken, p_data_patch: patch,
  });
+ // Never fail silently again: a swallowed CHECK-constraint violation here
+ // (e.g. a step the constraint doesn't allow) strands the user mid-flow.
+ if (error) console.error("[loop-inbound] advanceState FAILED", { phone, step, error: error.message ?? error });
 }
 
 async function resetState(phone: string) {
