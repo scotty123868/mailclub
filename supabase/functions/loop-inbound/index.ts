@@ -1502,7 +1502,7 @@ async function handleIdle(from: string, body = ""): Promise<void> {
  await loopSend({
  contact: from,
  subject: "📮 Welcome to Mailroom",
- text: "A magical mail club. Real paper. By text.\n\nText us a photo to send your first postcard, on us.",
+ text: "A magical mail club. Text a photo, mail a moment.\n\nYour first card's on us.",
  });
  return;
  }
