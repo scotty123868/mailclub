@@ -3062,23 +3062,26 @@ async function doMail(phone: string, state: any): Promise<void> {
  // Sarah's mailbox Jun 3" beats "Arrives Jun 3" because it makes
  // the recipient's experience visible to the sender.
  //
- // Tail priority: BUY nudges (urgent — they're out of credits) WIN
- // over MEMORIES nudges (discovery). After the 3rd card a sender
- // crosses into "regular" territory — that's the right moment to
- // unlock the MEMORIES word.
+ // Tail priority: the FIRST card ever gets its own milestone beat (the
+ // single most important moment in the product). After that, buy nudges
+ // (urgent — out of credits) win over memories nudges (discovery). The
+ // 3rd card crosses a sender into "regular" territory: the right moment
+ // to unlock the memories word.
+ const { count: sentCount } = await admin
+   .from("postcards")
+   .select("id", { count: "exact", head: true })
+   .eq("sender_id", userId);
  let tail = "";
- if (remaining <= 0) {
+ if (sentCount === 1) {
+   // Their first card actually became real. Mark the milestone, and
+   // point at the core action (text another photo), not a cold sell.
+   tail = `\n\nThat's your first card, on us. Text another photo anytime to send the next.`;
+ } else if (remaining <= 0) {
    tail = `\n\nLast one. Text "buy" for more.`;
  } else if (remaining <= 2) {
-   tail = `\n\n${remaining} left. Reply BUY for more.`;
- } else {
-   const { count: sentCount } = await admin
-     .from("postcards")
-     .select("id", { count: "exact", head: true })
-     .eq("sender_id", userId);
-   if (sentCount === 3) {
-     tail = `\n\nThat's three cards from you. Text MEMORIES anytime to see them.`;
-   }
+   tail = `\n\n${remaining} left. Text "buy" for more.`;
+ } else if (sentCount === 3) {
+   tail = `\n\nThat's three cards from you. Text "memories" anytime to see them.`;
  }
  await loopSend({
  contact: phone,

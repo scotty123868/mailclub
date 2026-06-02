@@ -588,8 +588,8 @@ serve(async (req) => {
       const sendBody: Record<string, unknown> = {
         contact: postcard.from_phone,
         text: results.route_miles
-          ? `Here's your card, and the ${results.route_miles}-mile trip it's taking.`
-          : `Here's your card, front to back, and the route it's taking.`,
+          ? `The trip ahead: ${results.route_miles.toLocaleString("en-US")} miles by post.`
+          : `Here's the route your card is taking.`,
         attachments: gallery,
       };
       if (LOOP_SENDER_ID) sendBody.sender = LOOP_SENDER_ID;

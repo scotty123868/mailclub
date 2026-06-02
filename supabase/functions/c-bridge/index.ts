@@ -97,7 +97,7 @@ function notFoundHtml(): string {
   return buildHtml({
     token: "",
     title: "Mailroom — A magical mail club",
-    description: "Real paper postcards by text. First one's on us.",
+    description: "Text a photo, mail a moment. Your first card's on us.",
     imageUrl: "https://app.themailroom.club/og-card.png",
     destinationUrl: "https://app.themailroom.club/",
   });
@@ -200,8 +200,8 @@ serve(async (req) => {
   } else if (postcard.status === "delivered") {
     title = `Postcard delivered to ${recipientFirst}`;
     description = routeBit
-      ? `${routeBit}. Real paper, in their mailbox.`
-      : `Real paper, in their mailbox.`;
+      ? `${routeBit}. A moment, delivered.`
+      : `A moment, delivered.`;
   } else {
     const etaLabel = postcard.lob_expected_delivery
       ? new Date(postcard.lob_expected_delivery).toLocaleDateString("en-US", { month: "short", day: "numeric" })
