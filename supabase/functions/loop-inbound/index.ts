@@ -1381,8 +1381,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  contact: from,
  subject: "💌 Writing back",
  text:
- `Send me the photo you want on ${match.sender_first_name}'s card` +
- (match.sender_city ? ` in ${match.sender_city}` : "") + `.`,
+ `Send me the photo you want on ${match.sender_first_name}'s card.`,
  });
  return;
  }
@@ -1695,7 +1694,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  contact: phone,
  subject: "🪶 Pen pal mode",
  text:
- "We'll match you with someone in the pool. You won't see their address. They won't see yours.\n\n" +
+ "We'll match you with another pen pal. You won't see their address. They won't see yours.\n\n" +
  "What should your card say? (Up to 240 chars, or say 'skip' for just the photo.)",
  });
  return;
@@ -1880,16 +1879,7 @@ async function handleRecipientAddress(phone: string, body: string, state: any): 
  // fills in their own address (existing /claim flow), which mails it.
  const lower = body.trim().toLowerCase();
  if (/\b(send (a |the )?link|don'?t (have|know)|do not (have|know)|not sure|they'?ll (add|fill)|no address|link them|let them add)\b/.test(lower)) {
- const nm = (state.conversation_data?.recipient_name ?? "your friend") as string;
- const first = nm.split(/\s+/)[0];
- await advanceState(phone, "awaiting_message", state.draft_token, {
- ...(state.conversation_data ?? {}), claim_mode: true,
- });
- await loopSend({
- contact: phone,
- text: `No problem. Write your note and I'll make a link for ${first} to add their address.\n\nUp to 240 characters, or say "skip" for just the photo.`,
- });
- return;
+ return await startClaimLink(phone, state);
  }
 
  // Fast path: a clean address confirms instantly (no LLM). Only
@@ -2024,7 +2014,7 @@ function buildPreSendComposition(opts: {
  const from = (opts.fromCity || "").trim().toUpperCase() || "YOUR CITY";
  const noteBlock = opts.note.length > 0 ? `\n\n   "${opts.note}"` : "";
  if (opts.sendType === "stranger") {
-  return `${from} ──→ ✦\n\n   To: a pen pal in the pool${noteBlock}`;
+  return `${from} ──→ ✦\n\n   To: a pen pal${noteBlock}`;
  }
  const firstName = (opts.recipientName ?? "").split(/\s+/)[0] || "your friend";
  const toCity = (opts.recipientCity || "their place").toUpperCase();
@@ -2083,6 +2073,77 @@ async function finishClaimSend(phone: string, state: any, note: string, echoText
  });
 }
 
+// CLAIM-LINK START. The recipient's address is unknown, so the practical
+// step is getting the link to them — that comes FIRST. We mint the claim
+// now (photo, no note yet), hand back the link, then offer an optional
+// note that prints on the card. The note lands on the postcard via a plain
+// update; the recipient takes far longer to open the link than the sender
+// takes to type a line, so in practice the note is always set before the
+// card mails. If the photo is still uploading, we degrade to the old order
+// (note first, then mint via finishClaimSend) so we never mint a photoless
+// claim.
+async function startClaimLink(phone: string, state: any): Promise<void> {
+ const draftToken = state.draft_token as string;
+ const data = state.conversation_data ?? {};
+ const name = (data.recipient_name ?? "your friend") as string;
+ const first = name.split(/\s+/)[0] || "your friend";
+
+ const { data: draftRow } = await admin
+  .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
+
+ // Photo not uploaded yet: keep the old order. finishClaimSend mints once
+ // the upload lands (it re-checks photo_path and waits if needed).
+ if (!draftRow?.photo_path) {
+  await advanceState(phone, "awaiting_message", draftToken, { ...data, claim_mode: true });
+  await loopSend({
+   contact: phone,
+   text: `No problem. I'll make a link for ${first} to add their address. Write your note (up to 240 characters, or say "skip" for just the photo).`,
+  });
+  return;
+ }
+
+ let userId: string;
+ try { userId = await findOrCreateUserByPhone(phone); }
+ catch (e: any) {
+  console.error("[loop-inbound] user create failed (claim start)", e);
+  await loopSend({ contact: phone, text: "Something went wrong on our end. Try again in a minute?" });
+  return;
+ }
+
+ let photoUrl = draftRow.photo_path as string;
+ if (!photoUrl.startsWith("http")) {
+  const { data: signed } = await admin.storage.from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 60);
+  if (signed?.signedUrl) photoUrl = signed.signedUrl;
+ }
+
+ // Mint the claim now with an empty note (the note is optional + comes next).
+ const { data: res, error } = await admin.rpc("send_postcard_via_claim_direct", {
+  p_user_id: userId, p_message: "", p_photo_path: photoUrl,
+ });
+ if (error || !res?.claim_token) {
+  const oom = error?.message?.includes("INSUFFICIENT_CREDITS");
+  await loopSend({ contact: phone, text: oom ? "Out of cards. Text \"buy\" to top up, then try again." : "Couldn't make the link. Try again in a minute?" });
+  return;
+ }
+
+ // Stay in awaiting_message to collect the optional note; stash the postcard
+ // id so the note UPDATES this card instead of minting a second one.
+ await advanceState(phone, "awaiting_message", draftToken, {
+  ...data, claim_mode: true, claim_postcard_id: res.postcard_id,
+ });
+
+ const link = `https://app.themailroom.club/claim?t=${res.claim_token}`;
+ await loopSend({
+  contact: phone,
+  subject: "🔗 Link ready",
+  text: `Send ${first} this link to add their address:\n${link}\n\nThe moment they do, I'll mail your card.`,
+ });
+ await loopSend({
+  contact: phone,
+  text: `Want a note on the card? Send it now (up to 240 characters), or say "skip" for just the photo.`,
+ });
+}
+
 async function handleMessage(phone: string, body: string, state: any): Promise<void> {
  let message = body.trim();
 
@@ -2124,11 +2185,31 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  ? `That's a little long for a postcard, so I trimmed it to fit (240 characters). Here's what'll print:\n"${truncated}"`
  : `Got it. "${truncated}"`;
 
- // CLAIM-LINK MODE: the sender didn't have the recipient's address, so
- // instead of mailing now we mint a link they forward to the recipient.
- // Note's done — finish the claim and hand back the link.
+ // CLAIM-LINK MODE: the sender had no recipient address, so we minted a
+ // link they forward; the recipient adds their own address. If the link is
+ // already out (claim_postcard_id stashed), this note just UPDATES that
+ // card. Otherwise (photo wasn't ready at link time) we mint now.
  if (state.conversation_data?.claim_mode === true) {
- return await finishClaimSend(phone, state, truncated, echoText);
+  const existingClaimId = state.conversation_data?.claim_postcard_id as string | undefined;
+  if (existingClaimId) {
+   await admin.from("postcards").update({ message: truncated }).eq("id", existingClaimId);
+   await admin.rpc("consume_sms_draft", { p_token: state.draft_token, p_postcard_id: existingClaimId });
+   await resetState(phone);
+   const first = ((state.conversation_data?.recipient_name ?? "your friend") as string).split(/\s+/)[0] || "their";
+   if (truncated) {
+    if (wasTrimmed) await loopSend({ contact: phone, text: echoText });
+    await loopSend({
+     contact: phone,
+     text: wasTrimmed
+      ? `That'll print on ${first}'s card. It mails the moment they add their address.`
+      : `Added to ${first}'s card:\n"${truncated}"\n\nIt mails the moment they add their address.`,
+    });
+   } else {
+    await loopSend({ contact: phone, text: `No note, just the photo. ${first}'s card mails the moment they add their address.` });
+   }
+   return;
+  }
+  return await finishClaimSend(phone, state, truncated, echoText);
  }
 
  // Gate on FULL home address. line1 + city + state + zip are all required
@@ -2430,7 +2511,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  if (matchErr) {
   console.error("[loop-inbound] match_pen_pal threw", matchErr);
   await releaseSendClaim(phone, draftToken);
-  await loopSend({ contact: phone, text: "No one in the pool right now. I'll hold your card and match you the moment someone joins." });
+  await loopSend({ contact: phone, text: "No pen pals around right now. I'll hold your card and match you the moment someone joins." });
   return;
  }
  const matchedRecipient = Array.isArray(match) && match.length > 0 ? match[0] : null;
@@ -2448,7 +2529,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
    contact: phone,
    text:
     "📭 No pen pals open right now.\n\n" +
-    "Your card's saved. Give me a friend's name to send it to them, or say \"penpal\" to try the pool again.",
+    "Your card's saved. Give me a friend's name to send it to them, or say \"penpal\" to try again.",
   });
   return;
  }

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mailroom · Send celebration — gallery options</title>
+<style>
+  :root{
+    --ink:#10100f; --bubble:#e9e9eb; --bubbletext:#000;
+    --parch:#f3ead9; --sender:#b8483a; --recip:#3c6e8f;
+    --board:#111114; --card:#1a1a1f; --line:#2a2a31; --muted:#8a8a93;
+    --accent:#d8a24a; --good:#5fb87a;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{
+    margin:0;background:var(--board);color:#ececf0;
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    padding:40px 24px 80px;
+  }
+  .wrap{max-width:1100px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 26px;font-size:14px}
+
+  .rec{
+    background:linear-gradient(180deg,#1d2a20,#16201a);
+    border:1px solid #2c5d3c;border-radius:14px;padding:16px 18px;margin:0 0 34px;
+  }
+  .rec b{color:var(--good)}
+  .rec .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;color:#0e0e10;background:var(--good);
+    padding:3px 8px;border-radius:999px;margin-right:10px;vertical-align:middle}
+
+  .cols{display:flex;gap:34px;flex-wrap:wrap;justify-content:center}
+  .col{flex:1 1 360px;max-width:420px}
+  .col h2{font-size:16px;margin:0 0 2px;letter-spacing:-.01em}
+  .col .lede{color:var(--muted);font-size:13px;margin:0 0 16px;min-height:34px}
+  .col.win h2 .pill{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+    color:#0e0e10;background:var(--good);padding:2px 7px;border-radius:999px;margin-left:8px;vertical-align:middle}
+  .col.alt h2 .pill{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+    color:#0e0e10;background:#8a8a93;padding:2px 7px;border-radius:999px;margin-left:8px;vertical-align:middle}
+
+  /* phone */
+  .phone{background:#000;border-radius:42px;padding:12px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .screen{background:#fff;border-radius:32px;overflow:hidden;color:#000}
+  .nav{background:#f7f7f7;border-bottom:1px solid #e3e3e6;padding:12px 0 9px;text-align:center}
+  .nav .av{width:42px;height:42px;border-radius:50%;margin:0 auto 4px;
+    background:radial-gradient(circle at 30% 30%,#f6d68a,#d8a24a);display:flex;align-items:center;justify-content:center;font-size:20px}
+  .nav .who{font-size:11px;font-weight:600;color:#111}
+  .nav .who span{color:#8a8a93;font-weight:400}
+  .thread{padding:14px 12px 20px;display:flex;flex-direction:column;gap:9px;background:#fff;min-height:300px}
+
+  .when{align-self:center;font-size:10px;color:#9a9aa2;letter-spacing:.04em;margin:6px 0 1px;text-transform:uppercase}
+  .b{max-width:80%;align-self:flex-start;background:var(--bubble);color:var(--bubbletext);
+    padding:8px 12px;border-radius:18px;border-bottom-left-radius:5px;white-space:pre-line;font-size:14.5px;position:relative}
+  .b .subj{font-weight:700;display:block;margin-bottom:2px}
+  .b.eff::after{content:attr(data-eff);position:absolute;top:-9px;right:6px;font-size:9px;
+    background:#fff;border:1px solid #e3e3e6;color:#6a6a72;border-radius:999px;padding:1px 6px;font-weight:600}
+  .typing{align-self:flex-start;background:var(--bubble);border-radius:16px;padding:10px 14px;display:flex;gap:4px}
+  .typing i{width:7px;height:7px;border-radius:50%;background:#b4b4bb;display:block;animation:tp 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+  @keyframes tp{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+
+  /* gallery tiles row */
+  .tiles{align-self:flex-start;max-width:86%;display:flex;gap:5px;flex-wrap:wrap}
+  .tile{width:84px;height:84px;border-radius:12px;overflow:hidden;border:1px solid rgba(0,0,0,.06);position:relative;background:#ddd}
+  .tile.big{width:174px;height:120px}
+  .tcap{font-size:9px;color:#9a9aa2;text-align:center;width:100%;margin-top:-2px}
+
+  /* the photo */
+  .photo{background:
+     radial-gradient(circle at 72% 28%,#ffe9a8 0 9%,transparent 30%),
+     linear-gradient(180deg,#ffb27a 0%,#ff8e6e 38%,#c75b7a 66%,#3b3b6b 100%);}
+  .photo::after{content:"";position:absolute;left:0;right:0;bottom:0;height:34%;
+     background:linear-gradient(180deg,rgba(40,30,70,.05),rgba(20,16,50,.55))}
+
+  /* flip card */
+  .flipwrap{perspective:600px}
+  .flip{width:100%;height:100%;position:relative;transform-style:preserve-3d;animation:flip 6s infinite}
+  .flip > div{position:absolute;inset:0;backface-visibility:hidden;border-radius:11px;overflow:hidden}
+  .flip .back{transform:rotateY(180deg);background:var(--parch);
+     display:flex;flex-direction:column;justify-content:space-between;padding:8px 9px}
+  @keyframes flip{0%,38%{transform:rotateY(0)}50%,88%{transform:rotateY(180deg)}100%{transform:rotateY(360deg)}}
+  .flip .back .stamp{align-self:flex-end;width:26px;height:30px;border:1.5px dashed #b9a98a;border-radius:3px;
+     display:flex;align-items:center;justify-content:center;font-size:13px}
+  .flip .back .note{font-family:"Snell Roundhand","Apple Chancery",cursive;font-size:12px;color:#4a3f2e;line-height:1.25}
+  .flip .back .meta{font-size:7.5px;letter-spacing:.12em;color:#9a8a6a;text-transform:uppercase}
+  .badge{position:absolute;bottom:4px;right:5px;background:rgba(0,0,0,.55);color:#fff;font-size:8px;
+     padding:1px 5px;border-radius:6px;letter-spacing:.04em}
+
+  /* route map tile */
+  .map{background:var(--parch)}
+  .map svg{display:block;width:100%;height:100%}
+  .citylabel{font:7px -apple-system,sans-serif;fill:#6b5d44;letter-spacing:.06em;text-transform:uppercase}
+  .miles{font:bold 8px -apple-system,sans-serif;fill:#8a7a5a;letter-spacing:.05em}
+
+  .delta{margin-top:14px;font-size:12.5px;color:#bdbdc6;background:var(--card);border:1px solid var(--line);
+     border-radius:11px;padding:11px 13px}
+  .delta b{color:#fff}
+  .delta .k{color:var(--accent);font-weight:700}
+  .foot{color:var(--muted);font-size:12px;text-align:center;margin-top:40px;line-height:1.6}
+  @media(max-width:520px){.tile.big{width:150px;height:104px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>The send celebration — two choreographies</h1>
+  <p class="sub">What lands in the thread the moment someone texts a photo. Same copy, same assets, different sequencing. The card flip and route map below are live, not screenshots.</p>
+
+  <div class="rec">
+    <span class="tag">My pick</span>
+    <b>Option B — flip as hero.</b> Right now the card shows up three times: a static front tile, a static back tile, then the animated flip. That's a lot of card before the card even matters. In B, your photo lands instantly, then the <b>animated flip is the one true reveal</b>, arriving with the map a few seconds later like the finished card just developed. Cleaner, more dramatic, and the photo still gives an instant payoff so nothing feels slow. The one cost: if the flip render ever fails you'd see only your photo until the tracking link, so I'd wire a static front+back fallback into that second bubble. Robust and clean.
+  </div>
+
+  <div class="cols">
+
+    <!-- OPTION A -->
+    <div class="col alt">
+      <h2>Option A — Current <span class="pill">live now</span></h2>
+      <p class="lede">Photo + card front + card back land together, then the flip + map repeat the card.</p>
+      <div class="phone"><div class="screen">
+        <div class="nav"><div class="av">📮</div><div class="who">Mailroom <span>· iMessage</span></div></div>
+        <div class="thread">
+          <div class="b">📮 Stamping...</div>
+          <div class="typing"><i></i><i></i><i></i></div>
+          <div class="b eff" data-eff="✨ confetti"><span class="subj">📮 Postmarked</span>POSTMARKED · JUN 2, 2026
+CHICAGO STATION
+
+Off to Sarah.</div>
+          <div class="when">instant</div>
+          <div class="b">· To Brooklyn, NY ·</div>
+          <div class="tiles">
+            <div class="tile photo"></div>
+            <div class="tile"><div class="flipwrap" style="height:100%"><div class="flip">
+              <div class="photo"></div>
+              <div class="back"><div class="meta">Brooklyn, NY</div><div class="note">Missing you,<br>Chicago ♥</div><div class="stamp">📮</div></div>
+            </div></div></div>
+            <div class="tile" style="background:var(--parch)"><div class="back" style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:8px 9px;border-radius:11px">
+              <div class="meta" style="font-size:7.5px;letter-spacing:.12em;color:#9a8a6a;text-transform:uppercase">Brooklyn, NY</div>
+              <div class="note" style="font-family:'Snell Roundhand',cursive;font-size:11px;color:#4a3f2e">Missing you ♥</div>
+              <div class="stamp" style="align-self:flex-end;width:24px;height:28px;border:1.5px dashed #b9a98a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px">📮</div>
+            </div></div>
+          </div>
+          <div class="tcap">photo · card front · card back</div>
+          <div class="when">~6s later</div>
+          <div class="b">The trip ahead: 1,234 miles by post.</div>
+          <div class="tiles">
+            <div class="tile big"><div class="flipwrap" style="height:100%"><div class="flip">
+              <div class="photo"></div>
+              <div class="back"><div class="meta">Brooklyn, NY</div><div class="note">Missing you,<br>Chicago ♥</div><div class="stamp">📮</div></div>
+            </div><div class="badge">GIF</div></div></div>
+            <div class="tile big map">
+              <svg viewBox="0 0 174 120" preserveAspectRatio="none">
+                <path d="M28,84 C60,40 110,40 146,40" fill="none" stroke="#b8483a" stroke-width="2" stroke-dasharray="5 4" opacity=".85"/>
+                <circle cx="28" cy="84" r="9" fill="#b8483a" opacity=".18"/><circle cx="28" cy="84" r="5" fill="#fff"/><circle cx="28" cy="84" r="3.2" fill="#b8483a"/>
+                <circle cx="146" cy="40" r="9" fill="#3c6e8f" opacity=".18"/><circle cx="146" cy="40" r="5" fill="#fff"/><circle cx="146" cy="40" r="3.2" fill="#3c6e8f"/>
+                <text x="22" y="103" class="citylabel">Chicago</text>
+                <text x="118" y="30" class="citylabel">Brooklyn</text>
+                <text x="64" y="74" class="miles">1,234 mi</text>
+              </svg>
+            </div>
+          </div>
+          <div class="tcap">flip (animated) · route map</div>
+          <div class="b">Lands in Sarah's mailbox Jun 7.
+app.themailroom.club/c/7k4q2m
+
+That's your first card, on us. Text another photo anytime to send the next.</div>
+        </div>
+      </div></div>
+      <div class="delta">
+        <b>The card appears <span class="k">3×</span>:</b> front still, back still, then the animated flip cycles those same two faces. The second bubble's job (the journey) competes with re-showing art you already saw.
+      </div>
+    </div>
+
+    <!-- OPTION B -->
+    <div class="col win">
+      <h2>Option B — Flip as hero <span class="pill">recommended</span></h2>
+      <p class="lede">Your photo lands instantly. The animated flip + map arrive as the single, finished reveal.</p>
+      <div class="phone"><div class="screen">
+        <div class="nav"><div class="av">📮</div><div class="who">Mailroom <span>· iMessage</span></div></div>
+        <div class="thread">
+          <div class="b">📮 Stamping...</div>
+          <div class="typing"><i></i><i></i><i></i></div>
+          <div class="b eff" data-eff="✨ confetti"><span class="subj">📮 Postmarked</span>POSTMARKED · JUN 2, 2026
+CHICAGO STATION
+
+Off to Sarah.</div>
+          <div class="when">instant</div>
+          <div class="b">· To Brooklyn, NY ·</div>
+          <div class="tiles">
+            <div class="tile big photo"></div>
+          </div>
+          <div class="tcap">your shot, embedded</div>
+          <div class="when">~6s later · the card "develops"</div>
+          <div class="b">The trip ahead: 1,234 miles by post.</div>
+          <div class="tiles">
+            <div class="tile big"><div class="flipwrap" style="height:100%"><div class="flip">
+              <div class="photo"></div>
+              <div class="back"><div class="meta">Brooklyn, NY</div><div class="note">Missing you,<br>Chicago ♥</div><div class="stamp">📮</div></div>
+            </div><div class="badge">GIF</div></div></div>
+            <div class="tile big map">
+              <svg viewBox="0 0 174 120" preserveAspectRatio="none">
+                <path d="M28,84 C60,40 110,40 146,40" fill="none" stroke="#b8483a" stroke-width="2" stroke-dasharray="5 4" opacity=".85"/>
+                <circle cx="28" cy="84" r="9" fill="#b8483a" opacity=".18"/><circle cx="28" cy="84" r="5" fill="#fff"/><circle cx="28" cy="84" r="3.2" fill="#b8483a"/>
+                <circle cx="146" cy="40" r="9" fill="#3c6e8f" opacity=".18"/><circle cx="146" cy="40" r="5" fill="#fff"/><circle cx="146" cy="40" r="3.2" fill="#3c6e8f"/>
+                <text x="22" y="103" class="citylabel">Chicago</text>
+                <text x="118" y="30" class="citylabel">Brooklyn</text>
+                <text x="64" y="74" class="miles">1,234 mi</text>
+              </svg>
+            </div>
+          </div>
+          <div class="tcap">the flip IS the reveal · route map</div>
+          <div class="b">Lands in Sarah's mailbox Jun 7.
+app.themailroom.club/c/7k4q2m
+
+That's your first card, on us. Text another photo anytime to send the next.</div>
+        </div>
+      </div></div>
+      <div class="delta">
+        <b>The card appears <span class="k">1×</span>,</b> animated, as the dramatic reveal. Photo gives the instant payoff; the flip lands like the finished card developing into the thread. Fallback: if the flip render fails, this bubble shows static front+back + map instead, so it never degrades to "just my photo."
+      </div>
+    </div>
+
+  </div>
+
+  <p class="foot">
+    Live in the bot: the postmark stamp, the effects, the route map, the first-card line, "the trip ahead" caption.<br>
+    The only open choice is the one above: how many times the card shows before the flip.
+  </p>
+</div>
+</body>
+</html>
