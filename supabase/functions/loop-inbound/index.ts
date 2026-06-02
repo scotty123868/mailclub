@@ -2900,7 +2900,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
 
  await loopSend({
   contact: phone,
-  text: `Lands in ${senderFirstName}'s mailbox ${eta}.\n${confirmUrl}`,
+  text: `Lands in ${senderFirstName}'s mailbox ${eta}.\nTap to flip your card and watch it travel:\n${confirmUrl}`,
  });
 
  // PEN-PAL REVEAL. The loop just closed: this sender wrote back to the
@@ -3155,7 +3155,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  }
  await loopSend({
  contact: phone,
- text: `Lands in ${firstName}'s mailbox ${eta}.\n${confirmUrl}${tail}`,
+ text: `Lands in ${firstName}'s mailbox ${eta}.\nTap to flip your card and watch it travel:\n${confirmUrl}${tail}`,
  });
 }
 
