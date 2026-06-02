@@ -1408,7 +1408,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  await loopSend({
  contact: from,
  subject: "🛒 Top up",
- text: `${checkout.pack_label}\n${checkout.url}\n\nExpires in 1h. Other sizes: BUY 5 or BUY 25.`,
+ text: `${checkout.pack_label}\n${checkout.url}\n\nExpires in 1h. Other sizes: say "buy 5" or "buy 25".`,
  });
  return;
  }
@@ -1425,7 +1425,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  if (/^buy\b/i.test(body.trim()) && !CONTENT_ENTRY_STEPS.has(state.step)) {
  await loopSend({
  contact: from,
- text: "BUY 5 ($5/4), BUY 10 ($10/10), or BUY 25 ($25/30). Just BUY = 10-pack.",
+ text: "Top up: 5 cards for $5, 10 for $10, 25 for $25. Just say \"buy 10\" (or buy 5, buy 25).",
  });
  return;
  }
@@ -1474,7 +1474,7 @@ async function handleIdle(from: string): Promise<void> {
  if (credits <= 0) {
  await loopSend({
  contact: from,
- text: "Out of cards. BUY 5, 10, or 25 to top up.",
+ text: "Out of cards. Text \"buy\" to top up.",
  });
  return;
  }
@@ -2335,7 +2335,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  if (matchErr) {
   console.error("[loop-inbound] match_pen_pal threw", matchErr);
   await releaseSendClaim(phone, draftToken);
-  await loopSend({ contact: phone, text: "Couldn't find a match right now. Try SEND again in a sec." });
+  await loopSend({ contact: phone, text: "No one in the pool right now. I'll hold your card and match you the moment someone joins." });
   return;
  }
  const matchedRecipient = Array.isArray(match) && match.length > 0 ? match[0] : null;
@@ -2423,7 +2423,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   await loopSend({
    contact: phone,
    text: oom
-    ? "Out of cards. BUY 5, 10, or 25 to top up, then SEND."
+    ? "Out of cards. Text \"buy\" to top up, then tell me to send it."
     : "Couldn't queue your card. Try sending again, or text a new photo to start over.",
   });
   return;
@@ -2608,8 +2608,8 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   await loopSend({
    contact: phone,
    text: oom
-    ? "Out of cards. BUY 5, 10, or 25 to top up, then SEND."
-    : "The reply got stuck in the press. Try SEND again.",
+    ? "Out of cards. Text \"buy\" to top up, then tell me to send it."
+    : "The reply got stuck in the press. Tell me to send it again.",
   });
   return;
  }
@@ -2841,7 +2841,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  await loopSend({
  contact: phone,
  text: oom
- ? "Out of cards. BUY 5, 10, or 25 to top up, then SEND."
+ ? "Out of cards. Text \"buy\" to top up, then tell me to send it."
  : "Your card got stuck in the press. Try sending again, or text a new photo to start over.",
  });
  return;
@@ -2965,7 +2965,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  // unlock the MEMORIES word.
  let tail = "";
  if (remaining <= 0) {
-   tail = `\n\nLast one. Reply BUY 5, BUY 10, or BUY 25 for more.`;
+   tail = `\n\nLast one. Text "buy" for more.`;
  } else if (remaining <= 2) {
    tail = `\n\n${remaining} left. Reply BUY for more.`;
  } else {
@@ -3056,7 +3056,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  await loopSend({
  contact: phone,
  text: oom
- ? "Out of cards. BUY 5, 10, or 25 to top up, then schedule again."
+ ? "Out of cards. Text \"buy\" to top up, then pick your date again."
  : "Couldn't schedule your card. Try again, or text a new photo.",
  });
  return;
