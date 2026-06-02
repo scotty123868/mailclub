@@ -1432,7 +1432,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  // 5. Step-based routing.
  switch (state.step) {
  case "idle":
- return await handleIdle(from);
+ return await handleIdle(from, body);
  case "awaiting_send_type":
  return await handleSendType(from, body, state);
  case "awaiting_recipient_name":
@@ -1450,18 +1450,55 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  case "awaiting_send_confirm":
  return await handleSendConfirm(from, body, state);
  default:
+ // Unknown/corrupt step — reset, then let the assistant interpret
+ // whatever they said instead of a canned line.
  await resetState(from);
- await loopSend({ contact: from, text: "Let's start fresh. Text a photo to begin a new card." });
+ if (body && body.trim()) return await respondFreeform(from, body, "Their session reset. Help them, then point them to text a photo.");
+ await loopSend({ contact: from, text: "Text a photo to start a postcard — first one's free." });
  }
 }
 
-async function handleIdle(from: string): Promise<void> {
+// AI INTENT ROUTER (miss path only). When input doesn't match a command
+// or a step's expected answer, one gpt-4o-mini call interprets it and
+// replies in the bot's voice — so off-script messages ("how much?", "send
+// one to my mom", "what is this") get a real answer instead of a canned
+// re-prompt. The happy path never hits this (it's regex/heuristic), so
+// it's a fraction of a cent and only fires on the messages that need it.
+const MAILROOM_ASSISTANT_PROMPT =
+ "You are the text assistant for Mailroom, a service that mails REAL paper postcards. " +
+ "How it works: the user texts a PHOTO, writes a short note, and we mail a real postcard. " +
+ "They can send to a friend (give an address, or we make a link the friend fills in) or to " +
+ "a random pen pal who writes back. First card is free, then about $1 each. To start or send " +
+ "anything, the user texts a photo. " +
+ "Reply to the user's message in ONE or TWO short, warm, plain sentences. No emoji, no hype, " +
+ "no exclamation pile-ups. If they seem ready to send, end by telling them to text a photo. " +
+ "Never invent features, prices, or promises beyond the above. " +
+ 'Return JSON: { "reply": "..." }.';
+
+async function respondFreeform(phone: string, body: string, context: string): Promise<void> {
+ fireTyping(phone, 5);
+ const r = await openaiJson([
+  { role: "system", content: MAILROOM_ASSISTANT_PROMPT + (context ? " " + context : "") },
+  { role: "user", content: body },
+ ]);
+ const reply = (typeof r?.reply === "string" && r.reply.trim())
+  ? r.reply.trim()
+  : "Text a photo to start a postcard — first one's free.";
+ await loopSend({ contact: phone, text: reply });
+}
+
+function looksLikeQuestion(t: string): boolean {
+ return /\?|\b(how|what|when|where|why|who|can i|could i|do you|does it|is it|cost|price|free|much|work|help)\b/i.test(t);
+}
+
+async function handleIdle(from: string, body = ""): Promise<void> {
+ const text = (body ?? "").trim();
  const { data: prof } = await admin
  .from("profiles").select("credits").eq("phone", from).maybeSingle();
  if (!prof) {
- // Cold-open for someone who's texted us but has no profile yet.
- // Anchor the brand (magical mail club) before the utility (send a
- // photo). The "First one's on us" is the value prop nudge.
+ // New contact. A real question gets a real answer; a bare hello gets
+ // the designed welcome.
+ if (text && looksLikeQuestion(text)) return await respondFreeform(from, body, "This person hasn't sent a card yet.");
  await loopSend({
  contact: from,
  subject: "📮 Welcome to Mailroom",
@@ -1470,11 +1507,16 @@ async function handleIdle(from: string): Promise<void> {
  return;
  }
  const credits = prof.credits ?? 0;
+ // Existing user, no active draft: route ANY non-empty text through the
+ // assistant (commands like buy/memories were already handled upstream).
+ if (text) {
+ const ctx = credits > 0
+  ? `They have ${credits} card${credits === 1 ? "" : "s"} ready. To start, they text a photo.`
+  : "They are out of cards; to send more they text the word buy to top up.";
+ return await respondFreeform(from, body, ctx);
+ }
  if (credits <= 0) {
- await loopSend({
- contact: from,
- text: "Out of cards. Text \"buy\" to top up.",
- });
+ await loopSend({ contact: from, text: "Out of cards. Text \"buy\" to top up." });
  return;
  }
  await loopSend({
@@ -1701,7 +1743,11 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  return;
  }
 
- // Couldn't parse. re-prompt with the same warmth.
+ // Off-script. If it reads like a question, let the assistant answer it
+ // (then it points them back). Otherwise, a plain re-prompt.
+ if (looksLikeQuestion(raw)) {
+ return await respondFreeform(phone, raw, "They're choosing who the card is for. After answering, tell them to reply with a friend's name or say penpal.");
+ }
  await loopSend({
  contact: phone,
  text: "Tell me a friend's name, or say \"penpal\" to be matched with someone new.",
