@@ -526,21 +526,9 @@ serve(async (req) => {
     errors: string[];
   } = { errors: [] };
 
-  // Flip GIF (needs both thumbnails).
-  if (postcard.lob_front_thumbnail_url && postcard.lob_back_thumbnail_url) {
-    try {
-      const flipBytes = await generateFlipGif(
-        postcard.lob_front_thumbnail_url,
-        postcard.lob_back_thumbnail_url,
-      );
-      results.flip_gif_url = await uploadAsset(postcardId, "flip.gif", flipBytes, "image/gif");
-    } catch (e: any) {
-      console.error("[render-gifs] flip failed", e?.message ?? e);
-      results.errors.push(`flip: ${e?.message ?? "unknown"}`);
-    }
-  } else {
-    results.errors.push("flip: missing_thumbnails");
-  }
+  // No flip GIF. A looping back-and-forth GIF is bad UI. The real,
+  // user-driven flip lives on the /c/ card page (CSS 3D, tap to flip,
+  // 0.85s eased). In-thread we show calm static stills (front + back).
 
   // Native Apple Maps route snapshot (needs from + to cities). The card
   // front is composited onto the arc, so pass it through if we have it.
@@ -580,25 +568,20 @@ serve(async (req) => {
   // gets the rich reveal. Threaded under the Mailed bubble when we have it.
   const LOOP_API_KEY = Deno.env.get("LOOPMESSAGE_API_KEY") ?? "";
   const LOOP_SENDER_ID = Deno.env.get("LOOPMESSAGE_SENDER_ID") ?? "";
-  // Flip-as-hero: the instant iMessage bubble was the photo only, so this
-  // follow-up carries the card reveal. Prefer the animated flip; if it
-  // failed to render, fall back to Lob's static front/back so the card
-  // still shows. Then the route map.
+  // In-thread reveal = calm static stills, no GIF (the looping flip was bad
+  // UI; the interactive tap-to-flip lives on the /c/ card page). Show the
+  // finished card's two faces, then the route map.
   const gallery: string[] = [];
-  if (results.flip_gif_url) {
-    gallery.push(results.flip_gif_url);
-  } else {
-    if (postcard.lob_front_thumbnail_url) gallery.push(postcard.lob_front_thumbnail_url);
-    if (postcard.lob_back_thumbnail_url) gallery.push(postcard.lob_back_thumbnail_url);
-  }
+  if (postcard.lob_front_thumbnail_url) gallery.push(postcard.lob_front_thumbnail_url);
+  if (postcard.lob_back_thumbnail_url) gallery.push(postcard.lob_back_thumbnail_url);
   if (results.route_map_url) gallery.push(results.route_map_url);
   if (notify && LOOP_API_KEY && postcard.from_phone && gallery.length) {
     try {
       const sendBody: Record<string, unknown> = {
         contact: postcard.from_phone,
         text: results.route_miles
-          ? `The trip ahead: ${results.route_miles.toLocaleString("en-US")} miles by post.`
-          : `Here's the route your card is taking.`,
+          ? `Your card, and the ${results.route_miles.toLocaleString("en-US")} miles it's traveling.`
+          : `Your card, front and back.`,
         attachments: gallery,
       };
       if (LOOP_SENDER_ID) sendBody.sender = LOOP_SENDER_ID;
