@@ -32,6 +32,7 @@ type Body = {
  front_url?: string;
  back_url?: string;
  render_mode?: "html"; // v0.7.0.11: server-side render path for claim flow
+ notify_gallery?: boolean; // when true, render-gifs texts the finished flip+map gallery as a follow-up (immediate sends only; the scheduled cron leaves it false so lob-webhook narrates instead)
 };
 
 // v0.7.0.12: HTML templates for server-side render (send-link claim flow
@@ -975,52 +976,36 @@ serve(async (req: Request) => {
  p_lob_id: lobJson.id,
  });
 
- // Render the celebration gallery assets: the card flip GIF + the
- // native Apple Maps route snapshot. Synchronous because the sender's
- // bot is waiting on this response to fire the celebration — we want
- // the assets ready BEFORE the user sees the Mailed bubble. Adds
- // ~2-5s of latency on top of the Lob call. Failures here are
- // non-fatal: postcards.flip_gif_url and route_map_url stay null, and
- // loop-inbound falls back to [photo, static front+back].
- let flipGifUrl: string | null = null;
- let routeMapUrl: string | null = null;
- let routeMiles: number | null = null;
+ // Render the celebration gallery (card flip GIF + native Apple Maps
+ // route) in the BACKGROUND. It takes ~5s, and we do NOT make the bot's
+ // celebration wait on it. render-gifs writes flip_gif_url/route_map_url
+ // to the postcards row AND, when notify is set, texts the finished
+ // gallery to the sender as a follow-up a few seconds later. waitUntil
+ // keeps the request alive past this response so it isn't cut off.
  if (frontThumbnailUrl && backThumbnailUrl) {
-   try {
-     const gifsRes = await fetch(`${SUPABASE_URL}/functions/v1/postcard-render-gifs`, {
-       method: "POST",
-       headers: {
-         "Content-Type": "application/json",
-         "x-mailroom-internal": Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "",
-       },
-       body: JSON.stringify({ postcard_id: postcard.id }),
-     });
-     const gifsJson = await gifsRes.json().catch(() => ({}));
-     // Partial success is fine — flip may succeed while the map fails
-     // (or vice versa). Capture whatever came back.
-     flipGifUrl = gifsJson?.flip_gif_url ?? null;
-     routeMapUrl = gifsJson?.route_map_url ?? null;
-     routeMiles = gifsJson?.route_miles ?? null;
-     if (!gifsJson?.ok) {
-       console.warn("[lob-send-postcard] gallery render partial/failed", gifsJson?.errors ?? gifsJson);
-     }
-   } catch (e: any) {
-     console.warn("[lob-send-postcard] gallery render threw", e?.message ?? e);
+   const renderReq = fetch(`${SUPABASE_URL}/functions/v1/postcard-render-gifs`, {
+     method: "POST",
+     headers: {
+       "Content-Type": "application/json",
+       "x-mailroom-internal": Deno.env.get("MAILROOM_INTERNAL_SECRET") ?? "",
+     },
+     body: JSON.stringify({ postcard_id: postcard.id, notify: body.notify_gallery === true }),
+   }).catch((e: any) => console.warn("[lob-send-postcard] render trigger failed", e?.message ?? e));
+   // @ts-ignore — Deno edge runtime
+   if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+     // @ts-ignore
+     EdgeRuntime.waitUntil(renderReq);
    }
  }
 
- // Expose the rendered surfaces to loop-inbound for the celebration
- // gallery: the card flip (animated) + the native Apple Maps route
- // snapshot, plus the great-circle distance for the caption. Same
- // values persisted to the postcards row by postcard-render-gifs.
+ // Return immediately after Lob (no render wait). loop-inbound fires the
+ // celebration now with the photo + Lob's static thumbnails; the
+ // animated flip + route map arrive as render-gifs' follow-up.
  return json({
  ok: true,
  lob_id: lobJson.id,
  expected_delivery_date: lobJson.expected_delivery_date,
  front_thumbnail_url: frontThumbnailUrl,
  back_thumbnail_url: backThumbnailUrl,
- flip_gif_url: flipGifUrl,
- route_map_url: routeMapUrl,
- route_miles: routeMiles,
  });
 });

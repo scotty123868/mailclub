@@ -1045,7 +1045,7 @@ async function submitToLob(postcardId: string): Promise<{ ok: boolean; expectedD
  apikey: anonKey,
  "x-mailroom-internal": internalSecret,
  },
- body: JSON.stringify({ postcard_id: postcardId, render_mode: "html" }),
+ body: JSON.stringify({ postcard_id: postcardId, render_mode: "html", notify_gallery: true }),
  });
  const data = await res.json().catch(() => ({}));
  if (!data?.ok || !data?.lob_id) {
@@ -1498,138 +1498,104 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  // text (QR scan), they already told us who to write back to — the
  // photo they're sending now is for THAT card, so we must NOT clobber
  // the stashed pending_reply on the awaiting_send_type advance.
- const [firstTime, priorStateRes] = await Promise.all([
+ const [firstTime, priorStateRes, pendingReply] = await Promise.all([
   isFirstTimeContact(phone),
   admin
    .from("sms_conversation_state")
    .select("conversation_data")
    .eq("phone", phone)
    .maybeSingle(),
+  findUnreciprocatedPairing(phone),
  ]);
  const carryReply = (priorStateRes.data?.conversation_data?.pending_reply ?? null) as any;
 
- // Bubble A — sent NOW, before the upload. One clean beat for everyone
- // (reply-code senders get a name-aware line). No fluff; the question
- // is what matters. If the upload then fails, the "lost it on the
- // conveyor" line below reads as an honest follow-up.
- const ackText = carryReply
-  ? `📮 Got it.`
-  : "📮 Got it.";
- await loopSend({ contact: phone, text: ackText });
+ // Ack immediately, before the slow photo upload.
+ await loopSend({ contact: phone, text: "📮 Got it." });
 
+ // Create the draft NOW with a pending photo, so we can advance state and
+ // ask the next question RIGHT AWAY. The photo download (10-15s for a big
+ // HEIC) runs in the background at the END of this function and fills in
+ // photo_path — long before the user has typed a name, address, and note.
+ // No dead wait between "Got it" and the question.
  const token = mintToken();
- const upload = await downloadAndUploadPhoto(mediaUrl, token);
- if (!upload.ok) {
- // Verbose error during debug. strip back once photo path verified.
- console.error("[loop-inbound] photo intake failed", { mediaUrl: mediaUrl.slice(0, 200), error: upload.error });
- await loopSend({
- contact: phone,
- text: `Couldn't download that photo. Send it again?`,
- });
- return;
- }
  await admin.from("sms_postcard_drafts").insert({
- token, from_phone: phone, caption: "",
- photo_path: upload.path, twilio_media_url: mediaUrl,
- verified_phone: phone,
+  token, from_phone: phone, caption: "",
+  photo_path: "", twilio_media_url: mediaUrl, verified_phone: phone,
  });
 
  // CLEAN SLATE. advance_sms_conversation SHALLOW-MERGES conversation_data,
- // so advancing with {} below would NOT clear stale keys from a prior
- // conversation (old recipient_name, message, pending_reply,
- // pending_new_photo_url, pending_ideas). Reset first so this new card
- // starts truly fresh. carryReply was already captured above, before any
- // reset, and is re-applied explicitly in the REPLY-code branch.
+ // so reset first to clear stale keys from a prior card. carryReply was
+ // captured above (pre-reset) and is re-applied explicitly below.
  await resetState(phone);
 
- // REPLY CODE FAST PATH: stranger scanned a QR on a Mailroom card, texted
- // REPLY <code>, then sent their photo. Skip the "who's this for?"
- // question entirely — they already told us via the code. Jump straight
- // to message capture with send_type=reply_to_pen_pal pre-set so
- // handleSendConfirm routes to doMailReplyToPenPal at the end.
+ // Send the right next question IMMEDIATELY (all three branches).
  if (carryReply) {
+  // REPLY-code path: they already told us who, via the QR code.
   await advanceState(phone, "awaiting_message", token, {
-   pending_reply: carryReply,
-   send_type: "reply_to_pen_pal",
+   pending_reply: carryReply, send_type: "reply_to_pen_pal",
   });
-  // Ack (Bubble A) already sent above, before the upload. Go straight
-  // to the note prompt.
   await loopSend({
    contact: phone,
    subject: "✍️ Write your note",
    text: `What should the card say?\n\nUp to 240 characters, or say "skip" for just the photo.`,
    contact_file: firstTime,
   });
-  return;
- }
-
- await advanceState(phone, "awaiting_recipient_name", token, {});
-
- // Warm, clear, conversational opener. Full questions, not cryptic
- // arrows. Two-bubble pattern: Bubble A is the "we saw it" beat,
- // Bubble B is the actual question.
- //
- // ACTIVE PENPAL DEEP LINK: if this phone recently received an
- // unreciprocated pen pal card, surface that as a third option in
- // Bubble B. The user texts back a photo and the bot says "looks
- // like Sarah in Brooklyn sent you a card — want to write her back?"
- // This closes the most important loop in the entire product.
- await advanceState(phone, "awaiting_send_type", token, {});
-
- const pendingReply = await findUnreciprocatedPairing(phone);
-
- // Bubble A (the "got it" ack) was already sent up top, before the
- // upload. Now send Bubble B — the question — which lands after the
- // upload completes (the typing dots covered the gap).
-
- // If there's a pen pal to reply to, stash the pairing context so
- // handleSendType / doMail can branch on it.
- if (pendingReply) {
- await advanceState(phone, "awaiting_send_type", token, {
- pending_reply: {
- pairing_id: pendingReply.pairingId,
- sender_id: pendingReply.senderId,
- sender_first_name: pendingReply.senderFirstName,
- sender_city: pendingReply.senderCity,
- sender_state: pendingReply.senderState,
- sender_line1: pendingReply.senderLine1,
- sender_line2: pendingReply.senderLine2,
- sender_zip: pendingReply.senderZip,
- paired_days_ago: pendingReply.pairedDaysAgo,
- },
- });
- const daysWord = pendingReply.pairedDaysAgo <= 1 ? "yesterday"
- : pendingReply.pairedDaysAgo < 7 ? `${pendingReply.pairedDaysAgo} days ago`
- : `${Math.floor(pendingReply.pairedDaysAgo / 7)} week${Math.floor(pendingReply.pairedDaysAgo / 7) > 1 ? "s" : ""} ago`;
- const locationLabel = pendingReply.senderCity
- ? `${pendingReply.senderFirstName} in ${pendingReply.senderCity}${pendingReply.senderState ? ", " + pendingReply.senderState : ""}`
- : pendingReply.senderFirstName;
- await loopSend({
- contact: phone,
- subject: "📬 Pen pal reply waiting",
- text:
- `${locationLabel} sent you a card ${daysWord}.\n\n` +
- `Want to write them back? Just say yes, or give me a friend's name, or say "penpal" for a new match.`,
- contact_file: firstTime,
- });
- return;
- }
-
- // Bubble B: get straight to the question. Someone texting a photo
- // already knows what Mailroom is — no welcome spiel. First-timers get
- // a one-clause "on us" nudge + the vCard; returning senders just get
- // the question.
- if (firstTime) {
- await loopSend({
- contact: phone,
- text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with someone new. First one's free.",
- contact_file: true,
- });
+ } else if (pendingReply) {
+  // A pen pal is waiting on a reply — offer to close the loop.
+  await advanceState(phone, "awaiting_send_type", token, {
+   pending_reply: {
+    pairing_id: pendingReply.pairingId,
+    sender_id: pendingReply.senderId,
+    sender_first_name: pendingReply.senderFirstName,
+    sender_city: pendingReply.senderCity,
+    sender_state: pendingReply.senderState,
+    sender_line1: pendingReply.senderLine1,
+    sender_line2: pendingReply.senderLine2,
+    sender_zip: pendingReply.senderZip,
+    paired_days_ago: pendingReply.pairedDaysAgo,
+   },
+  });
+  const daysWord = pendingReply.pairedDaysAgo <= 1 ? "yesterday"
+   : pendingReply.pairedDaysAgo < 7 ? `${pendingReply.pairedDaysAgo} days ago`
+   : `${Math.floor(pendingReply.pairedDaysAgo / 7)} week${Math.floor(pendingReply.pairedDaysAgo / 7) > 1 ? "s" : ""} ago`;
+  const locationLabel = pendingReply.senderCity
+   ? `${pendingReply.senderFirstName} in ${pendingReply.senderCity}${pendingReply.senderState ? ", " + pendingReply.senderState : ""}`
+   : pendingReply.senderFirstName;
+  await loopSend({
+   contact: phone,
+   subject: "📬 Pen pal reply waiting",
+   text:
+    `${locationLabel} sent you a card ${daysWord}.\n\n` +
+    `Want to write them back? Just say yes, or give me a friend's name, or say "penpal" for a new match.`,
+   contact_file: firstTime,
+  });
  } else {
- await loopSend({
- contact: phone,
- text: "Who's this one for?\n\nTell me a name, or say \"penpal\" for a new match.",
- });
+  // Normal: ask who it's for.
+  await advanceState(phone, "awaiting_send_type", token, {});
+  if (firstTime) {
+   await loopSend({
+    contact: phone,
+    text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with someone new. First one's free.",
+    contact_file: true,
+   });
+  } else {
+   await loopSend({
+    contact: phone,
+    text: "Who's this one for?\n\nTell me a name, or say \"penpal\" for a new match.",
+   });
+  }
+ }
+
+ // SLOW PART — now AFTER the question is already on screen. Download +
+ // store the photo, then fill in the draft. The user is reading the
+ // question / typing a name while this runs, so it's invisible. On
+ // failure, tell them to resend.
+ const upload = await downloadAndUploadPhoto(mediaUrl, token);
+ if (upload.ok) {
+  await admin.from("sms_postcard_drafts").update({ photo_path: upload.path }).eq("token", token);
+ } else {
+  console.error("[loop-inbound] photo intake failed", { mediaUrl: mediaUrl.slice(0, 200), error: upload.error });
+  await loopSend({ contact: phone, text: "Couldn't download that photo. Send it again?" });
  }
 }
 
@@ -2620,6 +2586,10 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   return;
  }
 
+ // Set from_phone NOW so the background render-gifs follow-up can text
+ // the gallery to this sender (it reads from_phone off the row).
+ await admin.from("postcards").update({ from_phone: phone }).eq("id", postcardId);
+
  // Lob handoff
  const lob = await submitToLob(postcardId as string);
  if (!lob.ok) {
@@ -2852,6 +2822,10 @@ async function doMail(phone: string, state: any): Promise<void> {
  });
  return;
  }
+
+ // Set from_phone NOW so the background render-gifs follow-up can text
+ // the gallery to this sender (it reads from_phone off the row).
+ await admin.from("postcards").update({ from_phone: phone }).eq("id", postcardId);
 
  const lob = await submitToLob(postcardId as string);
  if (!lob.ok) {

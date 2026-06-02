@@ -500,9 +500,10 @@ serve(async (req) => {
     });
   }
 
+  const notify = body?.notify === true;
   const { data: postcard, error } = await admin
     .from("postcards")
-    .select("id, lob_front_thumbnail_url, lob_back_thumbnail_url, from_city, to_city")
+    .select("id, lob_front_thumbnail_url, lob_back_thumbnail_url, from_city, to_city, from_phone, mailed_imessage_id")
     .eq("id", postcardId)
     .maybeSingle();
   if (error) {
@@ -570,6 +571,38 @@ serve(async (req) => {
     if (results.route_map_url) update.route_map_url = results.route_map_url;
     if (results.route_miles != null) update.route_miles = results.route_miles;
     await admin.from("postcards").update(update).eq("id", postcardId);
+  }
+
+  // FOLLOW-UP. When the caller asked for it (immediate sends), text the
+  // finished gallery to the sender. The bot already fired a fast
+  // "Postmarked + photo" celebration; this lands a few seconds later with
+  // the animated card flip + the route map, so the send feels instant AND
+  // gets the rich reveal. Threaded under the Mailed bubble when we have it.
+  const LOOP_API_KEY = Deno.env.get("LOOPMESSAGE_API_KEY") ?? "";
+  const LOOP_SENDER_ID = Deno.env.get("LOOPMESSAGE_SENDER_ID") ?? "";
+  const gallery: string[] = [];
+  if (results.flip_gif_url) gallery.push(results.flip_gif_url);
+  if (results.route_map_url) gallery.push(results.route_map_url);
+  if (notify && LOOP_API_KEY && postcard.from_phone && gallery.length) {
+    try {
+      const sendBody: Record<string, unknown> = {
+        contact: postcard.from_phone,
+        text: results.route_miles
+          ? `Here's your card, and the ${results.route_miles}-mile trip it's taking.`
+          : `Here's your card, front to back, and the route it's taking.`,
+        attachments: gallery,
+      };
+      if (LOOP_SENDER_ID) sendBody.sender = LOOP_SENDER_ID;
+      if (postcard.mailed_imessage_id) sendBody.reply_to_id = postcard.mailed_imessage_id;
+      const r = await fetch("https://a.loopmessage.com/api/v1/message/send/", {
+        method: "POST",
+        headers: { Authorization: LOOP_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify(sendBody),
+      });
+      if (!r.ok) console.warn("[render-gifs] gallery follow-up failed", r.status);
+    } catch (e: any) {
+      console.warn("[render-gifs] gallery follow-up threw", e?.message ?? e);
+    }
   }
 
   return new Response(
