@@ -3,52 +3,40 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Mailroom — every message</title>
+<title>Mailroom — every message (v2)</title>
 <style>
   :root{
     --bot:#e9e9eb; --bot-ink:#11141c; --user:#2c7ef8; --paper:#fdfaf1;
-    --ink:#1a1612; --muted:#8a8580; --burgundy:#b8483a;
+    --ink:#1a1612; --muted:#8a8580; --burgundy:#b8483a; --green:#3a7d44;
   }
   *{box-sizing:border-box}
-  body{
-    margin:0; background:#f2efe6; color:var(--ink);
+  body{margin:0; background:#f2efe6; color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
-    -webkit-font-smoothing:antialiased; line-height:1.45;
-  }
-  header{
-    background:var(--paper); border-bottom:1px solid #e4ddcd; padding:28px 24px 22px;
-    position:sticky; top:0; z-index:5;
-  }
+    -webkit-font-smoothing:antialiased; line-height:1.45;}
+  header{background:var(--paper); border-bottom:1px solid #e4ddcd; padding:26px 24px 20px; position:sticky; top:0; z-index:5;}
   header h1{margin:0; font-size:22px; letter-spacing:-0.01em;}
   header .eyebrow{color:var(--burgundy); font-weight:700; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:6px;}
-  header p{margin:8px 0 0; color:var(--muted); font-size:13px; max-width:640px;}
-  .wrap{max-width:560px; margin:0 auto; padding:28px 16px 80px;}
-  .flow{margin:0 0 40px;}
-  .flow > h2{
-    font-size:15px; letter-spacing:0.02em; margin:0 0 4px; color:var(--ink);
-    display:flex; align-items:center; gap:8px;
-  }
-  .flow > .sub{color:var(--muted); font-size:12.5px; margin:0 0 16px;}
-  .thread{
-    background:#fff; border:1px solid #e4ddcd; border-radius:20px; padding:16px 14px;
-    box-shadow:0 1px 2px rgba(0,0,0,0.04);
-  }
+  header p{margin:8px 0 0; color:var(--muted); font-size:13px; max-width:660px;}
+  .wrap{max-width:560px; margin:0 auto; padding:24px 16px 80px;}
+  .whatsnew{background:#fff; border:1px solid #e4ddcd; border-radius:16px; padding:16px 18px; margin-bottom:30px;}
+  .whatsnew h2{font-size:14px; margin:0 0 10px; letter-spacing:0.02em;}
+  .whatsnew ul{margin:0; padding-left:18px;}
+  .whatsnew li{font-size:13px; margin:5px 0; color:#3c352b;}
+  .flow{margin:0 0 38px;}
+  .flow > h2{font-size:15px; margin:0 0 4px; display:flex; align-items:center; gap:8px;}
+  .flow > .sub{color:var(--muted); font-size:12.5px; margin:0 0 14px;}
+  .thread{background:#fff; border:1px solid #e4ddcd; border-radius:20px; padding:16px 14px; box-shadow:0 1px 2px rgba(0,0,0,0.04);}
   .msg{max-width:84%; padding:9px 13px; border-radius:18px; font-size:14.5px; margin:7px 0; clear:both; position:relative; white-space:pre-wrap;}
   .bot{background:var(--bot); color:var(--bot-ink); float:left; border-bottom-left-radius:5px;}
   .user{background:var(--user); color:#fff; float:right; border-bottom-right-radius:5px;}
   .subj{font-weight:700; display:block; margin-bottom:2px;}
-  .att{
-    float:left; clear:both; margin:7px 0; max-width:84%;
-    background:#f5f2ea; border:1px dashed #cfc6b3; border-radius:14px;
-    color:#9a917f; font-size:12.5px; padding:14px; text-align:center; font-style:italic;
-  }
+  .att{float:left; clear:both; margin:7px 0; max-width:84%; background:#f5f2ea; border:1px dashed #cfc6b3; border-radius:14px; color:#9a917f; font-size:12.5px; padding:13px; text-align:center; font-style:italic;}
   .note{clear:both; text-align:center; color:var(--muted); font-size:11.5px; letter-spacing:0.3px; margin:14px 0 6px; text-transform:uppercase;}
-  .branch{clear:both; border-left:3px solid #e4ddcd; margin:10px 0 10px 6px; padding-left:12px;}
-  .branch .lbl{color:var(--burgundy); font-weight:700; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; margin:2px 0 4px;}
   .clear{clear:both}
-  .tag{display:inline-block; background:#efe7d4; color:#8a7d5c; font-size:10px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; padding:2px 7px; border-radius:6px; vertical-align:middle;}
+  .speed{display:inline-block; background:#e7f0e8; color:var(--green); font-size:10px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; padding:2px 7px; border-radius:6px; margin-left:6px;}
+  .newtag{display:inline-block; background:#f6e3e0; color:var(--burgundy); font-size:10px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; padding:2px 7px; border-radius:6px;}
   footer{max-width:560px; margin:0 auto; padding:0 16px 60px; color:var(--muted); font-size:12.5px;}
-  footer h3{color:var(--ink); font-size:14px; margin:26px 0 8px;}
+  footer h3{color:var(--ink); font-size:14px; margin:24px 0 8px;}
   code{background:#efe7d4; padding:1px 5px; border-radius:5px; font-size:12px;}
 </style>
 </head>
@@ -56,46 +44,59 @@
 <header>
   <div class="eyebrow">Mailroom · a magical mail club</div>
   <h1>Every message the bot can text you</h1>
-  <p>Gray = the bot. Blue = what you type. No keywords, no all-caps required — type however feels natural. This is the live copy.</p>
+  <p>Gray = the bot · Blue = what you type. Type however feels natural — no keywords, no caps. This is the live copy after the latest round.</p>
 </header>
 
 <div class="wrap">
 
-  <!-- 1 -->
+  <div class="whatsnew">
+    <h2>What changed this round</h2>
+    <ul>
+      <li><b>Faster.</b> The "who's this for?" question now lands instantly — the photo uploads in the background. The "Postmarked" celebration fires in ~2-3s; the animated card + route map follow a few seconds later.</li>
+      <li><b>No address? No problem.</b> New "send a link" branch — your friend adds their own address.</li>
+      <li><b>Ask anything.</b> Off-script messages get a real answer now, not a canned re-prompt.</li>
+      <li><b>Plain talk.</b> Errors say what actually happened. No "flew the coop." No all-caps.</li>
+      <li><b>Less repetition.</b> The reply flow no longer says "writing Sarah back" three times.</li>
+    </ul>
+  </div>
+
   <div class="flow">
     <h2>1 · First hello</h2>
-    <p class="sub">You text something before sending a photo.</p>
+    <p class="sub">Text before sending a photo.</p>
     <div class="thread">
       <div class="user">hi</div>
       <div class="msg bot"><span class="subj">📮 Welcome to Mailroom</span>A magical mail club. Real paper. By text.
 
 Text us a photo to send your first postcard, on us.</div>
       <div class="clear"></div>
+      <div class="note">— but ask a real question and it answers —</div>
+      <div class="user">how much does this cost?</div>
+      <div class="msg bot">Your first card's free, then about $1 each. Text a photo whenever you're ready to send one.</div>
+      <div class="clear"></div>
     </div>
   </div>
 
-  <!-- 2 -->
   <div class="flow">
-    <h2>2 · You send a photo</h2>
-    <p class="sub">The start of every card. ❤️ tapback lands on your photo instantly, then:</p>
+    <h2>2 · You send a photo <span class="speed">instant</span></h2>
+    <p class="sub">❤️ tapback lands on your photo, then immediately:</p>
     <div class="thread">
       <div class="att">📷 your photo</div>
       <div class="msg bot">📮 Got it.</div>
       <div class="msg bot">Who's this card for?
 
-Tell me a name, or say “penpal” to be matched with someone new. First one's on us.</div>
+Tell me a name, or say "penpal" to be matched with someone new. First one's free.</div>
       <div class="clear"></div>
-      <div class="note">— it forks three ways —</div>
+      <div class="note">— the photo uploads in the background; you never wait for it —</div>
     </div>
   </div>
 
-  <!-- 3 -->
   <div class="flow">
     <h2>3 · To a friend</h2>
-    <p class="sub">You type a name.</p>
     <div class="thread">
       <div class="user">Sarah</div>
-      <div class="msg bot">Great. What's a good address for Sarah?</div>
+      <div class="msg bot">Great. What's Sarah's address?
+
+Don't have it? Say "send a link" and they can add it themselves.</div>
       <div class="clear"></div>
       <div class="user">861 Humboldt St, Denver CO</div>
       <div class="msg bot">Mailing to:
@@ -103,36 +104,57 @@ Tell me a name, or say “penpal” to be matched with someone new. First one's 
    861 N Humboldt St
    Denver, CO 80218
 
-Look right? <span class="tag">ZIP auto-filled by USPS</span></div>
+Look right? <span class="speed">ZIP auto-filled</span></div>
       <div class="clear"></div>
       <div class="user">yep</div>
-      <div class="msg bot">Want to add a note? Just type it (up to 240 chars), or say “skip” to mail only the photo.</div>
+      <div class="msg bot">Want to add a note? Just type it (up to 240 chars), or say "skip" to mail only the photo.</div>
       <div class="clear"></div>
       <div class="user">Miss you. Come visit soon.</div>
-      <div class="msg bot">Got it. “Miss you. Come visit soon.”</div>
-      <div class="note">— first-timers also give their own address here (one time) —</div>
+      <div class="msg bot">Got it. "Miss you. Come visit soon."</div>
       <div class="msg bot">CHICAGO ──→ DENVER
    To: Sarah
-   “Miss you. Come visit soon.”
+   "Miss you. Come visit soon."
 
 Ready? Tell me to send it, or name a day to mail it later.</div>
       <div class="clear"></div>
       <div class="user">send it</div>
-      <div class="note">— celebration, see §6 —</div>
+      <div class="note">— celebration, §6 —</div>
     </div>
   </div>
 
-  <!-- 4 -->
   <div class="flow">
-    <h2>4 · To a pen pal (a stranger)</h2>
-    <p class="sub">You say “penpal”. You never see who; they never see your address.</p>
+    <h2>4 · No address? Send a link <span class="newtag">new</span></h2>
+    <p class="sub">When you don't know where they live — they fill it in.</p>
+    <div class="thread">
+      <div class="user">Mike</div>
+      <div class="msg bot">Great. What's Mike's address?
+
+Don't have it? Say "send a link" and they can add it themselves.</div>
+      <div class="clear"></div>
+      <div class="user">send a link</div>
+      <div class="msg bot">No problem. Write your note and I'll make a link for Mike to add their address.
+
+Up to 240 characters, or say "skip" for just the photo.</div>
+      <div class="clear"></div>
+      <div class="user">Happy birthday, old man.</div>
+      <div class="msg bot">Got it. "Happy birthday, old man."</div>
+      <div class="msg bot"><span class="subj">🔗 Link ready</span>Send Mike this link and they'll add their address:
+app.themailroom.club/claim?t=7K4Q2M
+
+The moment they do, I'll mail your card.</div>
+      <div class="clear"></div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <h2>5 · To a pen pal</h2>
     <div class="thread">
       <div class="user">penpal</div>
       <div class="msg bot"><span class="subj">🪶 Pen pal mode</span>We'll match you with someone in the pool. You won't see their address. They won't see yours.
 
-What should your card say? (up to 240 chars, or say “skip” for just the photo)</div>
+What should your card say? (up to 240 chars, or say "skip")</div>
       <div class="clear"></div>
-      <div class="user">Hello from a stranger in Denver. Hope your week is gentle.</div>
+      <div class="user">Hello from a stranger in Denver.</div>
       <div class="msg bot">Last thing — your mailing address, so a pen pal can write back. Stays private; only your city shows on the card.
 street, city, state, ZIP</div>
       <div class="clear"></div>
@@ -143,10 +165,9 @@ street, city, state, ZIP</div>
 
 Look right? Or send a different one.</div>
       <div class="clear"></div>
-      <div class="user">looks good</div>
+      <div class="user">yep</div>
       <div class="msg bot">DENVER ──→ ✦
    To: a pen pal in the pool
-   “Hello from a stranger…”
 
 Ready? Tell me to send it.</div>
       <div class="clear"></div>
@@ -154,100 +175,92 @@ Ready? Tell me to send it.</div>
       <div class="msg bot">🪶 Joining the pool…</div>
       <div class="msg bot"><span class="subj">🪶 In Sunday's drop</span>You're the 14th card in this week's pool.</div>
       <div class="msg bot">We match + mail every Sunday at noon. Yours flies Sunday, Jun 7.</div>
-      <div class="att">📷 your photo · caption “· To somewhere ·”</div>
+      <div class="att">📷 your photo · "· To somewhere ·"</div>
       <div class="msg bot">When they write back, you'll know.
 themailroom.club/c/…</div>
       <div class="clear"></div>
-    </div>
-  </div>
-
-  <!-- 5 -->
-  <div class="flow">
-    <h2>5 · Writing back (the loop closes)</h2>
-    <p class="sub">You scan the QR on a card you received, or get the “reply waiting” nudge.</p>
-    <div class="thread">
-      <div class="user">reply 7K4Q2M</div>
-      <div class="msg bot"><span class="subj">💌 Writing back</span>Got it. We'll write Sarah in Denver back.
-
-Send me the photo you want on the card.</div>
-      <div class="att">📷 your photo</div>
-      <div class="msg bot">Writing Sarah back. What should your card say? (up to 240 chars, or say “skip” for just the photo)</div>
-      <div class="clear"></div>
-      <div class="user">Your card made my whole week. Here's one back.</div>
-      <div class="msg bot">💌 Stamping the reply…</div>
-      <div class="msg bot"><span class="subj">💌 Loop closed</span>POSTMARKED · MAY 30, 2026
-DENVER STATION
-
-Off to Sarah.</div>
-      <div class="att">📷 photo · card flip · route map</div>
-      <div class="msg bot">Lands in Sarah's mailbox Jun 3.
-themailroom.club/c/…</div>
-      <div class="clear"></div>
-      <div class="note">— meanwhile, the original sender gets pinged —</div>
-      <div class="msg bot"><span class="subj">💌 A reply is on its way</span>Someone in Denver just wrote you back. Their card is heading to your mailbox now.</div>
+      <div class="note">— empty pool? It holds your card —</div>
+      <div class="msg bot">No pen pals available yet. I'll hold your card and send it the moment someone joins.</div>
       <div class="clear"></div>
     </div>
   </div>
 
-  <!-- 6 -->
   <div class="flow">
-    <h2>6 · The send celebration (friend)</h2>
-    <p class="sub">After “send it”. Confetti screen effect on the first bubble.</p>
+    <h2>6 · The send celebration <span class="speed">~3s, then a reveal</span></h2>
+    <p class="sub">"Postmarked" lands fast; the animated card + route map follow a few seconds later.</p>
     <div class="thread">
       <div class="msg bot">📮 Stamping…</div>
       <div class="msg bot"><span class="subj">📮 Postmarked</span>POSTMARKED · MAY 30, 2026
 CHICAGO STATION
 
 Off to Sarah.</div>
-      <div class="att">📷 your photo · 🔁 card flip (front ↔ back) · 🗺️ route map</div>
-      <div class="msg bot">Naples, FL · 1,100 mi</div>
+      <div class="att">📷 your photo · "· To Naples, FL ·"</div>
       <div class="msg bot">Lands in Sarah's mailbox Jun 3.
 themailroom.club/c/…</div>
+      <div class="note">— a few seconds later, the reveal —</div>
+      <div class="msg bot">Here's your card, and the 1,100-mile trip it's taking.</div>
+      <div class="att">🔁 card flip (front ↔ back) · 🗺️ native Apple Maps route</div>
       <div class="clear"></div>
     </div>
   </div>
 
-  <!-- 7 -->
   <div class="flow">
-    <h2>7 · As it travels (days later)</h2>
-    <p class="sub">Threaded under the “Postmarked” bubble as USPS scans it.</p>
+    <h2>7 · Writing back + the reveal</h2>
+    <div class="thread">
+      <div class="user">reply 7K4Q2M</div>
+      <div class="msg bot"><span class="subj">💌 Writing back</span>Send me the photo you want on Sarah's card in Denver.</div>
+      <div class="att">📷 your photo</div>
+      <div class="msg bot">📮 Got it.</div>
+      <div class="msg bot"><span class="subj">✍️ Write your note</span>What should the card say?
+
+Up to 240 characters, or say "skip" for just the photo.</div>
+      <div class="clear"></div>
+      <div class="user">Your card made my week. Here's one back.</div>
+      <div class="msg bot"><span class="subj">💌 Postmarked</span>POSTMARKED · MAY 30, 2026
+DENVER STATION
+
+Off to Sarah.</div>
+      <div class="msg bot">Lands in Sarah's mailbox Jun 3.</div>
+      <div class="note">— the original sender gets pinged —</div>
+      <div class="msg bot"><span class="subj">💌 A reply is on its way</span>Someone in Denver just wrote you back. Their card is heading to your mailbox now.</div>
+      <div class="clear"></div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <h2>8 · As it travels</h2>
     <div class="thread">
       <div class="msg bot"><span class="subj">🚚 In transit</span>Your card is moving. Should land in a few days.</div>
       <div class="msg bot"><span class="subj">📬 It landed</span>It just landed in Sarah's mailbox. 🎉</div>
-      <div class="att">📷 card · 🗺️ route map</div>
+      <div class="att">🔁 card · 🗺️ route map</div>
       <div class="clear"></div>
     </div>
   </div>
 
-  <!-- 8 -->
   <div class="flow">
-    <h2>8 · Buying more cards</h2>
+    <h2>9 · Ask it anything <span class="newtag">new</span></h2>
+    <p class="sub">Off-script messages get a real answer, then point you back. (One small AI call, only on misses.)</p>
     <div class="thread">
-      <div class="user">buy</div>
-      <div class="msg bot"><span class="subj">🛒 Top up</span>10 cards — $10
-checkout.stripe.com/…
-
-Expires in 1h. Other sizes: say “buy 5” or “buy 25”.</div>
+      <div class="user">can I send to two people?</div>
+      <div class="msg bot">One card per photo for now — text another photo to send a second. Want to start one?</div>
       <div class="clear"></div>
-      <div class="note">— if you just say something buy-ish —</div>
-      <div class="msg bot">Top up: 5 cards for $5, 10 for $10, 25 for $25. Just say “buy 10” (or buy 5, buy 25).</div>
+      <div class="user">do you ship internationally?</div>
+      <div class="msg bot">US addresses for now. Text a photo and tell me who it's for to get started.</div>
       <div class="clear"></div>
     </div>
   </div>
 
-  <!-- 9 -->
   <div class="flow">
-    <h2>9 · When something goes sideways</h2>
-    <p class="sub">Postal-annex voice. Every one tells you what to do next.</p>
+    <h2>10 · When something goes wrong</h2>
+    <p class="sub">Plain. Says what happened + what to do.</p>
     <div class="thread">
-      <div class="msg bot">That photo flew the coop. Send another?</div>
-      <div class="msg bot">Lost the photo somewhere in the sorting bin. Send it again?</div>
-      <div class="msg bot">Hmm, the mailroom's locked. Try again in a minute?</div>
-      <div class="msg bot">The press is jammed. Credit refunded. Tell me to send it again.</div>
-      <div class="msg bot">No one in the pool right now. I'll hold your card and match you the moment someone joins.</div>
+      <div class="msg bot">Couldn't read that photo. Send another?</div>
+      <div class="msg bot">Couldn't download that photo. Send it again?</div>
+      <div class="msg bot">Something went wrong on our end. Try again in a minute?</div>
+      <div class="msg bot">Couldn't print your card. Your credit's back. Tell me to send it again.</div>
       <div class="msg bot">Almost there. I just need the ZIP. Resend it like:
 861 Humboldt St, Denver CO &lt;ZIP&gt;</div>
-      <div class="msg bot">We lost the thread on that card. Text a fresh photo to start over.</div>
+      <div class="msg bot">That draft expired. Text a new photo to start over.</div>
       <div class="clear"></div>
     </div>
   </div>
@@ -256,9 +269,9 @@ Expires in 1h. Other sizes: say “buy 5” or “buy 25”.</div>
 
 <footer>
   <h3>Notes</h3>
-  Type naturally — <code>send it</code>, <code>yep</code>, <code>looks good</code>, <code>never mind</code>, <code>skip</code>, <code>buy 10</code> all work, any case. No keyword is required.<br><br>
-  Schedule a friend card by naming a day (“June 15”, “in 3 days”). Pen pal cards ride the next Sunday drop, so they can't be scheduled. Replies mail right away.<br><br>
-  The only AI in a normal session is optional “ideas” (note suggestions). Everything else is instant + free.
+  Natural replies work, any case: <code>send it</code>, <code>yep</code>, <code>looks good</code>, <code>never mind</code>, <code>skip</code>, <code>buy 10</code>, <code>send a link</code>.<br><br>
+  Friend cards can be scheduled ("June 15", "in 3 days"). Pen pal cards ride the next Sunday drop. Replies mail right away.<br><br>
+  AI is used only on misses (off-script questions) + the optional "ideas" note helper — a fraction of a cent. The whole happy path is instant and free.
 </footer>
 </body>
 </html>
