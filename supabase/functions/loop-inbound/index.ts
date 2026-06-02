@@ -1697,7 +1697,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  recipient_name: raw,
  });
  const firstName = raw.split(/\s+/)[0];
- await loopSend({ contact: phone, text: `Great. What's a good address for ${firstName}?` });
+ await loopSend({ contact: phone, text: `Great. What's ${firstName}'s address?\n\nDon't have it? Say "send a link" and they can add it themselves.` });
  return;
  }
 
@@ -1824,11 +1824,28 @@ async function handleRecipientName(phone: string, body: string, state: any): Pro
  const firstName = name.split(/\s+/)[0];
  await loopSend({
  contact: phone,
- text: `Got it. What's a good address for ${firstName}?`,
+ text: `Got it. What's ${firstName}'s address?\n\nDon't have it? Say "send a link" and they can add it themselves.`,
  });
 }
 
 async function handleRecipientAddress(phone: string, body: string, state: any): Promise<void> {
+ // "I don't have their address" → switch to claim-link mode. The sender
+ // composes the card; we mint a link they forward to the recipient, who
+ // fills in their own address (existing /claim flow), which mails it.
+ const lower = body.trim().toLowerCase();
+ if (/\b(send (a |the )?link|don'?t (have|know)|do not (have|know)|not sure|they'?ll (add|fill)|no address|link them|let them add)\b/.test(lower)) {
+ const nm = (state.conversation_data?.recipient_name ?? "your friend") as string;
+ const first = nm.split(/\s+/)[0];
+ await advanceState(phone, "awaiting_message", state.draft_token, {
+ ...(state.conversation_data ?? {}), claim_mode: true,
+ });
+ await loopSend({
+ contact: phone,
+ text: `No problem. Write your note and I'll make a link for ${first} to add their address.\n\nUp to 240 characters, or say "skip" for just the photo.`,
+ });
+ return;
+ }
+
  // Fast path: a clean address confirms instantly (no LLM). Only
  // ambiguous input hits the LLM, and resolveAddress shows typing then.
  const parsed = await resolveAddress(phone, body);
@@ -1968,6 +1985,58 @@ function buildPreSendComposition(opts: {
  return `${from} ──→ ${toCity}\n\n   To: ${firstName}${noteBlock}`;
 }
 
+// CLAIM-LINK SEND. The sender didn't have the recipient's address, so we
+// mint a claim and hand back a link they forward. The recipient fills in
+// their own address on /claim, which triggers the actual mailing.
+async function finishClaimSend(phone: string, state: any, note: string, echoText: string): Promise<void> {
+ const draftToken = state.draft_token as string;
+ const name = (state.conversation_data?.recipient_name ?? "your friend") as string;
+ const firstName = name.split(/\s+/)[0] || "your friend";
+
+ await loopSend({ contact: phone, text: echoText });
+
+ let userId: string;
+ try { userId = await findOrCreateUserByPhone(phone); }
+ catch (e: any) {
+  console.error("[loop-inbound] user create failed (claim)", e);
+  await loopSend({ contact: phone, text: "Something went wrong on our end. Try again in a minute?" });
+  return;
+ }
+
+ // Photo (the background upload is done by now). Sign for 60 days — a
+ // claim can sit a while before the recipient adds their address.
+ const { data: draftRow } = await admin
+  .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
+ if (!draftRow?.photo_path) {
+  await loopSend({ contact: phone, text: "Still saving your photo — give me a few seconds, then send your note again." });
+  return;
+ }
+ let photoUrl = draftRow.photo_path;
+ if (!photoUrl.startsWith("http")) {
+  const { data: signed } = await admin.storage.from("sms-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 60);
+  if (signed?.signedUrl) photoUrl = signed.signedUrl;
+ }
+
+ const { data: res, error } = await admin.rpc("send_postcard_via_claim_direct", {
+  p_user_id: userId, p_message: note, p_photo_path: photoUrl,
+ });
+ if (error || !res?.claim_token) {
+  const oom = error?.message?.includes("INSUFFICIENT_CREDITS");
+  await loopSend({ contact: phone, text: oom ? "Out of cards. Text \"buy\" to top up, then try again." : "Couldn't make the link. Try again in a minute?" });
+  return;
+ }
+
+ await admin.rpc("consume_sms_draft", { p_token: draftToken, p_postcard_id: res.postcard_id });
+ await resetState(phone);
+
+ const link = `https://app.themailroom.club/claim?t=${res.claim_token}`;
+ await loopSend({
+  contact: phone,
+  subject: "🔗 Link ready",
+  text: `Send ${firstName} this link and they'll add their address:\n${link}\n\nThe moment they do, I'll mail your card.`,
+ });
+}
+
 async function handleMessage(phone: string, body: string, state: any): Promise<void> {
  let message = body.trim();
 
@@ -2008,6 +2077,14 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  const echoText = wasTrimmed
  ? `That's a little long for a postcard, so I trimmed it to fit (240 characters). Here's what'll print:\n"${truncated}"`
  : `Got it. "${truncated}"`;
+
+ // CLAIM-LINK MODE: the sender didn't have the recipient's address, so
+ // instead of mailing now we mint a link they forward to the recipient.
+ // Note's done — finish the claim and hand back the link.
+ if (state.conversation_data?.claim_mode === true) {
+ return await finishClaimSend(phone, state, truncated, echoText);
+ }
+
  // Gate on FULL home address. line1 + city + state + zip are all required
  // to send (so pen pal reciprocation works downstream). Users with just
  // city/state on file from earlier rounds get re-prompted for the full
