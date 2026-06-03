@@ -3363,16 +3363,36 @@ serve(async (req) => {
  if (payload.message_id) {
  const { error: dupErr } = await admin
  .from("loop_inbound_dedup")
- .insert({ message_id: payload.message_id });
+ .insert({ message_id: payload.message_id, status: "processing", updated_at: new Date().toISOString() });
  if (dupErr) {
  if ((dupErr as any).code === "23505") {
- console.log("[loop-inbound] duplicate webhook, skipping", { message_id: payload.message_id });
+ // Already have a row. Reprocess ONLY if it's a stale in-flight row
+ // (status 'processing' older than 3 min = a prior run died mid-handle
+ // before it could mark succeeded/failed). 'succeeded', 'failed', or a
+ // fresh in-flight row all skip — so we recover true crashes without
+ // looping on a poison message.
+ const { data: existing } = await admin
+ .from("loop_inbound_dedup")
+ .select("status, updated_at")
+ .eq("message_id", payload.message_id)
+ .maybeSingle();
+ const dStatus = existing?.status ?? "succeeded";
+ const ageMs = existing?.updated_at ? Date.now() - new Date(existing.updated_at).getTime() : 0;
+ const retryable = dStatus === "processing" && ageMs > 3 * 60 * 1000;
+ if (!retryable) {
+ console.log("[loop-inbound] duplicate webhook, skipping", { message_id: payload.message_id, status: dStatus });
  return new Response(JSON.stringify({ ok: true, deduped: true }), {
  status: 200, headers: { "Content-Type": "application/json" },
  });
  }
+ await admin.from("loop_inbound_dedup")
+ .update({ status: "processing", updated_at: new Date().toISOString() })
+ .eq("message_id", payload.message_id);
+ console.warn("[loop-inbound] reprocessing stale in-flight message", { message_id: payload.message_id });
+ } else {
  // Non-duplicate DB error: log but proceed (don't drop a real message).
  console.warn("[loop-inbound] dedup insert error (proceeding)", (dupErr as any).message ?? dupErr);
+ }
  }
  }
 
@@ -3408,17 +3428,31 @@ serve(async (req) => {
  const safeHandle = async () => {
  try {
  await handleInbound(ctx);
+ // Mark the ledger row done so a redelivery is correctly skipped.
+ if (payload.message_id) {
+ await admin.from("loop_inbound_dedup")
+ .update({ status: "succeeded", updated_at: new Date().toISOString() })
+ .eq("message_id", payload.message_id);
+ }
  } catch (e: any) {
  const errMsg = e?.message ?? String(e);
  const errStack = (e?.stack ?? "").split("\n").slice(0, 3).join(" | ");
  console.error("[loop-inbound] handler threw", { errMsg, errStack, ctx });
- // Best-effort recovery message. don't let the user wonder why
- // nothing came back. Catch the catch so a recovery failure also
- // doesn't crash silently.
+ // Mark failed (terminal) so a redelivery of a poison message doesn't
+ // loop. A true crash never reaches here and stays 'processing' -> the
+ // stale-retry path recovers it.
+ if (payload.message_id) {
+ try {
+ await admin.from("loop_inbound_dedup")
+ .update({ status: "failed", updated_at: new Date().toISOString() })
+ .eq("message_id", payload.message_id);
+ } catch (_) { /* best-effort */ }
+ }
+ // Plain recovery message (no debug text leaked to the user).
  try {
  await loopSend({
  contact: ctx.from,
- text: `Something broke on our end. (debug: ${errMsg.slice(0, 100)}) Try again, or say "start over" to reset.`,
+ text: `Something went wrong on our end. Try again, or say "start over" to reset.`,
  });
  } catch (sendErr: any) {
  console.error("[loop-inbound] recovery send also failed", sendErr?.message ?? sendErr);
