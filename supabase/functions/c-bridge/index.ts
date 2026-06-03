@@ -97,7 +97,7 @@ function notFoundHtml(): string {
   return buildHtml({
     token: "",
     title: "Mailroom — A magical mail club",
-    description: "Text a photo, mail a moment. Your first card's on us.",
+    description: "Mail a photo with a text. Your first card's on us.",
     imageUrl: "https://app.themailroom.club/og-card.png",
     destinationUrl: "https://app.themailroom.club/",
   });

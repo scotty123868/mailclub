@@ -1518,7 +1518,7 @@ async function handleIdle(from: string, body = ""): Promise<void> {
  await loopSend({
  contact: from,
  subject: "📮 Welcome to Mailroom",
- text: "A magical mail club. Text a photo, mail a moment.\n\nYour first card's on us.",
+ text: "A magical mail club. Mail a photo with a text.\n\nYour first card's on us.",
  });
  return;
  }
@@ -1633,7 +1633,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
   if (firstTime) {
    await loopSend({
     contact: phone,
-    text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with someone new. First one's free.",
+    text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with someone new.",
     contact_file: true,
    });
   } else {
