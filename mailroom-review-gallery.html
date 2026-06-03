@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mailroom · Full review</title>
+<style>
+  :root{
+    --board:#0f0f12; --panel:#17171c; --line:#2a2a31; --ink:#ececf0; --muted:#8c8c96;
+    --bubble:#e9e9eb; --bubbletext:#0a0a0a; --user:#2c8cff; --usertext:#fff;
+    --parch:#f3ead9; --sender:#b8483a; --recip:#3c6e8f;
+    --good:#5fb87a; --amber:#d8a24a; --red:#e06a5a;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--board);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;padding:36px 20px 90px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:28px;letter-spacing:-.02em;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:14px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:14px 0 30px}
+  .legend b{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .dot-good{background:var(--good)} .dot-amber{background:var(--amber)}
+
+  h2{font-size:13px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);
+    margin:42px 0 16px;border-bottom:1px solid var(--line);padding-bottom:8px}
+
+  /* flow grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:20px;align-items:start}
+  .flow{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 16px 18px}
+  .flow .ttl{font-size:14px;font-weight:700;letter-spacing:-.01em;margin:0 0 3px}
+  .flow .desc{font-size:11.5px;color:var(--muted);margin:0 0 14px;line-height:1.4}
+  .thread{display:flex;flex-direction:column;gap:7px}
+
+  .b{max-width:90%;align-self:flex-start;background:var(--bubble);color:var(--bubbletext);
+    padding:7px 11px;border-radius:16px;border-bottom-left-radius:5px;white-space:pre-line;font-size:13px;line-height:1.4}
+  .b .subj{font-weight:700;display:block;margin-bottom:1px}
+  .b.eff{position:relative}
+  .b.eff::after{content:attr(data-eff);position:absolute;top:-8px;right:5px;font-size:8px;
+    background:var(--panel);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:1px 6px;font-weight:600}
+  .u{max-width:75%;align-self:flex-end;background:var(--user);color:var(--usertext);
+    padding:6px 11px;border-radius:16px;border-bottom-right-radius:5px;font-size:13px}
+  .cap{align-self:flex-start;font-size:9.5px;color:var(--muted);margin:-3px 2px 1px}
+  .typing{align-self:flex-start;color:var(--muted);font-size:18px;letter-spacing:2px;padding:0 6px}
+
+  /* attachment tiles */
+  .att{align-self:flex-start;display:flex;gap:5px;flex-wrap:wrap;max-width:92%}
+  .tile{width:62px;height:62px;border-radius:9px;overflow:hidden;border:1px solid rgba(0,0,0,.06);position:relative}
+  .tile.wide{width:96px;height:66px}
+  .photo{background:radial-gradient(circle at 72% 26%,#ffe9a8 0 8%,transparent 28%),
+     linear-gradient(180deg,#ffb27a,#ff8e6e 40%,#c75b7a 68%,#3b3b6b)}
+  .cardface{background:var(--parch);display:flex;flex-direction:column;justify-content:space-between;padding:5px 6px}
+  .cardface .pin{font-size:7px;letter-spacing:.1em;color:#9a8a6a;text-transform:uppercase}
+  .cardface .nt{font-family:"Snell Roundhand","Apple Chancery",cursive;font-size:10px;color:#4a3f2e}
+  .cardface .st{align-self:flex-end;width:15px;height:18px;border:1px dashed #b9a98a;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:9px}
+  .map{background:var(--parch)} .map svg{width:100%;height:100%;display:block}
+
+  /* changelog */
+  .changes{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+  .chg{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--good);border-radius:12px;padding:13px 15px}
+  .chg.b1{border-left-color:#6aa0e0} .chg.b2{border-left-color:#c07ad0} .chg.earlier{border-left-color:var(--good)}
+  .chg .tag{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .chg h4{margin:3px 0 6px;font-size:13.5px;letter-spacing:-.01em}
+  .chg p{margin:0;font-size:12px;color:#c4c4cc;line-height:1.45}
+  .chg .ba{margin-top:8px;font-size:11.5px;line-height:1.5}
+  .chg .old{color:#9a6b66;text-decoration:line-through}
+  .chg .new{color:#9fd9b3}
+  .pill{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    padding:2px 7px;border-radius:999px;margin-left:7px;vertical-align:middle}
+  .pill.live{background:var(--good);color:#0a0a0a} .pill.queued{background:var(--amber);color:#0a0a0a}
+  .note{font-size:11px;color:var(--muted);margin:6px 2px 0}
+  .held{background:#211c16;border:1px solid #4a3a22;border-radius:12px;padding:13px 15px;font-size:12.5px;color:#d9c9a8}
+  .held b{color:#f0d9a8}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Mailroom — full review</h1>
+  <p class="sub">The complete live texting flow, plus everything changed this session. Names/cities are examples; the rest is the deployed copy verbatim.</p>
+  <div class="legend">
+    <span><b class="dot-good"></b>Live now (deployed)</span>
+    <span><b class="dot-amber"></b>Queued (not yet built)</span>
+    <span>Gray = bot · Blue = the texter</span>
+  </div>
+
+  <!-- ============ FLOW ============ -->
+  <h2>The texting flow <span class="pill live">live</span></h2>
+  <div class="grid">
+
+    <div class="flow">
+      <div class="ttl">First contact</div>
+      <div class="desc">A new number texts in. Welcome + the free hook, then straight to the photo.</div>
+      <div class="thread">
+        <div class="u">[sends a photo]</div>
+        <div class="b"><span class="subj">📮 Welcome to Mailroom</span>A magical mail club. Text a photo, mail a moment.
+
+Your first card's on us.</div>
+        <div class="b">📮 Got it.</div>
+        <div class="b">Who's this card for?
+
+Tell me a name, or say "penpal" to be matched with someone new. First one's free.</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">Friend → address</div>
+      <div class="desc">Name given. Ask for the address, with the no-address escape hatch right there.</div>
+      <div class="thread">
+        <div class="u">Sarah</div>
+        <div class="b">Got it. What's Sarah's address?
+
+Don't have it? Say "send a link" and they can add it themselves.</div>
+        <div class="u">123 Main St, Brooklyn NY 11201</div>
+        <div class="b">Mailing to:
+   Sarah
+   123 Main St
+   Brooklyn, NY 11201
+
+Look right?</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">Note → sender address</div>
+      <div class="desc">Confirm the note, then ask the sender's address with reciprocity framing (private, city-only on the card).</div>
+      <div class="thread">
+        <div class="u">yes</div>
+        <div class="b"><span class="subj">✍️ Write your note</span>What should the card say?
+
+Up to 240 characters, or say "skip" for just the photo.</div>
+        <div class="u">Miss you, Brooklyn. Come visit ♥</div>
+        <div class="b">Got it. "Miss you, Brooklyn. Come visit ♥"</div>
+        <div class="b">Last step. What's your full mailing address? We keep it private (only your city shows on the postcard) so Sarah can mail one back to you.
+
+Format: street, city, state, ZIP.</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">Send confirm → 📮 the moment</div>
+      <div class="desc">Flip-as-hero: photo lands instantly, the printed card + route arrive as the reveal, then the promise + first-card beat.</div>
+      <div class="thread">
+        <div class="u">send it</div>
+        <div class="b">📮 Stamping...</div>
+        <div class="typing">•••</div>
+        <div class="b eff" data-eff="✨ confetti"><span class="subj">📮 Postmarked</span>POSTMARKED · JUN 2, 2026
+CHICAGO STATION
+
+Off to Sarah.</div>
+        <div class="cap">instant</div>
+        <div class="b">· To Brooklyn, NY ·</div>
+        <div class="att"><div class="tile wide photo"></div></div>
+        <div class="cap">~6s later</div>
+        <div class="b">Your card, and the 1,234 miles it's traveling.</div>
+        <div class="att">
+          <div class="tile cardface"><div class="pin">Brooklyn NY</div><div class="nt">Miss you ♥</div><div class="st">📮</div></div>
+          <div class="tile wide map"><svg viewBox="0 0 96 66" preserveAspectRatio="none">
+            <path d="M14,50 C34,22 62,22 84,24" fill="none" stroke="#b8483a" stroke-width="1.6" stroke-dasharray="4 3"/>
+            <circle cx="14" cy="50" r="3" fill="#b8483a"/><circle cx="84" cy="24" r="3" fill="#3c6e8f"/></svg></div>
+        </div>
+        <div class="b">Lands in Sarah's mailbox Jun 7.
+Tap to flip your card and watch it travel:
+app.themailroom.club/c/7k4q2m
+
+That's your first card, on us. Text another photo anytime to send the next.</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">No address → send a link <span class="pill live">reordered</span></div>
+      <div class="desc">The practical step (the link) goes FIRST, then the note is optional. The recipient adds their own address.</div>
+      <div class="thread">
+        <div class="u">I don't have Mike's address</div>
+        <div class="b"><span class="subj">🔗 Link ready</span>Send Mike this link to add their address:
+app.themailroom.club/claim?t=7K4Q2M
+
+The moment they do, I'll mail your card.</div>
+        <div class="b">Want a note on the card? Send it now (up to 240 characters), or say "skip" for just the photo.</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">Pen pal <span class="pill live">no "pool" · mails on match</span></div>
+      <div class="desc">Matched with a real stranger, both anonymous. No Sunday wait, no water metaphor. Photo-only reveal keeps the mystery.</div>
+      <div class="thread">
+        <div class="u">penpal</div>
+        <div class="b"><span class="subj">🪶 Pen pal mode</span>We'll match you with another pen pal. You won't see their address. They won't see yours.
+
+What should your card say? (Up to 240 chars, or say 'skip' for just the photo.)</div>
+        <div class="b">🪶 Matched. Stamping your card...</div>
+        <div class="b eff" data-eff="🌠 shootingStar"><span class="subj">🪶 Postmarked</span>POSTMARKED · JUN 2, 2026
+CHICAGO STATION
+
+Off to a pen pal.</div>
+        <div class="att"><div class="tile wide photo"></div></div>
+        <div class="cap">· To somewhere ·</div>
+        <div class="b">When they write back, you'll know.
+app.themailroom.club/c/...</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">Reply to a card (QR / "reply CODE")</div>
+      <div class="desc">Someone got a Mailroom card and writes back. Lowercase keyword, no caps requirement.</div>
+      <div class="thread">
+        <div class="u">reply 7K4Q2M</div>
+        <div class="b"><span class="subj">💌 Writing back</span>Send me the photo you want on Sarah's card.</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">Returning sender</div>
+      <div class="desc">Knows the drill. Rolodex reuse offers a saved address; "ideas" pulls AI note suggestions.</div>
+      <div class="thread">
+        <div class="b">Who's this one for?
+
+Tell me a name, or say "penpal" for a new match.</div>
+        <div class="u">Sarah</div>
+        <div class="b">Found Sarah in Brooklyn, NY (123 Main St). Send there? Or give me a different address.</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">buy · memories</div>
+      <div class="desc">Lowercase keywords (never required in caps). They don't fire while you're writing a note.</div>
+      <div class="thread">
+        <div class="u">buy</div>
+        <div class="b"><span class="subj">🛒 Top up</span>10 cards for $10
+checkout.stripe.com/...
+
+Expires in 1h. Other sizes: say "buy 5" or "buy 25".</div>
+        <div class="u">memories</div>
+        <div class="b"><span class="subj">📮 Your postcards</span>Your last 3. Text a photo to send a new one.</div>
+        <div class="att"><div class="tile photo"></div><div class="tile photo"></div><div class="tile photo"></div></div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">Plain errors <span class="pill live">no buzzwords</span></div>
+      <div class="desc">Every error says what went wrong + the one next step. No cutesy, no debug text, no caps.</div>
+      <div class="thread">
+        <div class="b">Almost there. I just need the ZIP code. Send the full address again with the ZIP on the end.</div>
+        <div class="b">Couldn't hand this to the printer. Your credit is back. Tell me to send it again.</div>
+        <div class="b">Something went wrong on our end. Try again, or say "start over" to reset.</div>
+        <div class="b">Still mailing this card. I'll text you when it's done.</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="ttl">Scheduled send (friend only)</div>
+      <div class="desc">"Mail it June 15." Holds, then ships. Pen pal + replies mail right away.</div>
+      <div class="thread">
+        <div class="u">mail it June 15</div>
+        <div class="b"><span class="subj">🗓️ Saved for Jun 15</span>Card to Sarah ships Jun 15.
+We'll text you when it goes.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ CHANGELOG ============ -->
+  <h2>What changed this session</h2>
+  <div class="changes">
+
+    <div class="chg earlier">
+      <div class="tag">Brand voice</div>
+      <h4>Slogan + voice cleanup</h4>
+      <div class="ba"><span class="old">Real paper. By text.</span><br><span class="new">A magical mail club. Text a photo, mail a moment.</span></div>
+      <p class="note">Also updated the landing footer + link-preview OG copy.</p>
+    </div>
+
+    <div class="chg earlier">
+      <div class="tag">Pen pal</div>
+      <h4>Killed "pool" + the Sunday wait</h4>
+      <div class="ba"><span class="old">Joining the pool… you're #14 in this week's pool. Flies Sunday.</span><br><span class="new">Matched. Off to a pen pal. Mails the moment there's a match.</span></div>
+    </div>
+
+    <div class="chg earlier">
+      <div class="tag">Celebration</div>
+      <h4>Flip-as-hero + first-card beat</h4>
+      <p>Photo lands instantly; the card + map are the reveal. A new sender's first card ends with a milestone, not a cold "buy more."</p>
+    </div>
+
+    <div class="chg earlier">
+      <div class="tag">Card flip</div>
+      <h4>Killed the looping GIF</h4>
+      <p>In-thread is calm static stills now. The real flip is a tap/drag-to-flip 3D card on the /c/ page the link opens.</p>
+    </div>
+
+    <div class="chg earlier">
+      <div class="tag">Claim link</div>
+      <h4>Link before note</h4>
+      <p>No-address flow sends the link first (the practical step), note optional after.</p>
+    </div>
+
+    <div class="chg" style="border-left-color:var(--red)">
+      <div class="tag">P0 · correctness</div>
+      <h4>Sends were silently failing</h4>
+      <p>DB CHECK constraints never allowed the <code>sending</code> / sender-confirm steps, so the send-claim matched 0 rows and every send returned as a "duplicate." Fixed the constraints + status set; <code>advanceState</code> now logs errors.</p>
+    </div>
+
+    <div class="chg b1">
+      <div class="tag">Batch 1 · security</div>
+      <h4>Webhook forgery guard</h4>
+      <p><code>LOB_WEBHOOK_SKIP_VERIFY</code> only bypasses signature checks off-production now.</p>
+    </div>
+
+    <div class="chg b1">
+      <div class="tag">Batch 1 · correctness</div>
+      <h4>Keyword hijack + address parse</h4>
+      <p>A note saying "buy"/"memories" is treated as the note, not a command. The address fast-path stops mis-splitting <code>123 Main St #4 Denver</code> into a bad city.</p>
+    </div>
+
+    <div class="chg b1">
+      <div class="tag">Batch 1 · copy</div>
+      <h4>Plain language everywhere</h4>
+      <div class="ba"><span class="old">The press is jammed. Sorry for the run-around. ...CO &lt;ZIP&gt;</span><br><span class="new">Couldn't hand this to the printer. Send the full address again with the ZIP on the end.</span></div>
+    </div>
+
+    <div class="chg b2">
+      <div class="tag">Batch 2 · money</div>
+      <h4>Atomic credit deduction</h4>
+      <p>One conditional, row-locked UPDATE gates + deducts, so two fast sends can't both win or go negative.</p>
+    </div>
+
+    <div class="chg b2">
+      <div class="tag">Batch 2 · reliability</div>
+      <h4>Dedup processing-ledger</h4>
+      <p>A crash mid-handle now retries on redelivery instead of black-holing the message. Marks processing → succeeded/failed.</p>
+    </div>
+
+  </div>
+
+  <!-- ============ HELD ============ -->
+  <h2>Held on purpose (your calls)</h2>
+  <div class="held">
+    <p><b>Codex wanted to change two things you'd already decided — I did not touch them:</b></p>
+    <p>• Keep the slogan "A magical mail club. Text a photo, mail a moment." (Codex wanted it gone).<br>
+    • Keep flip-as-hero / photo-first celebration (Codex wanted instant front/back instead).</p>
+  </div>
+
+  <!-- ============ QUEUED ============ -->
+  <h2>Still queued <span class="pill queued">not yet built</span></h2>
+  <div class="changes">
+    <div class="chg" style="border-left-color:var(--amber)">
+      <div class="tag">Batch 3 · P0</div>
+      <h4>Photo durability</h4>
+      <p>Store storage paths, sign at send time, so scheduled-far-out sends + old memories don't break on an expired URL. Plus reject non-image attachments.</p>
+    </div>
+    <div class="chg" style="border-left-color:var(--amber)">
+      <div class="tag">Batch 4 · design</div>
+      <h4>iOS Series-level gallery</h4>
+      <p>Detail sheet, journal, history, system-SF typography. Mockups first.</p>
+    </div>
+    <div class="chg" style="border-left-color:var(--amber)">
+      <div class="tag">Closer</div>
+      <h4>Final debug sweep</h4>
+      <p>Bundle-check every function, confirm migrations, re-run Codex on the full diff, smoke the live endpoints.</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
