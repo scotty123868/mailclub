@@ -539,7 +539,7 @@ async function handleInbound(ctx: InboundContext): Promise<Response> {
  console.error("[sms-inbound] BUY checkout failed", checkout.error);
  return twiml(
  "Couldn't open checkout right now. Try again in a minute, or " +
- "email hello@mailroomclub.io if it keeps failing."
+ "email scottylefkowitz2@gmail.com if it keeps failing."
  );
  }
  return twiml(
