@@ -185,7 +185,7 @@ function buildBackHtml(opts: {
  // fresh iMessage thread, so the printed text is just the human
  // backup for people who don't scan QR codes.
  const displayUrl = shortCode
- ? `Text REPLY ${shortCode} to ${printedBotNumber}`
+ ? `Text "reply ${shortCode}" to ${printedBotNumber}`
  : "";
  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
  const now = new Date();
@@ -804,7 +804,7 @@ serve(async (req: Request) => {
  // sms: URL with prefilled body. iOS routes to Messages thread.
  if (shortCode) {
  const botNumber = Deno.env.get("MAILROOM_PUBLIC_SMS_NUMBER") ?? "+14156836457";
- reciprocationUrl = `sms:${botNumber}&body=${encodeURIComponent(`REPLY ${shortCode}`)}`;
+ reciprocationUrl = `sms:${botNumber}&body=${encodeURIComponent(`reply ${shortCode}`)}`;
  }
  } catch (err) {
  // eslint-disable-next-line no-console

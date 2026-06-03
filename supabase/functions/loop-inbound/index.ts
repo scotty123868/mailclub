@@ -461,6 +461,14 @@ const US_STATE_ABBR: Record<string, string> = {
 };
 const US_STATE_ABBRS = new Set(Object.values(US_STATE_ABBR));
 
+// Steps where a bare keyword (buy, memories, REPLY <code>) is the user's own
+// content (a note, a name, an address), NOT a command. Globals consult this so
+// content entry is never hijacked. Module-level so every global check sees it.
+const CONTENT_ENTRY_STEPS = new Set([
+ "awaiting_message", "awaiting_recipient_name",
+ "awaiting_recipient_address", "awaiting_sender_location",
+]);
+
 // Regex/heuristic address parser. NO network. The safety net for when
 // OpenAI is unreachable (dead key, rate limit, outage) so the address
 // step never hard-sticks on "that looks like just a city." Requires a
@@ -501,6 +509,13 @@ function parseAddressHeuristic(input: string): ParsedAddress | null {
   city = segs.pop() ?? "";
   line1 = segs.join(", ");
  } else {
+  // No comma: splitting street from city is a guess, and unit markers
+  // (#4, apt) or directionals (NW, NE) break it ("123 Main St #4 Denver"
+  // -> city "#4 Denver"). Bail to the LLM parser, which handles those.
+  if (/(?:^|\s)(?:#|apt|apartment|unit|suite|ste)\b/i.test(beforeZip) ||
+      /\b(?:NW|NE|SW|SE)\b/i.test(beforeZip)) {
+   return null;
+  }
   const words = beforeZip.split(" ");
   const cityWords = words.length >= 5 ? 2 : 1;
   city = words.slice(-cityWords).join(" ");
@@ -1336,7 +1351,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  // them for a photo. The rest of the flow runs as a reciprocation
  // send (see handleSendType + doMailReplyToPenPal).
  const replyMatch = body.trim().match(/^REPLY\s+([A-Z0-9]{4,8})$/i);
- if (replyMatch) {
+ if (replyMatch && !CONTENT_ENTRY_STEPS.has(state.step)) {
  const code = replyMatch[1].toUpperCase();
  const { data: lookup } = await admin.rpc("lookup_reciprocation_short_code", {
  p_code: code,
@@ -1352,7 +1367,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  if (!match.sender_line1 || !match.sender_zip) {
  await loopSend({
  contact: from,
- text: `${match.sender_first_name}'s address isn't on file yet, so I can't route a card back to them right now. Sorry for the run-around.`,
+ text: `I don't have ${match.sender_first_name}'s return address yet, so I can't route a card back right now.`,
  });
  return;
  }
@@ -1391,13 +1406,13 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
 
  // 3. Global: MEMORIES. send the last 3 postcard photos inline.
  // Returns the user to "memory lane" without disrupting any in-progress draft.
- if (/^memories?$/i.test(body.trim())) {
+ if (/^memories?$/i.test(body.trim()) && !CONTENT_ENTRY_STEPS.has(state.step)) {
  return await sendMemories(from);
  }
 
  // 3. Global: BUY keyword.
  const buy = parseBuyKeyword(body);
- if (buy.matched) {
+ if (buy.matched && !CONTENT_ENTRY_STEPS.has(state.step)) {
  const checkout = await createBuyCheckout(from, buy.pack_id);
  if (!checkout.ok) {
  await loopSend({
@@ -1414,15 +1429,9 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  return;
  }
  // Loose "buy ..." hint (e.g. "buy more credits"), but ONLY when the user
- // is NOT mid free-text entry. In a content-entry step a message that
- // starts with "buy" is the user's actual note/name/address (a postcard
- // that reads "buy yourself something nice" must NOT be hijacked into the
- // purchase menu). The exact BUY / BUY 5 / 10 / 25 command above is
- // anchored and stays global.
- const CONTENT_ENTRY_STEPS = new Set([
- "awaiting_message", "awaiting_recipient_name",
- "awaiting_recipient_address", "awaiting_sender_location",
- ]);
+ // is NOT mid free-text entry (CONTENT_ENTRY_STEPS, module-level). In a
+ // content-entry step a message that starts with "buy" is the user's own
+ // note/name/address ("buy yourself something nice" must NOT be hijacked).
  if (/^buy\b/i.test(body.trim()) && !CONTENT_ENTRY_STEPS.has(state.step)) {
  await loopSend({
  contact: from,
@@ -1451,6 +1460,11 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  return await handleSenderAddressConfirm(from, body, state);
  case "awaiting_send_confirm":
  return await handleSendConfirm(from, body, state);
+ case "sending":
+ // Anti-double-send claim is held; the card is being handed to Lob. Don't
+ // reset the session, just reassure and let the send finish.
+ await loopSend({ contact: from, text: "Still mailing this card. I'll text you when it's done." });
+ return;
  default:
  // Unknown/corrupt step — reset, then let the assistant interpret
  // whatever they said instead of a canned line.
@@ -1898,7 +1912,7 @@ async function handleRecipientAddress(phone: string, body: string, state: any): 
  // verbatim so they know WHY. "Naples is in FL not CA" beats a
  // generic "try again."
  const concern = parsed.concerns?.trim() || "doesn't look right";
- await loopSend({ contact: phone, text: `${concern} Send the right one?` });
+ await loopSend({ contact: phone, text: `${concern} Send the full address again.` });
  return;
  }
  if (!parsed.line1 || !parsed.zip || !parsed.city || !parsed.state) {
@@ -1906,7 +1920,7 @@ async function handleRecipientAddress(phone: string, body: string, state: any): 
  // don't have to retype the whole thing.
  let text: string;
  if (parsed.line1 && parsed.city && parsed.state && !parsed.zip) {
- text = `Almost there. I just need the ZIP. Resend it like:\n${parsed.line1}, ${parsed.city} ${parsed.state} <ZIP>`;
+ text = `Almost there. I just need the ZIP code. Send the full address again with the ZIP on the end.`;
  } else {
  const missing = [
  !parsed.line1 && "street",
@@ -1952,8 +1966,8 @@ async function handleAddressConfirm(phone: string, body: string, state: any): Pr
  // correct it), parse + switch to it and re-confirm — no "no" detour. The
  // digit gate skips the LLM for plain Y/N.
  if (/\d/.test(t)) {
- const newAddr = await parseAddress(t);
- if (newAddr && newAddr.confidence >= 0.7 && newAddr.line1 && newAddr.zip && newAddr.city && newAddr.state) {
+ const newAddr = await resolveAddress(phone, t);
+ if (newAddr && newAddr.confidence >= 0.7 && newAddr.plausible !== false && newAddr.line1 && newAddr.zip && newAddr.city && newAddr.state) {
  await advanceState(phone, "awaiting_address_confirm", state.draft_token, {
  recipient: { line1: newAddr.line1, line2: newAddr.line2 || "", city: newAddr.city, state: newAddr.state, zip: newAddr.zip },
  });
@@ -2302,7 +2316,7 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
  // wrong and traps them. Name the gap and pre-fill the rest.
  let text: string;
  if (parsed && parsed.line1 && parsed.city && parsed.state && !parsed.zip) {
- text = `Almost there. I just need the ZIP code. Resend it like:\n${parsed.line1}, ${parsed.city} ${parsed.state} <ZIP>`;
+ text = `Almost there. I just need the ZIP code. Send the full address again with the ZIP on the end.`;
  } else if (parsed && parsed.line1 && (!parsed.city || !parsed.state)) {
  text = `Got the street. I also need the city, state, and ZIP. Format: street, city, state, ZIP.\n\nE.g. "123 Main St, San Francisco CA 94102".`;
  } else {
@@ -2618,7 +2632,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   await releaseSendClaim(phone, draftToken);
   await loopSend({
    contact: phone,
-   text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. Just tell me to send it again.`,
+   text: `Couldn't hand this to the printer (${lob.error?.slice(0, 60)}). Your credit is back. Tell me to send it again.`,
   });
   return;
  }
@@ -3031,7 +3045,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  await releaseSendClaim(phone, draftToken);
  await loopSend({
  contact: phone,
- text: `The press is jammed (${lob.error?.slice(0, 60)}). Credit refunded. Just tell me to send it again.`,
+ text: `Couldn't hand this to the printer (${lob.error?.slice(0, 60)}). Your credit is back. Tell me to send it again.`,
  });
  return;
  }

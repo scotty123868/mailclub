@@ -124,8 +124,8 @@ async function verifySignature(rawBody: string, headerSig: string): Promise<bool
  // LOB_WEBHOOK_SKIP_VERIFY=true did nothing in any environment that
  // had EVER set a secret. Use this temporarily to confirm Lob webhook
  // wiring while diagnosing signature failures; remove before friends.
- if (Deno.env.get("LOB_WEBHOOK_SKIP_VERIFY") === "true") {
- console.warn("[lob-webhook] LOB_WEBHOOK_SKIP_VERIFY=true. signature check bypassed");
+ if (Deno.env.get("LOB_WEBHOOK_SKIP_VERIFY") === "true" && Deno.env.get("ENVIRONMENT") !== "production") {
+ console.warn("[lob-webhook] LOB_WEBHOOK_SKIP_VERIFY=true (non-production). signature check bypassed");
  return true;
  }
  // Filter empty strings so the empty-secret check actually fires.
