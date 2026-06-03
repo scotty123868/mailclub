@@ -761,10 +761,15 @@ serve(async (req: Request) => {
  if (path.startsWith("http")) {
  photoUrl = path;
  } else {
+ // Sign at send time from a durable path (never a stored signed URL, which
+ // would expire on scheduled / far-out sends). SMS cards live in sms-photos,
+ // app cards in postcard-photos — try sms-photos first, then fall back.
+ for (const bucket of ["sms-photos", "postcard-photos"]) {
  const { data: signed } = await supabase.storage
- .from("postcard-photos")
+ .from(bucket)
  .createSignedUrl(path, 60 * 60 * 24 * 7);
- if (signed?.signedUrl) photoUrl = signed.signedUrl;
+ if (signed?.signedUrl) { photoUrl = signed.signedUrl; break; }
+ }
  }
  }
  // Mint a reciprocation claim + ensure it has a short_code. The QR

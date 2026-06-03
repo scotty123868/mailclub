@@ -355,11 +355,11 @@ async function downloadAndUploadPhoto(
  else if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70 && bytes[8] === 0x68 && bytes[9] === 0x65 && bytes[10] === 0x69 && bytes[11] === 0x63) { ct = "image/heic"; ext = "heic"; }
  else if (rawCt.startsWith("image/")) { ct = rawCt; ext = rawCt.split("/")[1].split(";")[0]; }
  else {
- // Last resort. assume jpeg. Lob accepts most image formats and our
- // bucket is happy with image/jpeg. Better to upload SOMETHING than to
- // hard-fail when the CDN gives us octet-stream.
- ct = "image/jpeg";
- ext = "jpg";
+ // Not a recognized image: magic bytes didn't match jpeg/png/gif/heic and
+ // the CDN content-type isn't image/*. Don't mail a PDF / video / vCard as
+ // a postcard photo — reject so the caller re-prompts for a real image.
+ console.warn("[loop-inbound] rejected non-image attachment", { rawCt, magic: Array.from(bytes.slice(0, 12)).map((b) => b.toString(16).padStart(2, "0")).join(" ") });
+ return { ok: false, error: "not_an_image" };
  }
  console.log("[loop-inbound] photo content-type detect", { rawCt, finalCt: ct, ext, magic: Array.from(bytes.slice(0, 12)).map((b) => b.toString(16).padStart(2, "0")).join(" ") });
 
@@ -1653,7 +1653,9 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
   await admin.from("sms_postcard_drafts").update({ photo_path: upload.path }).eq("token", token);
  } else {
   console.error("[loop-inbound] photo intake failed", { mediaUrl: mediaUrl.slice(0, 200), error: upload.error });
-  await loopSend({ contact: phone, text: "Couldn't download that photo. Send it again?" });
+  await loopSend({ contact: phone, text: upload.error === "not_an_image"
+   ? "That attachment isn't a photo I can mail. Send a JPEG, PNG, GIF, or HEIC."
+   : "Couldn't download that photo. Send it again?" });
  }
 }
 
@@ -2071,7 +2073,7 @@ async function finishClaimSend(phone: string, state: any, note: string, echoText
  }
 
  const { data: res, error } = await admin.rpc("send_postcard_via_claim_direct", {
-  p_user_id: userId, p_message: note, p_photo_path: photoUrl,
+  p_user_id: userId, p_message: note, p_photo_path: draftRow.photo_path,
  });
  if (error || !res?.claim_token) {
   const oom = error?.message?.includes("INSUFFICIENT_CREDITS");
@@ -2135,7 +2137,7 @@ async function startClaimLink(phone: string, state: any): Promise<void> {
 
  // Mint the claim now with an empty note (the note is optional + comes next).
  const { data: res, error } = await admin.rpc("send_postcard_via_claim_direct", {
-  p_user_id: userId, p_message: "", p_photo_path: photoUrl,
+  p_user_id: userId, p_message: "", p_photo_path: draftRow.photo_path,
  });
  if (error || !res?.claim_token) {
   const oom = error?.message?.includes("INSUFFICIENT_CREDITS");
@@ -2595,7 +2597,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms_direct", {
   p_user_id: userId,
   p_message: message,
-  p_photo_path: photoUrl,
+  p_photo_path: draftRow.photo_path,
   p_to_line1: matchedRecipient.recipient_line1,
   p_to_line2: matchedRecipient.recipient_line2,
   p_to_city: matchedRecipient.recipient_city,
@@ -2774,7 +2776,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
  const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms_direct", {
   p_user_id: userId,
   p_message: message,
-  p_photo_path: photoUrl,
+  p_photo_path: draftRow.photo_path,
   p_to_line1: pendingReply.sender_line1,
   p_to_line2: pendingReply.sender_line2,
   p_to_city: pendingReply.sender_city,
@@ -3017,7 +3019,7 @@ async function doMail(phone: string, state: any): Promise<void> {
 
  const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms", {
  p_user_id: userId, p_to_friend_id: friendId, p_message: message,
- p_photo_path: photoUrl, p_to_city: recipient.city, p_from_city: senderCity,
+ p_photo_path: draftRow.photo_path, p_to_city: recipient.city, p_from_city: senderCity,
  });
  if (rpcErr) {
  console.error("[loop-inbound] send_postcard_sms failed", rpcErr);
@@ -3240,7 +3242,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
 
  const { data: postcardId, error: rpcErr } = await admin.rpc("send_postcard_sms", {
  p_user_id: userId, p_to_friend_id: friendId, p_message: message,
- p_photo_path: photoUrl, p_to_city: recipient.city, p_from_city: senderCity,
+ p_photo_path: draftRow.photo_path, p_to_city: recipient.city, p_from_city: senderCity,
  p_scheduled_send_at: sendAt.toISOString(),
  });
  if (rpcErr) {
