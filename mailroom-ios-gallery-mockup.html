@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mailroom · iOS gallery redesign (mockups)</title>
+<style>
+  :root{
+    --board:#0e0e11; --ink:#ececf0; --muted:#8c8c96;
+    --ios-bg:#f2f2f7; --ios-card:#ffffff; --ios-sep:#e3e3e8; --ios-label:#1c1c1e;
+    --ios-2nd:#8a8a8e; --ios-blue:#0a84ff; --good:#34c759; --amber:#ff9f0a;
+    --parch:#f4ecdd; --sender:#b8483a; --recip:#3c6e8f;
+    --sf:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Helvetica,Arial,sans-serif;
+    --script:"Snell Roundhand","Apple Chancery",cursive;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--board);color:var(--ink);font:15px/1.5 var(--sf);padding:38px 20px 90px}
+  .wrap{max-width:1200px;margin:0 auto}
+  h1{font-size:27px;letter-spacing:-.02em;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 6px;max-width:760px}
+  .principle{color:var(--muted);font-size:12.5px;margin:0 0 30px;max-width:820px}
+  .principle b{color:#cdcdd4}
+
+  .row{display:flex;gap:34px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+  .col{flex:0 0 auto;width:320px}
+  .col .label{font-size:13px;font-weight:650;letter-spacing:-.01em;margin:0 0 3px;text-align:center}
+  .col .why{font-size:11.5px;color:var(--muted);text-align:center;margin:0 0 14px;min-height:32px;line-height:1.4}
+
+  /* iPhone */
+  .phone{background:#000;border-radius:46px;padding:11px;box-shadow:0 24px 70px rgba(0,0,0,.55)}
+  .screen{background:var(--ios-bg);border-radius:36px;overflow:hidden;height:660px;position:relative;color:var(--ios-label)}
+  .notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:104px;height:26px;background:#000;border-radius:16px;z-index:30}
+  .statusbar{height:42px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 4px;font-size:12px;font-weight:600;color:var(--ios-label)}
+  .scroll{height:calc(100% - 42px);overflow:hidden}
+
+  /* nav */
+  .nav{padding:6px 18px 4px}
+  .nav .lt{font-size:30px;font-weight:800;letter-spacing:-.03em}
+  .nav .sub2{font-size:13px;color:var(--ios-2nd);margin-top:1px}
+  .navbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;font-size:16px}
+  .navbar .t{font-weight:650;font-size:16px}
+  .navbar .b{color:var(--ios-blue)}
+
+  /* sheet */
+  .grabber{width:38px;height:5px;border-radius:3px;background:#cfcfd4;margin:8px auto 4px}
+
+  /* the postcard hero */
+  .stage{padding:14px 22px 6px;perspective:1200px}
+  .pc{position:relative;aspect-ratio:7/5;border-radius:10px;background:var(--parch);
+     box-shadow:0 18px 30px rgba(0,0,0,.22),0 4px 8px rgba(0,0,0,.10);transform:rotate(-1deg);overflow:hidden}
+  .pc .ph{position:absolute;inset:0;background:
+     radial-gradient(circle at 74% 24%,#ffe9a8 0 8%,transparent 30%),
+     linear-gradient(180deg,#ffb27a,#ff8e6e 40%,#c75b7a 68%,#3b3b6b)}
+  .pc .ph::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,rgba(255,255,255,.07),transparent 34%,rgba(0,0,0,.05))}
+  .pc .stamp{position:absolute;top:9px;right:9px;width:30px;height:36px;border:1.5px dashed rgba(255,255,255,.85);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:15px;backdrop-filter:blur(2px)}
+  .pc .pm{position:absolute;top:13px;right:46px;width:30px;height:30px;border:1.5px solid rgba(255,255,255,.7);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:6px;color:rgba(255,255,255,.9);text-align:center;line-height:1.1;letter-spacing:.02em;transform:rotate(-8deg)}
+  .pager{display:flex;gap:6px;justify-content:center;margin:12px 0 4px}
+  .pager i{width:6px;height:6px;border-radius:50%;background:#c8c8cd}.pager i.on{background:#3a3a3c}
+
+  /* info card */
+  .info{margin:10px 16px 0;background:var(--ios-card);border-radius:14px;overflow:hidden}
+  .info .r{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--ios-sep)}
+  .info .r:last-child{border-bottom:0}
+  .info .ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+  .info .tx{flex:1;min-width:0}
+  .info .tx .k{font-size:15px;font-weight:560;letter-spacing:-.01em}
+  .info .tx .v{font-size:13px;color:var(--ios-2nd);margin-top:1px}
+  .info .tr{margin-left:auto;font-size:13px;color:var(--ios-2nd)}
+  .statuspill{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600}
+  .statuspill b{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+  /* route strip */
+  .route{margin:10px 16px 0;background:var(--ios-card);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+  .route .mini{width:88px;height:54px;border-radius:9px;background:var(--parch);overflow:hidden;flex:0 0 auto}
+  .route .mini svg{width:100%;height:100%;display:block}
+  .route .rt .mi{font-size:17px;font-weight:700;letter-spacing:-.02em}
+  .route .rt .sub{font-size:12.5px;color:var(--ios-2nd);margin-top:1px}
+
+  /* gallery grid */
+  .ghead{padding:4px 18px 8px;font-size:13px;font-weight:650;color:var(--ios-2nd);text-transform:uppercase;letter-spacing:.04em}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:2px 18px 18px}
+  .tile .pcS{aspect-ratio:7/5;border-radius:8px;overflow:hidden;position:relative;
+     box-shadow:0 8px 16px rgba(0,0,0,.16),0 2px 4px rgba(0,0,0,.08)}
+  .tile .cap{margin-top:7px}
+  .tile .cap .n{font-size:14px;font-weight:560;letter-spacing:-.01em}
+  .tile .cap .d{font-size:12px;color:var(--ios-2nd);margin-top:0}
+
+  /* history list */
+  .hlist{margin:8px 16px 0;background:var(--ios-card);border-radius:14px;overflow:hidden}
+  .hrow{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--ios-sep)}
+  .hrow:last-child{border-bottom:0}
+  .hrow .th{width:52px;height:37px;border-radius:6px;overflow:hidden;flex:0 0 auto;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  .hrow .m{flex:1;min-width:0}
+  .hrow .m .n{font-size:15.5px;font-weight:560;letter-spacing:-.01em}
+  .hrow .m .s{font-size:13px;color:var(--ios-2nd);margin-top:1px;display:flex;align-items:center;gap:5px}
+  .hrow .m .s b{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .hrow .dt{font-size:13px;color:#b8b8be;margin-left:auto}
+
+  .foot{color:var(--muted);font-size:12px;text-align:center;margin-top:40px;line-height:1.7;max-width:760px;margin-left:auto;margin-right:auto}
+  .pill{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--amber);color:#0a0a0a;padding:2px 7px;border-radius:999px;margin-left:8px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>iOS gallery redesign <span class="pill">mockup · not built yet</span></h1>
+  <p class="sub">The three screens where a sent card lives in the app, rebuilt to Series-level nativeness. React to the look, then I'll write the React Native.</p>
+  <p class="principle"><b>The moves:</b> the mailed postcard itself becomes the hero (front + back, swipeable) instead of "a photo + a message box" · system <b>SF</b> for all chrome, handwriting reserved for the card's own note · real depth + restraint · delivery status and route read like a Wallet pass, not admin software (no category, no credit counts in the rows).</p>
+
+  <div class="row">
+
+    <!-- 1. DETAIL SHEET -->
+    <div class="col">
+      <div class="label">1 · Postcard detail</div>
+      <div class="why">Tap a card → the actual printed postcard is the hero. Swipe front↔back. Status + route read below, calm.</div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span>● ▼ 100%</span></div>
+        <div class="scroll" style="background:var(--ios-bg)">
+          <div class="grabber"></div>
+          <div class="navbar"><span class="b">Close</span><span class="t">To Sarah</span><span class="b">Share</span></div>
+          <div class="stage">
+            <div class="pc"><div class="ph"></div>
+              <div class="pm">CHICAGO<br>JUN 2</div><div class="stamp">📮</div></div>
+          </div>
+          <div class="pager"><i class="on"></i><i></i></div>
+          <div class="info">
+            <div class="r"><div class="ic" style="background:#e8f7ec">📬</div>
+              <div class="tx"><div class="k">Delivered</div><div class="v">Jun 7, 2026 · Brooklyn, NY</div></div>
+              <div class="tr"><span class="statuspill"><b style="background:var(--good)"></b></span></div></div>
+            <div class="r"><div class="ic" style="background:#f0eafc">✍️</div>
+              <div class="tx"><div class="k">Your note</div><div class="v" style="font-family:var(--script);font-size:15px;color:#4a3f2e">Miss you, Brooklyn. Come visit ♥</div></div></div>
+          </div>
+          <div class="route">
+            <div class="mini"><svg viewBox="0 0 88 54" preserveAspectRatio="none">
+              <path d="M12,42 C30,16 58,16 78,20" fill="none" stroke="#b8483a" stroke-width="1.6" stroke-dasharray="4 3"/>
+              <circle cx="12" cy="42" r="3" fill="#b8483a"/><circle cx="78" cy="20" r="3" fill="#3c6e8f"/></svg></div>
+            <div class="rt"><div class="mi">1,234 miles</div><div class="sub">Chicago → Brooklyn, by post</div></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- 2. GALLERY / JOURNAL -->
+    <div class="col">
+      <div class="label">2 · Your mail (gallery)</div>
+      <div class="why">A grid of real postcards with depth. Label sits below the card (no script overlay muddying the photo).</div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span>● ▼ 100%</span></div>
+        <div class="scroll" style="background:var(--ios-bg)">
+          <div class="nav"><div class="lt">Your Mail</div><div class="sub2">28 cards sent</div></div>
+          <div class="ghead">June 2026</div>
+          <div class="grid">
+            <div class="tile"><div class="pcS"><div class="pc" style="transform:none;border-radius:8px;box-shadow:none;height:100%"><div class="ph"></div><div class="stamp" style="width:20px;height:24px;font-size:10px;top:6px;right:6px">📮</div></div></div>
+              <div class="cap"><div class="n">Sarah</div><div class="d">Brooklyn · Jun 2</div></div></div>
+            <div class="tile"><div class="pcS"><div class="pc" style="transform:none;border-radius:8px;box-shadow:none;height:100%"><div class="ph" style="background:linear-gradient(180deg,#8ec5e0,#3c6e8f 70%,#244b63)"></div><div class="stamp" style="width:20px;height:24px;font-size:10px;top:6px;right:6px">📮</div></div></div>
+              <div class="cap"><div class="n">Mom</div><div class="d">Denver · Jun 1</div></div></div>
+            <div class="tile"><div class="pcS"><div class="pc" style="transform:none;border-radius:8px;box-shadow:none;height:100%"><div class="ph" style="background:linear-gradient(180deg,#f3c94e,#e08a3c 60%,#8a4b2a)"></div><div class="stamp" style="width:20px;height:24px;font-size:10px;top:6px;right:6px">📮</div></div></div>
+              <div class="cap"><div class="n">a pen pal</div><div class="d">somewhere · May 30</div></div></div>
+            <div class="tile"><div class="pcS"><div class="pc" style="transform:none;border-radius:8px;box-shadow:none;height:100%"><div class="ph" style="background:linear-gradient(180deg,#cdb4e8,#7b5ea8 65%,#3f2f5e)"></div><div class="stamp" style="width:20px;height:24px;font-size:10px;top:6px;right:6px">📮</div></div></div>
+              <div class="cap"><div class="n">Jess</div><div class="d">Austin · May 28</div></div></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- 3. HISTORY -->
+    <div class="col">
+      <div class="label">3 · History</div>
+      <div class="why">Reads like mail, not a ledger: thumbnail, who, delivery state, date. No category, no credit columns.</div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span>● ▼ 100%</span></div>
+        <div class="scroll" style="background:var(--ios-bg)">
+          <div class="nav"><div class="lt">History</div><div class="sub2">Sent cards and replies</div></div>
+          <div class="hlist">
+            <div class="hrow"><div class="th"><div class="ph" style="position:absolute;inset:0;background:linear-gradient(180deg,#ffb27a,#c75b7a 70%,#3b3b6b)"></div></div>
+              <div class="m"><div class="n">Sarah</div><div class="s"><b style="background:var(--good)"></b>Delivered · Brooklyn, NY</div></div><div class="dt">Jun 7</div></div>
+            <div class="hrow"><div class="th"><div class="ph" style="position:absolute;inset:0;background:linear-gradient(180deg,#8ec5e0,#3c6e8f 70%)"></div></div>
+              <div class="m"><div class="n">Mom</div><div class="s"><b style="background:var(--amber)"></b>In transit · Denver, CO</div></div><div class="dt">Jun 3</div></div>
+            <div class="hrow"><div class="th"><div class="ph" style="position:absolute;inset:0;background:linear-gradient(180deg,#f3c94e,#8a4b2a 70%)"></div></div>
+              <div class="m"><div class="n">A pen pal</div><div class="s"><b style="background:var(--good)"></b>Delivered · somewhere</div></div><div class="dt">May 30</div></div>
+            <div class="hrow"><div class="th"><div class="ph" style="position:absolute;inset:0;background:linear-gradient(180deg,#cdb4e8,#3f2f5e 70%)"></div></div>
+              <div class="m"><div class="n">Jess wrote back</div><div class="s"><b style="background:var(--recip)"></b>Reply · on its way to you</div></div><div class="dt">May 28</div></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+
+  <p class="foot">
+    Maps to Codex's D findings: detail sheet shows the mailed card (not a photo + message box) · gallery uses real postcard tiles with the label below · history drops the admin columns · typography moves to system SF, handwriting only on the card's note.<br>
+    Say the word and I'll build these in React Native (PostcardDetailSheet, WeeklyJournal, MailHistorySheet, theme/typography).
+  </p>
+</div>
+</body>
+</html>
