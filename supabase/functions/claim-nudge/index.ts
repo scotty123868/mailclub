@@ -101,7 +101,7 @@ serve(async (req) => {
   const daysLeft = Math.max(1, Math.round((new Date(row.expires_at).getTime() - now) / 86400000));
   const ok = await loopSend(
    phone,
-   `Quick nudge: the postcard you started is still waiting on an address, so it hasn't shipped yet. The link's good for ${daysLeft} more day${daysLeft === 1 ? "" : "s"} — forward it again whenever:\n${link}`,
+   `Quick nudge: the postcard you started is still waiting on an address, so it hasn't shipped yet. The link's good for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}. Forward it again whenever:\n${link}`,
    "📮 Still waiting on an address",
   );
   // Stamp nudge_sent_at regardless of send outcome so a hard-failing

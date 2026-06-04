@@ -304,7 +304,7 @@ function receiverLandingPage(
 
  <p class="small">
  Mailroom is a quiet little app for sending real postcards to real friends.
- Each card costs the price of a stamp. No feed, no algorithm.
+ First card's free, then about a dollar each. No feed, no algorithm.
  </p>
 </div>
 <script>

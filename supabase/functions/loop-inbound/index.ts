@@ -1314,8 +1314,53 @@ interface InboundCtx {
  messageId?: string; // the user's inbound message id, used for reactions
 }
 
+// Per-phone spam guard. Returns true (drop the message) when a number has
+// fired many non-photo messages without ever starting a card. A real photo
+// clears the streak, so genuine users never trip it. Caps OpenAI/Lob/media
+// spend from someone spamming the public number.
+async function checkAbuseGuard(from: string, hasPhoto: boolean): Promise<boolean> {
+ const nowMs = Date.now();
+ const nowIso = new Date(nowMs).toISOString();
+ if (hasPhoto) {
+  await admin.from("sms_abuse_guard").upsert(
+   { phone: from, nonphoto_streak: 0, blocked_until: null, updated_at: nowIso },
+   { onConflict: "phone" });
+  return false;
+ }
+ const { data: row } = await admin
+  .from("sms_abuse_guard").select("nonphoto_streak, blocked_until").eq("phone", from).maybeSingle();
+ if (row?.blocked_until) {
+  if (new Date(row.blocked_until).getTime() > nowMs) return true; // still cooling off → silence
+  // Cooldown elapsed: clean slate.
+  await admin.from("sms_abuse_guard").upsert(
+   { phone: from, nonphoto_streak: 0, blocked_until: null, updated_at: nowIso },
+   { onConflict: "phone" });
+  return false;
+ }
+ const streak = (row?.nonphoto_streak ?? 0) + 1;
+ if (streak >= 20) {
+  await admin.from("sms_abuse_guard").upsert(
+   { phone: from, nonphoto_streak: streak, blocked_until: new Date(nowMs + 24 * 3600 * 1000).toISOString(), updated_at: nowIso },
+   { onConflict: "phone" });
+  // One heads-up on the crossing only; subsequent messages hit the
+  // blocked_until branch above and stay silent.
+  await loopSend({ contact: from, text: "Text a photo to start a postcard. (I'll be quiet until you do.)" });
+  return true;
+ }
+ await admin.from("sms_abuse_guard").upsert(
+  { phone: from, nonphoto_streak: streak, blocked_until: null, updated_at: nowIso },
+  { onConflict: "phone" });
+ return false;
+}
+
 async function handleInbound(ctx: InboundCtx): Promise<void> {
  const { from, body, attachments, messageId } = ctx;
+ const hasPhoto = !!(attachments && attachments.length > 0);
+
+ // Spam guard: silence a number that fires many non-photo messages without
+ // ever starting a card. A real photo resets the streak (genuine users are
+ // never affected). Caps OpenAI/Lob/media spend.
+ if (await checkAbuseGuard(from, hasPhoto)) return;
 
  // Fetch state once at the top — used by the photo-restart guard, the
  // loose-BUY gate, and step routing.
@@ -1325,7 +1370,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  // works even mid-confirmation.
  if (isRestartCommand(body)) {
  await resetState(from);
- await loopSend({ contact: from, text: "All cleared — text a photo whenever you're ready." });
+ await loopSend({ contact: from, text: "All cleared. Text a photo whenever you're ready." });
  return;
  }
 
@@ -1474,7 +1519,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  if (/^buy\b/i.test(body.trim()) && !CONTENT_ENTRY_STEPS.has(state.step)) {
  await loopSend({
  contact: from,
- text: "Top up: 5 cards for $5, 10 for $10, 25 for $25. Just say \"buy 10\" (or buy 5, buy 25).",
+ text: "Top up: 4 cards for $5, 10 for $10, 30 for $25. Just say \"buy 10\" (or buy 5, buy 25).",
  });
  return;
  }
@@ -1509,7 +1554,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  // whatever they said instead of a canned line.
  await resetState(from);
  if (body && body.trim()) return await respondFreeform(from, body, "Their session reset. Help them, then point them to text a photo.");
- await loopSend({ contact: from, text: "Text a photo to start a postcard — first one's free." });
+ await loopSend({ contact: from, text: "Text a photo to start a postcard. First one's free." });
  }
 }
 
@@ -1538,7 +1583,7 @@ async function respondFreeform(phone: string, body: string, context: string): Pr
  ]);
  const reply = (typeof r?.reply === "string" && r.reply.trim())
   ? r.reply.trim()
-  : "Text a photo to start a postcard — first one's free.";
+  : "Text a photo to start a postcard. First one's free.";
  await loopSend({ contact: phone, text: reply });
 }
 
@@ -1557,7 +1602,7 @@ async function handleIdle(from: string, body = ""): Promise<void> {
  await loopSend({
  contact: from,
  subject: "📮 Welcome to Mailroom",
- text: "A magical mail club — the seamless way to mail a photo as a real postcard.\n\nYour first card's on us. Send me a photo to begin.",
+ text: "A magical mail club: the easiest way to mail a postcard.\n\nYour first card's on us. Send me a photo to begin.",
  });
  return;
  }
@@ -1663,7 +1708,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
    subject: "📬 Pen pal reply waiting",
    text:
     `${locationLabel} sent you a card ${daysWord}.\n\n` +
-    `Want to write ${pendingReply.senderFirstName} back? Just say yes.\n\n(Or give me a friend's name, or say "penpal" for a new match.)`,
+    `Want to write ${pendingReply.senderFirstName} back? Just say yes.\n\n(Or give me a friend's name, or say "penpal" to meet a random stranger.)`,
    contact_file: firstTime,
   });
  } else {
@@ -1672,13 +1717,13 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
   if (firstTime) {
    await loopSend({
     contact: phone,
-    text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with someone new.",
+    text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with a random stranger.",
     contact_file: true,
    });
   } else {
    await loopSend({
     contact: phone,
-    text: "Who's this one for?\n\nTell me a name, or say \"penpal\" for a new match.",
+    text: "Who's this one for?\n\nTell me a name, or say \"penpal\" to meet a random stranger.",
    });
   }
  }
@@ -1752,7 +1797,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  contact: phone,
  subject: "🪶 Pen pal mode",
  text:
- "We'll match you with another pen pal. You won't see their address. They won't see yours.\n\n" +
+ "We'll match you with a random pen pal. You won't see their address. They won't see yours.\n\n" +
  "What should your card say? (Up to 240 chars, or say 'skip' for just the photo.)",
  });
  return;
@@ -1807,7 +1852,7 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  }
  await loopSend({
  contact: phone,
- text: "Tell me a friend's name, or say \"penpal\" to be matched with someone new.",
+ text: "Tell me a friend's name, or say \"penpal\" to be matched with a random stranger.",
  });
 }
 
@@ -2082,7 +2127,7 @@ function buildPreSendComposition(opts: {
  recipientCity?: string;
  note: string;
 }): string {
- const from = (opts.fromCity || "").trim().toUpperCase() || "YOUR CITY";
+ const from = (opts.fromCity || "").trim().toUpperCase() || "YOU";
  const noteBlock = opts.note.length > 0 ? `\n\n   "${opts.note}"` : "";
  if (opts.sendType === "stranger") {
   return `${from} ──→ ✦\n\n   To: a pen pal${noteBlock}`;
@@ -2115,7 +2160,7 @@ async function finishClaimSend(phone: string, state: any, note: string, echoText
  const { data: draftRow } = await admin
   .from("sms_postcard_drafts").select("photo_path").eq("token", draftToken).maybeSingle();
  if (!draftRow?.photo_path) {
-  await loopSend({ contact: phone, text: "Still saving your photo — give me a few seconds, then send your note again." });
+  await loopSend({ contact: phone, text: "Still saving your photo. Give me a few seconds, then send your note again." });
   return;
  }
  let photoUrl = draftRow.photo_path;
@@ -2444,10 +2489,18 @@ async function handleSenderAddressConfirm(phone: string, body: string, state: an
  // Deferred capture (friend first-send): the card already mailed, so
  // there's nothing left to send — just confirm the save and reset.
  if (state.conversation_data?.post_send) {
+ // Backfill from_city on cards sent before we had the address (the
+ // deferred first send) so their route map + "from" label render. The
+ // sender's city never prints on the physical card (that's the Mailroom
+ // return address), so this fully corrects the display retroactively.
+ if (existing?.id) {
+ await admin.from("postcards").update({ from_city: resolved.city })
+ .eq("sender_id", existing.id).eq("from_city", "");
+ }
  await resetState(phone);
  await loopSend({
  contact: phone,
- text: `Saved — that's your return address. Now friends can write you back. Text a photo anytime to send another. 📮`,
+ text: `Saved. That's your return address. Now friends can write you back. Text a photo anytime to send another. 📮`,
  });
  return;
  }
@@ -2712,7 +2765,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   await releaseSendClaim(phone, draftToken);
   await loopSend({
    contact: phone,
-   text: `Couldn't mail this — ${friendlyLobError(lob.error)}. Your credit's back. Tell me to send it again, or text a new photo to start over.`,
+   text: `Couldn't mail this: ${friendlyLobError(lob.error)}. Your credit's back. Tell me to send it again, or text a new photo to start over.`,
   });
   return;
  }
@@ -2889,7 +2942,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   await releaseSendClaim(phone, draftToken);
   await loopSend({
    contact: phone,
-   text: `Couldn't mail your reply — ${friendlyLobError(lob.error)}. Your credit's back. Tell me to send it again.`,
+   text: `Couldn't mail your reply: ${friendlyLobError(lob.error)}. Your credit's back. Tell me to send it again.`,
   });
   return;
  }
@@ -3125,7 +3178,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  await releaseSendClaim(phone, draftToken);
  await loopSend({
  contact: phone,
- text: `Couldn't mail this — ${friendlyLobError(lob.error)}. Your credit's back. Tell me to send it again, or text a new photo to start over.`,
+ text: `Couldn't mail this: ${friendlyLobError(lob.error)}. Your credit's back. Tell me to send it again, or text a new photo to start over.`,
  });
  return;
  }
@@ -3269,7 +3322,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  await advanceState(phone, "awaiting_sender_location", null, { post_send: true });
  await loopSend({
  contact: phone,
- text: `One more thing — what's your full mailing address? We keep it private (only your city shows on a card) so friends can mail one back to you.\n\nFormat: street, city, state, ZIP.`,
+ text: `One more thing: what's your full mailing address? We keep it private (only your city shows on a card) so friends can mail one back to you.\n\nFormat: street, city, state, ZIP.`,
  });
  }
 }
