@@ -723,6 +723,15 @@ async function resolveAddress(phone: string, input: string): Promise<ParsedAddre
  };
  }
  }
+ // AI completion fallback. Lob was unavailable or found no match, but we
+ // have a street plus enough context (state, ZIP, or city) to infer the
+ // rest. Fill it and let the confirm step catch any mistake — better than
+ // bouncing a 90%-complete address. (Skips when there's no street at all.)
+ if (parsed && parsed.line1 && (!parsed.zip || !parsed.city) && (parsed.state || parsed.zip || parsed.city)) {
+ fireTyping(phone, 6);
+ const completed = await completeAddressAI(parsed);
+ if (completed) return completed;
+ }
  return parsed;
 }
 
