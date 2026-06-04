@@ -3392,13 +3392,20 @@ async function doScheduleReply(phone: string, state: any, schedule: ParsedSendCo
 
  await loopSend({ contact: phone, text: "🗓️ Saving your reply..." });
  await loopTyping(phone, 2);
- await loopSend({
+ const schedRes = await loopSend({
   contact: phone,
   subject: `🗓️ Reply saved for ${sendDateFmt}`,
   text: `Your reply to ${senderFirstName} ships ${sendDateFmt}.\nWe'll text you when it goes.`,
   effect: "gentle",
   passthrough: `scheduled_reply:${postcardId}`,
  });
+ // Anchor the "it shipped" update here: persist from_phone + this bubble's
+ // id so lob-webhook can thread the ship/deliver update when
+ // fire-scheduled-postcards mails it later. (Without these the webhook
+ // can't honor "we'll text you when it goes".)
+ const schedPatch: Record<string, unknown> = { from_phone: phone };
+ if (schedRes.ok && schedRes.messageId) schedPatch.mailed_imessage_id = schedRes.messageId;
+ await admin.from("postcards").update(schedPatch).eq("id", postcardId);
  await sleep(700);
  await loopSend({
   contact: phone,
@@ -3516,13 +3523,19 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  // promise that we'll text when it goes. Reframes "scheduled" from
  // calendar entry to social pact.
  const firstNameSched = recipientName.split(/\s+/)[0];
- await loopSend({
+ const schedRes = await loopSend({
  contact: phone,
  subject: `🗓️ Saved for ${sendDateFmt}`,
  text: `Card to ${firstNameSched} ships ${sendDateFmt}.\nWe'll text you when it goes.`,
  effect: "gentle",
  passthrough: `scheduled:${postcardId}`,
  });
+ // Anchor the "it shipped" update here: persist from_phone + this bubble's
+ // id so lob-webhook can thread the ship/deliver update when
+ // fire-scheduled-postcards mails it later.
+ const schedPatch: Record<string, unknown> = { from_phone: phone };
+ if (schedRes.ok && schedRes.messageId) schedPatch.mailed_imessage_id = schedRes.messageId;
+ await admin.from("postcards").update(schedPatch).eq("id", postcardId);
  await sleep(700);
 
  // Act 2. THE PROOF — postal-label centering (no console arrow),
