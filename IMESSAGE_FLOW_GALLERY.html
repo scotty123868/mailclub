@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mailroom — iMessage Flow Gallery</title>
+<title>Mailroom — iMessage Flow Gallery (v2)</title>
 <style>
   :root{
     --blue:#0a7cff; --blue2:#0a60ff;
@@ -17,8 +17,6 @@
   body{margin:0;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--paper)}
   a{color:var(--red)}
   code{font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;background:#efe9dc;padding:1px 5px;border-radius:5px}
-
-  /* layout */
   .wrap{display:grid;grid-template-columns:248px 1fr;gap:0;max-width:1280px;margin:0 auto}
   nav.toc{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:22px 16px 60px;border-right:1px solid var(--line);background:#fbf8f1}
   nav.toc h1{font-size:16px;margin:0 0 2px;letter-spacing:.2px}
@@ -27,33 +25,35 @@
   nav.toc a:hover{background:#efe9dc}
   nav.toc a.head{font-weight:700;margin-top:14px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px;pointer-events:none;padding-left:9px}
   main{padding:28px 40px 120px;min-width:0}
-
-  header.hero{padding:18px 0 26px;border-bottom:2px solid var(--line);margin-bottom:30px}
+  header.hero{padding:18px 0 22px;border-bottom:2px solid var(--line);margin-bottom:26px}
   header.hero h1{font-size:30px;margin:0 0 6px}
-  header.hero p{margin:6px 0;max-width:760px;color:#473f37}
-  .tag{display:inline-block;background:#efe7d6;border:1px solid var(--line);color:#6a5;color:var(--muted);font-size:11.5px;padding:2px 9px;border-radius:999px;margin:2px 4px 2px 0;font-weight:600}
+  header.hero p{margin:6px 0;max-width:780px;color:#473f37}
+  .tag{display:inline-block;background:#efe7d6;border:1px solid var(--line);color:var(--muted);font-size:11.5px;padding:2px 9px;border-radius:999px;margin:2px 4px 2px 0;font-weight:600}
   .tag.live{background:#e7f3ec;border-color:#bfe0cc;color:var(--green)}
-  .tag.legacy{background:#f3e7e7;border-color:#e0c5c5;color:var(--red)}
+  .tag.new{background:#e6eefb;border-color:#c2d4f5;color:#2b5bb5}
   .legend{display:flex;gap:18px;flex-wrap:wrap;margin:16px 0 0;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);font-size:12.5px}
-  .legend b{font-weight:700}
   .swatch{display:inline-block;width:13px;height:13px;border-radius:4px;vertical-align:-2px;margin-right:5px}
-
+  .changed{margin:20px 0 0;padding:16px 18px;background:#eef6f0;border:1px solid #c7e2d1;border-radius:12px}
+  .changed h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--green)}
+  .changed ul{margin:0;padding-left:18px;columns:2;column-gap:28px}
+  .changed li{margin:0 0 5px;font-size:13px;break-inside:avoid}
+  @media(max-width:760px){.changed ul{columns:1}}
   section.flow{margin:0 0 46px;scroll-margin-top:14px}
-  section.flow > h2{font-size:21px;margin:0 0 3px;display:flex;align-items:center;gap:9px}
+  section.flow > h2{font-size:21px;margin:0 0 3px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
   section.flow > h2 .num{font-size:12px;color:#fff;background:var(--ink);border-radius:7px;padding:2px 8px;font-weight:700}
-  .trigger{color:var(--muted);font-size:13px;margin:0 0 14px;max-width:760px}
+  .badge{font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 8px;letter-spacing:.3px}
+  .badge.upd{background:#e6eefb;color:#2b5bb5}
+  .badge.new{background:#e7f3ec;color:var(--green)}
+  .trigger{color:var(--muted);font-size:13px;margin:0 0 14px;max-width:780px}
   .trigger b{color:var(--ink)}
   .cols{display:grid;grid-template-columns:380px 1fr;gap:26px;align-items:start}
   @media(max-width:900px){.wrap{grid-template-columns:1fr}.cols{grid-template-columns:1fr}nav.toc{display:none}}
-
-  /* phone */
   .phone{background:#fff;border:1px solid #d9d2c4;border-radius:30px;box-shadow:var(--shadow);overflow:hidden}
   .phone .topbar{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 10px 10px;border-bottom:1px solid #ececec;background:#f7f7f8}
   .phone .avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#b8493a,#d98b3a);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
   .phone .who{font-size:12.5px;color:#555;font-weight:600}
   .phone .who span{color:#999;font-weight:400}
   .thread{padding:14px 12px 16px;display:flex;flex-direction:column;gap:3px;background:#fff}
-
   .b{max-width:80%;padding:8px 13px;border-radius:19px;font-size:14.5px;line-height:1.38;position:relative;white-space:pre-wrap;word-wrap:break-word}
   .bot{align-self:flex-start;background:var(--gray);color:var(--grayink);border-bottom-left-radius:6px}
   .user{align-self:flex-end;background:linear-gradient(180deg,var(--blue),var(--blue2));color:#fff;border-bottom-right-radius:6px}
@@ -62,17 +62,14 @@
   .subj{font-weight:700;display:block;margin-bottom:2px}
   .v{background:rgba(255,235,160,.5);border-radius:4px;padding:0 3px;font-style:italic}
   .user .v{background:rgba(255,255,255,.25)}
-  .attach{align-self:flex-start;width:170px;height:128px;border-radius:16px;border-bottom-left-radius:6px;background:linear-gradient(135deg,#d8c9ad,#b59f7a);
-     display:flex;align-items:center;justify-content:center;color:#fff8;font-size:11px;overflow:hidden;position:relative}
+  .attach{align-self:flex-start;width:170px;height:128px;border-radius:16px;border-bottom-left-radius:6px;background:linear-gradient(135deg,#d8c9ad,#b59f7a);display:flex;align-items:center;justify-content:center;color:#fff8;font-size:11px;overflow:hidden;position:relative}
   .attach.photo::after{content:"📷 photo";position:absolute;bottom:7px;left:9px;color:#fff;font-size:11px;text-shadow:0 1px 2px #0006}
   .attach.gallery{background:linear-gradient(135deg,#7a93b8,#b58fae)}
   .attach.gallery::after{content:"📷 photo · card flip · route map"}
   .react{align-self:flex-start;font-size:12px;color:#a99;margin:-1px 0 2px 6px}
   .effect{align-self:center;font-size:11px;color:#9a8f80;background:#f3eee2;border-radius:999px;padding:2px 10px;margin:5px 0 2px}
-  .sys{align-self:center;font-size:11px;color:#b0a89a;margin:6px 0 2px;text-transform:uppercase;letter-spacing:.5px}
+  .sys{align-self:center;font-size:11px;color:#b0a89a;margin:6px 0 2px;text-transform:uppercase;letter-spacing:.5px;text-align:center}
   .typing{align-self:flex-start;background:var(--gray);border-radius:16px;padding:9px 14px;color:#999;font-size:13px}
-
-  /* review callout */
   .review{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:12px;padding:14px 16px 13px;box-shadow:var(--shadow)}
   .review h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--amber)}
   .review.good{border-left-color:var(--green)}
@@ -80,12 +77,11 @@
   .review ul{margin:0;padding-left:18px}
   .review li{margin:0 0 7px;font-size:13.5px;color:#473f37}
   .review li b{color:var(--ink)}
-  .review .keep{color:var(--green);font-weight:700}
-  .review .fix{color:var(--red);font-weight:700}
+  .keep{color:var(--green);font-weight:700}
+  .fix{color:var(--red);font-weight:700}
+  .ship{color:var(--green);font-weight:700}
   .src{display:block;margin-top:9px;color:#a99;font-size:11px}
   .src code{font-size:11px;background:#efe9dc}
-
-  /* appendix */
   .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow);margin:0 0 22px}
   .panel h3{margin:0 0 12px;font-size:17px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -93,9 +89,7 @@
   .row{display:flex;gap:10px;align-items:flex-start;padding:8px 11px;border-radius:9px;font-size:13px}
   .row.w{background:#e9f3ec}.row.s{background:#fbf2df}.row.m{background:#f6e8e6}
   .pill{font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 7px;white-space:nowrap;margin-top:1px}
-  .pill.w{background:#cbe6d3;color:#246}.pill.w{color:var(--green)}
-  .pill.s{background:#f0dcb0;color:var(--amber)}
-  .pill.m{background:#e6c5c1;color:var(--red)}
+  .pill.w{background:#cbe6d3;color:var(--green)}.pill.s{background:#f0dcb0;color:var(--amber)}.pill.m{background:#e6c5c1;color:var(--red)}
   .p0{color:var(--red);font-weight:700}.p1{color:var(--amber);font-weight:700}.p2{color:var(--muted);font-weight:700}
   ol.steps{margin:6px 0 0;padding-left:20px}ol.steps li{margin-bottom:6px}
   hr.soft{border:none;border-top:1px solid var(--line);margin:34px 0}
@@ -107,50 +101,67 @@
 
 <nav class="toc">
   <h1>📮 Mailroom</h1>
-  <div class="sub">iMessage flow gallery</div>
+  <div class="sub">iMessage flow gallery · v2 (current code)</div>
   <a href="#how">How it works</a>
   <a class="head">Core send loop</a>
   <a href="#f1">1 · Cold open / welcome</a>
   <a href="#f2">2 · Photo → who's it for</a>
-  <a href="#f3">3 · Friend: name & address</a>
+  <a href="#f3">3 · Name &amp; address</a>
   <a href="#f4">4 · The note + AI ideas</a>
-  <a href="#f5">5 · Your return address</a>
-  <a href="#f6">6 · Send + celebration</a>
+  <a href="#f5">5 · Send + celebration</a>
+  <a href="#f6">6 · Return address (after send)</a>
   <a class="head">Branches</a>
-  <a href="#f7">7 · No address → claim link</a>
+  <a href="#f7">7 · No address → forward a link</a>
   <a href="#f8">8 · Pen pal (stranger)</a>
   <a href="#f9">9 · Writing back (reciprocate)</a>
   <a href="#f10">10 · Schedule for later</a>
   <a href="#f11">11 · Recipient memory</a>
-  <a class="head">Utility & commands</a>
+  <a class="head">Utility &amp; automated</a>
   <a href="#f12">12 · Buy / top up</a>
   <a href="#f13">13 · Memories</a>
   <a href="#f14">14 · Off-script (AI)</a>
   <a href="#f15">15 · Global commands</a>
   <a href="#f16">16 · Error catalog</a>
-  <a class="head">Receiver side (web)</a>
-  <a href="#f17">17 · Claim page & QR landing</a>
+  <a href="#f17">17 · Unclaimed-link nudge</a>
+  <a href="#f18">18 · Receiver side (web)</a>
   <a class="head">Reference</a>
-  <a href="#review">Top review notes</a>
+  <a href="#review">Review scorecard</a>
   <a href="#status">Does it connect?</a>
   <a href="#remains">What remains</a>
 </nav>
 
 <main>
 <header class="hero">
-  <h1>Mailroom — the iMessage flow, every word</h1>
-  <p>This is the complete conversational bot a sender experiences over <b>iMessage</b> (via the LoopMessage API). Every bubble below is <b>verbatim from the live code</b> on branch <code>mvp-v0.3-credits-and-categories</code> — the real state machine in <code>supabase/functions/loop-inbound/index.ts</code> (3,476 lines). Example values (names, cities) are filled in so threads read naturally; <span class="v">highlighted italics</span> mark dynamic template variables — hover to see the variable name.</p>
+  <h1>Mailroom — the iMessage flow, every word <span style="font-size:15px;color:var(--green);font-weight:700;vertical-align:middle">v2 · current code</span></h1>
+  <p>The complete conversational bot a sender experiences over <b>iMessage</b> (LoopMessage API). Every bubble is <b>verbatim from the live code</b> on branch <code>mvp-v0.3-credits-and-categories</code> — the state machine in <code>supabase/functions/loop-inbound/index.ts</code> — <b>including this session's edits</b>. Example values are filled in; <span class="v">highlighted italics</span> mark dynamic template variables.</p>
   <div>
-    <span class="tag live">LoopMessage · iMessage (live path)</span>
-    <span class="tag">Supabase backend</span>
+    <span class="tag live">LoopMessage · iMessage</span>
+    <span class="tag">Supabase</span>
     <span class="tag">Lob fulfillment</span>
     <span class="tag">Stripe credits</span>
-    <span class="tag legacy">sms-inbound (legacy Twilio, superseded)</span>
+    <span class="tag new">+ claim-nudge cron (new)</span>
+  </div>
+  <div class="changed">
+    <h3>✓ Changed this session (vs v1 gallery)</h3>
+    <ul>
+      <li>Welcome ends with a clear CTA + "seamless way to mail a photo" framing</li>
+      <li>Missing ZIP/city is <b>AI-completed and shown at confirm</b>, not bounced</li>
+      <li>Note prompt surfaces the <code>ideas</code> helper</li>
+      <li>Reciprocation prompt leads with one action</li>
+      <li>Return address is asked <b>after</b> the first card mails (faster first send)</li>
+      <li>Claim link is now a single <b>forwardable blurb</b></li>
+      <li>Lob errors shown in <b>plain language</b></li>
+      <li>Buy link expiry clarified ("cards never expire")</li>
+      <li>Warmer cancel; memories nudge moved to 10 cards</li>
+      <li>Support email → scottylefkowitz2@gmail.com</li>
+      <li><b>Pen-pal replies can now be scheduled</b></li>
+      <li><b>New:</b> unclaimed-link reminder texts the sender before expiry</li>
+    </ul>
   </div>
   <div class="legend">
-    <div><span class="swatch" style="background:var(--gray)"></span><b>Bot</b> (Mailroom, incoming)</div>
-    <div><span class="swatch" style="background:var(--blue)"></span><b>Sender</b> (you, outgoing)</div>
-    <div><b>📮/🪶/💌/🔗/🗓️</b> = bold iMessage <i>subject</i> line</div>
+    <div><span class="swatch" style="background:var(--gray)"></span><b>Bot</b> (incoming)</div>
+    <div><span class="swatch" style="background:var(--blue)"></span><b>Sender</b> (you)</div>
+    <div><b>📮/🪶/💌</b> = bold iMessage <i>subject</i></div>
     <div>✨ = screen <b>effect</b></div>
     <div><span class="v" title="example">var</span> = dynamic value</div>
   </div>
@@ -158,39 +169,35 @@
 
 <section class="flow" id="how">
   <h2>How the whole thing works</h2>
-  <p class="trigger">A sender texts a <b>photo</b> to Mailroom's iMessage number. A bot walks them through one short conversation — recipient, address, a note — then hands the card to <b>Lob</b>, which prints and mails a real paper postcard via USPS. The first card is free; after that it's ~$1 (credits topped up with <code>buy</code> via Stripe). Recipients can write back by scanning a QR / texting a <code>REPLY</code> code, or — if the sender didn't have an address — by tapping a claim link and adding their own. There's also a "pen pal" mode that mails to an anonymous stranger who can write back. The companion iOS app + App Clip let people view cards travel on a map and claim links natively.</p>
+  <p class="trigger">A sender texts a <b>photo</b> to Mailroom's iMessage number. A short conversation collects a recipient and a note, then hands the card to <b>Lob</b>, which prints &amp; mails a real postcard via USPS. First card free; then ~$1 (credits via <code>buy</code> → Stripe). Recipients write back by texting a <code>REPLY</code> code or — if the sender had no address — by tapping a forwarded claim link. "Pen pal" mode mails an anonymous stranger who writes back. A companion iOS app + App Clip show cards traveling and claim links natively.</p>
   <div class="panel" style="margin-top:4px">
-    <b>Entry → states → exit.</b> Webhook authenticates &amp; dedupes → checks global commands (<code>cancel</code>, photo-swap, <code>REPLY</code>, <code>memories</code>, <code>buy</code>) → routes on <code>sms_conversation_state.step</code> through: <code>idle → (photo) → awaiting_send_type → awaiting_recipient_name → awaiting_recipient_address → awaiting_address_confirm → awaiting_message → awaiting_sender_location → awaiting_sender_address_confirm → awaiting_send_confirm → sending → [celebration] → idle</code>. Off-script questions are answered by a GPT-4o-mini assistant in the bot's voice.
+    <b>States.</b> <code>idle → (photo) → awaiting_send_type → awaiting_recipient_name → awaiting_recipient_address → awaiting_address_confirm → awaiting_message → awaiting_send_confirm → sending → [celebration] → (first-timers) awaiting_sender_location → idle</code>. Note the <b>return-address step now lives after the send</b>. Pen-pal &amp; reply sends still collect the address up front (the match needs it). Off-script questions get a GPT-4o-mini reply in the bot's voice.
   </div>
 </section>
 
 <!-- 1 -->
 <section class="flow" id="f1">
-  <h2><span class="num">01</span> Cold open / welcome</h2>
-  <p class="trigger"><b>Trigger:</b> a brand-new number texts anything that isn't a question. Existing users with no active draft get a status line instead. Real questions skip straight to the AI assistant.</p>
+  <h2><span class="num">01</span> Cold open / welcome <span class="badge upd">copy updated</span></h2>
+  <p class="trigger"><b>Trigger:</b> a brand-new number texts something that isn't a question. Real questions skip to the AI assistant; returning users get a status line.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
-        <div class="b user">hey what is this?</div>
-        <div class="sys">new number · a question → AI assistant</div>
-        <div class="b bot">It mails a real paper postcard. Text a photo, write a short note, and we mail it. Want to try? Text a photo.</div>
-        <div class="b bot gap"><span class="subj">📮 Welcome to Mailroom</span>A magical mail club. Mail a photo with a text.
+        <div class="b bot"><span class="subj">📮 Welcome to Mailroom</span>A magical mail club — the seamless way to mail a photo as a real postcard.
 
-Your first card's on us.</div>
-        <div class="sys">existing user, idle, has credits</div>
+Your first card's on us. Send me a photo to begin.</div>
+        <div class="sys">existing user, idle</div>
         <div class="b bot gap">You have <span class="v" title="${credits}">3</span> cards left. Text a photo to start a new one.</div>
         <div class="b bot gap">Out of cards. Text "buy" to top up.</div>
       </div>
     </div>
-    <div class="review">
-      <h4>Review · clarity</h4>
+    <div class="review good">
+      <h4>Review · resolved</h4>
       <ul>
-        <li><span class="fix">Fix:</span> The welcome bubble never tells a first-timer <b>what to do next</b>. "A magical mail club. Mail a photo with a text." describes; it doesn't instruct. Add a closing CTA: <i>"Send me a photo to begin."</i> Right now the only explicit "text a photo" prompt is on the <i>returning</i>-user line.</li>
-        <li><span class="keep">Keep:</span> Branching a genuine question into the AI assistant instead of the canned welcome is a great touch — it makes the bot feel alive on the very first message.</li>
-        <li><b>Consider:</b> "magical mail club" is charming but vague. One concrete noun ("real paper postcards") earlier would lower confusion for cold traffic.</li>
+        <li><span class="ship">✓ Shipped:</span> the welcome now ends with <b>"Send me a photo to begin."</b> — a first-timer is told exactly what to do. Also reframed to "the seamless way to mail a photo," your preferred positioning.</li>
+        <li><span class="keep">Keep:</span> a genuine question on the first message still routes to the AI assistant instead of this canned line.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:1518–1540</code> · <code>handleIdle</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>handleIdle</code></span>
     </div>
   </div>
 </section>
@@ -198,40 +205,35 @@ Your first card's on us.</div>
 <!-- 2 -->
 <section class="flow" id="f2">
   <h2><span class="num">02</span> Photo → "who's it for?"</h2>
-  <p class="trigger"><b>Trigger:</b> the sender texts a photo. An instant ❤️ tapback + a "got it" ack fire <b>before</b> the slow (10–15s) HEIC download/EXIF-strip/upload, so the thread never sits silent.</p>
+  <p class="trigger"><b>Trigger:</b> the sender texts a photo. An instant ❤️ tapback + "Got it" fire <b>before</b> the slow upload, so the thread never goes silent.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
-        <div class="attach photo user" style="align-self:flex-end;border-bottom-right-radius:6px;border-bottom-left-radius:16px"></div>
+        <div class="attach photo" style="align-self:flex-end;border-bottom-right-radius:6px;border-bottom-left-radius:16px"></div>
         <div class="react">❤️ Liked</div>
         <div class="b bot">📮 Got it.</div>
         <div class="typing">Mailroom is typing…</div>
         <div class="b bot gap">Who's this card for?
 
 Tell me a name, or say "penpal" to be matched with someone new.</div>
-        <div class="sys">returning sender variant</div>
-        <div class="b bot gap">Who's this one for?
-
-Tell me a name, or say "penpal" for a new match.</div>
       </div>
     </div>
-    <div class="review">
-      <h4>Review · flow</h4>
+    <div class="review good">
+      <h4>Review · keep</h4>
       <ul>
-        <li><span class="keep">Keep:</span> The instant ❤️ + "📮 Got it." before the upload is the single best UX decision in the flow. Don't lose it.</li>
-        <li><b>Consider:</b> "penpal" is introduced to a <b>first-timer</b> before they know what it means. For someone sending their very first card to a friend, this is a fork they can't evaluate. Option: hide the pen-pal nudge on card #1 and surface it after the first successful send ("Want to meet a stranger next time? Say penpal.").</li>
-        <li><b>Nit:</b> "Who's this card for?" vs "Who's this one for?" — two variants for first vs returning. Fine, but the difference is invisible to users; you could simplify to one line and cut maintenance.</li>
+        <li><span class="keep">Keep:</span> instant ❤️ + "📮 Got it." before the 10–15s upload is the strongest single UX touch in the flow.</li>
+        <li>Per your call, the <code>penpal</code> option stays on card #1 — people know what pen pals are.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:1571–1642</code> · <code>startNewConversation</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>startNewConversation</code></span>
     </div>
   </div>
 </section>
 
 <!-- 3 -->
 <section class="flow" id="f3">
-  <h2><span class="num">03</span> Friend: name &amp; address</h2>
-  <p class="trigger"><b>Trigger:</b> sender types a name. If that friend is already in their Rolodex, the bot offers the saved address. Otherwise it asks — and an LLM parses whatever format they paste, with specific error recovery.</p>
+  <h2><span class="num">03</span> Name &amp; address <span class="badge upd">auto-complete added</span></h2>
+  <p class="trigger"><b>Trigger:</b> sender types a name, then an address. A missing ZIP or city is now <b>filled in by Lob verification or AI</b> and shown at the confirm step — no more bouncing the user to retype.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
@@ -240,79 +242,112 @@ Tell me a name, or say "penpal" for a new match.</div>
         <div class="b bot">Great. What's <span class="v" title="${firstName}">Sarah</span>'s address?
 
 Don't have it? Say "send a link" and they can add it themselves.</div>
-        <div class="sys">if Sarah is already saved</div>
-        <div class="b bot gap">Found <span class="v" title="${f}">Sarah</span> in <span class="v" title="${saved.city}, ${saved.state}">Austin, TX</span> (<span class="v" title="${saved.line1}">120 W 5th St</span>). Send there? Or give me a different address.</div>
-        <div class="b user gap">120 W 5th St Austin TX 78701</div>
+        <div class="b user gap">120 W 5th St, Austin TX</div>
+        <div class="sys">no ZIP typed → auto-completed, shown for approval</div>
         <div class="b bot">Mailing to:
    <span class="v" title="${firstName}">Sarah</span>
    <span class="v" title="${parsed.line1}">120 W 5th St</span>
-   <span class="v" title="${city}, ${state} ${zip}">Austin, TX 78701</span>
+   <span class="v" title="city/state/ZIP filled in">Austin, TX 78701</span>
 
 Look right?</div>
         <div class="b user">yes</div>
-        <div class="sys">address error variants</div>
-        <div class="b bot gap">Didn't catch an address. Try: "123 Main St, Naples FL 34101"</div>
-        <div class="b bot gap">Almost there. I just need the ZIP code. Send the full address again with the ZIP on the end.</div>
-        <div class="b bot gap">I'm missing the <span class="v" title="${missing}">city</span>. Full address? Format: street, city, state, ZIP.</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · mostly strong</h4>
+      <h4>Review · resolved</h4>
       <ul>
-        <li><span class="keep">Keep:</span> Rolodex reuse ("Found Sarah in Austin… Send there?") removes the address step entirely for repeat recipients. Excellent.</li>
-        <li><span class="keep">Keep:</span> Address errors are <b>specific and actionable</b> (missing ZIP vs missing city), not a generic "invalid." This is the right pattern.</li>
-        <li><b>Consider:</b> The confirm uses leading-space indentation to fake a mailing label. It renders cleanly in iMessage, but on some Android/RCS bridges leading spaces can collapse. Low risk on a pure-iMessage product; worth knowing.</li>
-        <li><b>Consider:</b> "yes/no" confirm + "send the correct address" all work, but consider echoing the magic word people will try ("Reply <b>yes</b>, or paste a new address").</li>
+        <li><span class="ship">✓ Shipped:</span> exactly your ask — a missing ZIP/city no longer bounces. <code>resolveAddress</code> tries Lob CASS verification, then an AI completion, and surfaces the best guess at the <b>confirmation</b> (the safety net). Genuine contradictions ("Naples, CA") still get flagged.</li>
+        <li><span class="keep">Keep:</span> Rolodex reuse — a saved friend skips the address step entirely.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:1751–1957</code> · <code>handleRecipientName</code> / <code>handleRecipientAddress</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>resolveAddress</code> / <code>completeAddressAI</code> / <code>lobVerifyAddress</code></span>
     </div>
   </div>
 </section>
 
 <!-- 4 -->
 <section class="flow" id="f4">
-  <h2><span class="num">04</span> The note + AI idea suggestions</h2>
-  <p class="trigger"><b>Trigger:</b> after the address confirms. Sender can write a note, type <code>?</code>/<code>ideas</code> for three AI-ghostwritten options, or <code>skip</code> for photo-only. Notes over 240 chars are trimmed with an honest heads-up.</p>
+  <h2><span class="num">04</span> The note + AI ideas <span class="badge upd">ideas hint added</span></h2>
+  <p class="trigger"><b>Trigger:</b> after the address confirms. The prompt now advertises the AI ghost-writer.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
-        <div class="b bot">Want to add a note? Just type it (up to 240 chars), or say "skip" to mail only the photo.</div>
+        <div class="b bot">Want to add a note? Just type it (up to 240 chars), say "ideas" for help, or "skip" to mail only the photo.</div>
         <div class="b user">ideas</div>
-        <div class="b bot"><span class="subj">💡 Some ideas</span>1. Thinking of you, <span class="v" title="${recipientName}">Sarah</span>. Hope today's a good one.
+        <div class="b bot"><span class="subj">💡 Some ideas</span>1. Thinking of you, <span class="v">Sarah</span>. Hope today's a good one.
 
 2. Just wanted to drop you a line. Miss your face.
 
 3. Sending good vibes your way from afar.</div>
         <div class="b bot">Pick 1, 2, or 3, or just write your own.</div>
         <div class="b user gap">2</div>
-        <div class="b bot">Got it. "<span class="v" title="${truncated}">Just wanted to drop you a line. Miss your face.</span>"</div>
-        <div class="sys">over-length variant</div>
-        <div class="b bot gap">That's a little long for a postcard, so I trimmed it to fit (240 characters). Here's what'll print:
-"<span class="v">…trimmed note…</span>"</div>
+        <div class="b bot">Got it. "<span class="v">Just wanted to drop you a line. Miss your face.</span>"</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · strong</h4>
+      <h4>Review · resolved</h4>
       <ul>
-        <li><span class="keep">Keep:</span> AI ideas with a tight ghost-writer voice ("under 140 chars, no clichés, no em-dashes") is a real differentiator and lowers the blank-page barrier.</li>
-        <li><span class="keep">Keep:</span> The over-length message is handled honestly ("I trimmed it… here's what'll print") instead of silently truncating. Trust-building.</li>
-        <li><b>Consider:</b> Discovery — a first-timer won't know <code>ideas</code> exists. The prompt says "type it… or say skip." Add "…or say <b>ideas</b> for help." so the AI feature gets used.</li>
+        <li><span class="ship">✓ Shipped:</span> the note prompt now says <b>say "ideas" for help</b>, so the AI feature is discoverable instead of hidden.</li>
+        <li><span class="keep">Keep:</span> over-length notes are still trimmed with an honest heads-up ("I trimmed it to fit… here's what'll print").</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:1188–1246, 2166–2227</code> · <code>sendNoteIdeas</code> / <code>handleMessage</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>handleMessage</code> / <code>sendNoteIdeas</code></span>
     </div>
   </div>
 </section>
 
 <!-- 5 -->
 <section class="flow" id="f5">
-  <h2><span class="num">05</span> Your return address (first-timers only)</h2>
-  <p class="trigger"><b>Trigger:</b> a first-time sender, after the note. Needed for the postcard's return address and so a pen pal could write back. Returning senders skip this entirely.</p>
+  <h2><span class="num">05</span> Send + the celebration</h2>
+  <p class="trigger"><b>Trigger:</b> sender says "send." The card hands to Lob; a 4-act "stamping" ritual covers the 6–8s of printing. A screen effect is picked from the note's emotion. <b>For a first-timer, the send now happens before we ask for their address</b> (see flow 6).</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
-        <div class="b bot">Last step. What's your full mailing address? We keep it private (only your city shows on the postcard) so <span class="v" title="${writeBackWho}">Sarah</span> can mail one back to you.
+        <div class="b bot"><span class="v" title="first-timer: fromCity unknown → 'YOUR CITY'">YOUR CITY</span> ──→ <span class="v">AUSTIN</span>
+
+   To: Sarah
+
+   "Just wanted to drop you a line. Miss your face."
+
+Ready? Tell me to send it, or name a day to mail it later. <span class="v">(First one's free.)</span></div>
+        <div class="b user">send it</div>
+        <div class="b bot gap">📮 Stamping…</div>
+        <div class="b bot"><span class="subj">📮 Postmarked</span>POSTMARKED · <span class="v">JUN 3, 2026</span>
+<span class="v" title="omitted on the very first card (no city yet)">CHICAGO STATION</span>
+
+Off to <span class="v">Sarah</span>.</div>
+        <div class="effect">✨ effect picked from the note</div>
+        <div class="attach gallery"></div>
+        <div class="b bot" style="margin-top:2px">· To <span class="v">Austin, TX</span> ·</div>
+        <div class="b bot gap">Lands in <span class="v">Sarah</span>'s mailbox <span class="v">Jun 10</span>.
+Tap to flip your card and watch it travel:
+<span class="v">app.themailroom.club/c/…</span>
+
+That's your first card, on us. Text another photo anytime to send the next.</div>
+      </div>
+    </div>
+    <div class="review good">
+      <h4>Review · keep (with one note)</h4>
+      <ul>
+        <li><span class="keep">Keep all of it:</span> the stamping → postmark → photo → "lands in Sarah's mailbox" sequence is the signature moment.</li>
+        <li><b>Side effect of the deferral:</b> on the very first card the postmark <b>STATION line is omitted</b> and the pre-send mock shows "YOUR CITY" (no city on file yet). It self-heals on card #2 once the address is saved. Acceptable trade for a faster first send; flag if you'd rather grab city/state inline.</li>
+        <li>Per your call, no "say <b>send</b>" hint was added.</li>
+      </ul>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>doMail</code></span>
+    </div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="flow" id="f6">
+  <h2><span class="num">06</span> Return address — now <em>after</em> the send <span class="badge upd">moved</span></h2>
+  <p class="trigger"><b>Trigger:</b> a first-time sender, <b>right after the celebration above</b>. Same private-address ask as before — just relocated so it never delays the first card. Returning senders skip it.</p>
+  <div class="cols">
+    <div class="phone">
+      <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
+      <div class="thread">
+        <div class="sys">↑ continues right after the celebration</div>
+        <div class="b bot">One more thing — what's your full mailing address? We keep it private (only your city shows on a card) so friends can mail one back to you.
 
 Format: street, city, state, ZIP.</div>
         <div class="b user">900 N Michigan Ave Chicago IL 60611</div>
@@ -321,98 +356,45 @@ Format: street, city, state, ZIP.</div>
 
 Look right? Or send a different one.</div>
         <div class="b user">yes</div>
-      </div>
-    </div>
-    <div class="review">
-      <h4>Review · flow friction (biggest one)</h4>
-      <ul>
-        <li><span class="fix">Watch:</span> This is the <b>longest pole</b> in time-to-first-send. The first friend-send is up to ~8 round trips (name → address → confirm → note → <b>your address → confirm</b> → send). The legacy SMS path only asked for "city + state" here.</li>
-        <li><b>Idea:</b> For a friend send, the return address mainly needs to be printable. You could collect just city/state for the postmark and <b>defer the full address</b> until the moment it's actually needed (a pen-pal reply), e.g. ask for it after the card ships: "Where should replies go?" That shortens the first magic moment, which is what conversion hinges on.</li>
-        <li><span class="keep">Keep:</span> The privacy reassurance ("only your city shows on the postcard") is exactly right to defuse address hesitancy — keep it wherever you ask.</li>
-      </ul>
-      <span class="src"><code>loop-inbound/index.ts:2302–2422</code> · <code>handleSenderLocation</code> / <code>handleSenderAddressConfirm</code></span>
-    </div>
-  </div>
-</section>
-
-<!-- 6 -->
-<section class="flow" id="f6">
-  <h2><span class="num">06</span> Send + the celebration</h2>
-  <p class="trigger"><b>Trigger:</b> sender says "send" (or names a date). The card hands off to Lob; while it prints, a 4-act "stamping" ritual turns 6–8s of dead air into a moment. A screen effect is auto-picked from the note's emotion.</p>
-  <div class="cols">
-    <div class="phone">
-      <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
-      <div class="thread">
-        <div class="b bot"><span class="v">Chicago</span> ──→ <span class="v">Austin</span>
-
-   To: Sarah
-
-   "Just wanted to drop you a line. Miss your face."
-
-Ready? Tell me to send it, or name a day to mail it later. <span class="v" title="balanceParenthetical">(First one's free.)</span></div>
-        <div class="b user">send it</div>
-        <div class="b bot gap">📮 Stamping…</div>
-        <div class="typing">Mailroom is typing…</div>
-        <div class="b bot"><span class="subj">📮 Postmarked</span>POSTMARKED · <span class="v" title="${postmarkDate}">JUN 3, 2026</span>
-<span class="v" title="${stationLine}">CHICAGO STATION</span>
-
-Off to <span class="v" title="${firstName}">Sarah</span>.</div>
-        <div class="effect">✨ sent with an effect picked from the note</div>
-        <div class="attach gallery"></div>
-        <div class="b bot" style="margin-top:2px">· To <span class="v" title="${recipLocLabel}">Austin, TX</span> ·
-<span class="v" title="when &gt;25mi">1,123 miles by post</span></div>
-        <div class="b bot gap">Lands in <span class="v" title="${firstName}">Sarah</span>'s mailbox <span class="v" title="${eta}">Jun 10</span>.
-Tap to flip your card and watch it travel:
-<span class="v" title="${confirmUrl}">app.themailroom.club/c/abc123</span>
-
-That's your first card, on us. Text another photo anytime to send the next.</div>
+        <div class="b bot">Saved — that's your return address. Now friends can write you back. Text a photo anytime to send another. 📮</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · the signature moment</h4>
+      <h4>Review · resolved (your final call)</h4>
       <ul>
-        <li><span class="keep">Keep all of it:</span> "📮 Stamping… → POSTMARKED · CHICAGO STATION → photo → Lands in Sarah's mailbox" is genuinely delightful and on-brand. Past-tense "Off to Sarah" beats "is in the mail."</li>
-        <li><span class="keep">Keep:</span> The first-card milestone tail ("That's your first card, on us…") is the right reward at the right beat. Later tails switch to buy/memories nudges intelligently.</li>
-        <li><b>Consider:</b> "Tell me to send it" relies on the sender guessing the verb. It accepts many synonyms, but a hint ("say <b>send</b>") removes any doubt at the highest-stakes step.</li>
-        <li><b>Consider:</b> The route map / card-flip arrive as one inline gallery tile — make sure the degraded path (no map) still reads well; copy already adapts, just verify visually on a real device.</li>
+        <li><span class="ship">✓ Shipped:</span> the full-address ask moved to <b>after the first send</b>, same copy. Time-to-first-card drops by ~2 round trips — the conversion-critical moment is faster.</li>
+        <li><b>Implementation:</b> friend sends skip the pre-send address step; <code>doMail</code> re-enters <code>awaiting_sender_location</code> with a <code>post_send</code> flag after mailing, and the confirm just saves + resets (no second send).</li>
+        <li><span class="fix">Edge to watch:</span> if a first-timer ignores this and texts a new photo, that's fine (a new card starts); but they won't have a return address until they answer it on some later send. Low risk.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:3096–3178</code> · <code>doMail</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>doMail</code> (post_send) / <code>handleSenderAddressConfirm</code></span>
     </div>
   </div>
 </section>
 
 <!-- 7 -->
 <section class="flow" id="f7">
-  <h2><span class="num">07</span> "I don't have their address" → claim link</h2>
-  <p class="trigger"><b>Trigger:</b> at the address step, sender says "send a link" / "don't have it." The bot mints a private claim link the sender forwards; the card mails the moment the recipient adds their own address.</p>
+  <h2><span class="num">07</span> No address → forward a link <span class="badge upd">forwardable blurb</span></h2>
+  <p class="trigger"><b>Trigger:</b> at the address step, sender says "send a link." The bot mints a private claim link <b>wrapped in a ready-to-forward message</b>.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
-        <div class="b bot">Great. What's <span class="v">Sarah</span>'s address?
-
-Don't have it? Say "send a link" and they can add it themselves.</div>
         <div class="b user">send a link</div>
-        <div class="b bot"><span class="subj">🔗 Link ready</span>Send <span class="v" title="${first}">Sarah</span> this link to add their address:
-<span class="v" title="${link}">app.themailroom.club/claim?t=…</span>
+        <div class="b bot">Forward this to <span class="v" title="${first}">Sarah</span> 👇
 
-The moment they do, I'll mail your card.</div>
-        <div class="b bot">Want a note on the card? Send it now (up to 240 characters), or say "skip" for just the photo.</div>
-        <div class="b user">Miss you! Come visit.</div>
-        <div class="b bot">Added to <span class="v">Sarah</span>'s card:
-"<span class="v">Miss you! Come visit.</span>"
+“Hey <span class="v">Sarah</span>! I'm mailing you a real postcard 📮 Tap to add your address and it's on its way: <span class="v">app.themailroom.club/claim?t=…</span>”
 
-It mails the moment they add their address.</div>
+The moment they add it, your card ships.</div>
+        <div class="b bot gap">Want a note on the card? Send it now (up to 240 characters), or say "skip" for just the photo.</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · strong, one gap</h4>
+      <h4>Review · resolved + answer to your share-sheet question</h4>
       <ul>
-        <li><span class="keep">Keep:</span> Link-first, note-second ordering means the sender can forward the link immediately. The "mails the moment they add their address" promise is clear and repeated consistently.</li>
-        <li><span class="fix">Gap:</span> There's <b>no sender notification</b> if the recipient never claims (links expire at ~7–30 days per migrations). The sender is left hanging. Add a nudge: "Heads up — Sarah hasn't added their address yet. Want me to resend the link?" before expiry.</li>
-        <li><b>Consider:</b> A naked <code>app.themailroom.club/claim?t=…</code> forwarded with no context can look like spam to the recipient. Consider a pre-written share blurb the sender can copy ("Sarah! I'm mailing you a real postcard — add your address here:").</li>
+        <li><span class="ship">✓ Shipped:</span> the link is now a single <b>forwardable bubble</b> — the sender long-presses it → Forward, and the recipient gets a friendly, contextual message instead of a naked URL (which reads like spam).</li>
+        <li><b>Your iOS share-sheet question:</b> a true share sheet (the slide-up "share to Messages/Mail/…") <b>can't be triggered from a remote iMessage</b> — that UI only exists inside a native app. The right home for it is the <b>Mailroom app's</b> claim/link screen, where a one-line <code>Share.share({url})</code> opens the real sheet. In the texting bot, the forwardable blurb is the closest equivalent. (Happy to wire the in-app share sheet next.)</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:2046–2162</code> · <code>startClaimLink</code> / <code>finishClaimSend</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>startClaimLink</code> / <code>finishClaimSend</code></span>
     </div>
   </div>
 </section>
@@ -420,7 +402,7 @@ It mails the moment they add their address.</div>
 <!-- 8 -->
 <section class="flow" id="f8">
   <h2><span class="num">08</span> Pen pal — mail a stranger</h2>
-  <p class="trigger"><b>Trigger:</b> sender says "penpal." Matched to an anonymous recipient at send time (neither sees the other's address). Photo + text are <b>moderated fail-closed</b> before mailing. If the pool is empty, the card is held.</p>
+  <p class="trigger"><b>Trigger:</b> sender says "penpal." Matched anonymously at send time; photo + text are moderated fail-closed. Pen pal sends still collect the return address <b>up front</b> (the match needs it).</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
@@ -440,96 +422,90 @@ Off to a pen pal.</div>
         <div class="b bot" style="margin-top:2px">· To somewhere ·</div>
         <div class="b bot gap">When they write back, you'll know.
 <span class="v">app.themailroom.club/c/…</span></div>
-        <div class="sys">empty pool variant</div>
+        <div class="sys">empty pool · moderation block variants</div>
         <div class="b bot gap">📭 No pen pals open right now.
 
 Your card's saved. Give me a friend's name to send it to them, or say "penpal" to try again.</div>
-        <div class="sys">moderation block variant</div>
         <div class="b bot gap">📵 We can't send this to a stranger.
 
 Pen pal cards go to someone we've never met, so we're conservative about what we mail. Try a different photo or note, or send to a friend instead.</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · thoughtful</h4>
+      <h4>Review · keep</h4>
       <ul>
-        <li><span class="keep">Keep:</span> "· To somewhere ·" and "Off to a pen pal" preserve anonymity beautifully without feeling cold. The shooting-star effect fits.</li>
-        <li><span class="keep">Keep:</span> Fail-closed moderation with a non-judgmental explanation is exactly the right safety posture for stranger mail.</li>
-        <li><b>Consider:</b> "When they write back, you'll know" is lovely but sets an expectation the pen pal <b>might never</b> fulfill. Soften to "If they write back, you'll know" to avoid an implied promise.</li>
-        <li><b>Verify:</b> The connectivity audit flagged that a held/no-match card may show success without surfacing "matching in progress" in one path. Confirm the held state is always visible to the sender.</li>
+        <li><span class="keep">Keep:</span> "· To somewhere ·" + fail-closed moderation are the right anonymity/safety posture.</li>
+        <li>Per your call, "<b>When</b> they write back, you'll know" stays — the match guarantees you a pen pal in return, so it's not an empty promise.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:2483–2616</code> · <code>doMailStranger</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>doMailStranger</code></span>
     </div>
   </div>
 </section>
 
 <!-- 9 -->
 <section class="flow" id="f9">
-  <h2><span class="num">09</span> Writing back — reciprocation</h2>
-  <p class="trigger"><b>Trigger:</b> a recipient texts <code>REPLY &lt;code&gt;</code> (from the QR/code on the printed card), or a pen pal who has a card waiting sends a new photo. Replies mail immediately and notify the original sender.</p>
+  <h2><span class="num">09</span> Writing back — reciprocation <span class="badge upd">prompt simplified</span></h2>
+  <p class="trigger"><b>Trigger:</b> a recipient texts <code>REPLY &lt;code&gt;</code>, or a pen pal with a card waiting sends a new photo. Replies mail immediately and notify the original sender.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
-        <div class="b user">REPLY 7HK2</div>
-        <div class="b bot"><span class="subj">💌 Writing back</span>Send me the photo you want on <span class="v" title="${match.sender_first_name}">Sarah</span>'s card.</div>
-        <div class="sys">— or, pen pal with a card waiting texts a photo —</div>
-        <div class="b bot gap"><span class="subj">📬 Pen pal reply waiting</span><span class="v">Maya in Portland, OR</span> sent you a card <span class="v" title="${daysWord}">3 days ago</span>.
+        <div class="sys">pen pal with a card waiting texts a photo</div>
+        <div class="b bot"><span class="subj">📬 Pen pal reply waiting</span><span class="v">Maya in Portland, OR</span> sent you a card <span class="v">3 days ago</span>.
 
-Want to write them back? Just say yes, or give me a friend's name, or say "penpal" for a new match.</div>
+Want to write <span class="v" title="${senderFirstName}">Maya</span> back? Just say yes.
+
+(Or give me a friend's name, or say "penpal" for a new match.)</div>
         <div class="sys">… after photo + note + send …</div>
         <div class="b bot gap">💌 Stamping the reply…</div>
         <div class="b bot"><span class="subj">💌 Postmarked</span>POSTMARKED · <span class="v">JUN 3, 2026</span>
 <span class="v">CHICAGO STATION</span>
 
-Off to <span class="v">Sarah</span>.</div>
+Off to <span class="v">Maya</span>.</div>
         <div class="effect">✨ love</div>
-        <div class="sys">↓ pushed to the ORIGINAL sender's thread</div>
-        <div class="b bot gap"><span class="subj">💌 A reply is on its way</span>Someone<span class="v" title="${fromCityBit}"> in Chicago</span> just wrote you back. Their card is heading to your mailbox now.</div>
+        <div class="sys">↓ pushed to the ORIGINAL sender</div>
+        <div class="b bot gap"><span class="subj">💌 A reply is on its way</span>Someone<span class="v"> in Chicago</span> just wrote you back. Their card is heading to your mailbox now.</div>
         <div class="effect">✨ confetti</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · closes the loop</h4>
+      <h4>Review · resolved</h4>
       <ul>
-        <li><span class="keep">Keep:</span> Proactively notifying the original sender ("A reply is on its way") with confetti is the emotional payoff that makes pen-pal worth it. This is the retention engine.</li>
-        <li><span class="keep">Keep:</span> <code>REPLY &lt;code&gt;</code> off the printed card is a clean bridge from physical → digital. Error copy ("Double-check the code on the back of the postcard") is concrete.</li>
-        <li><b>Consider:</b> "Want to write them back? Just say yes, or give me a friend's name, or say penpal" offers three forks at once — slightly heavy. Lead with the one action you want (yes), tuck the others under it.</li>
+        <li><span class="ship">✓ Shipped:</span> the prompt now <b>leads with the one action</b> ("Just say yes."), with the other options tucked into a parenthetical line below.</li>
+        <li><span class="keep">Keep:</span> proactively pinging the original sender ("A reply is on its way") with confetti is the retention payoff of the whole pen-pal loop.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:1363–1403, 2715–2941</code> · <code>doMailReplyToPenPal</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>startNewConversation</code> / <code>doMailReplyToPenPal</code></span>
     </div>
   </div>
 </section>
 
 <!-- 10 -->
 <section class="flow" id="f10">
-  <h2><span class="num">10</span> Schedule for later</h2>
-  <p class="trigger"><b>Trigger:</b> at the send step, sender names a future date ("June 15", "in 3 days"). Friend sends only — pen pal &amp; reply sends mail immediately. Enforces a ~7-day mail lead time.</p>
+  <h2><span class="num">10</span> Schedule for later <span class="badge upd">now incl. replies</span></h2>
+  <p class="trigger"><b>Trigger:</b> at the send step, sender names a future date ("June 20"). <b>Friend AND reply sends</b> can now be scheduled; pen-pal first sends still mail on match. Enforces a ~7-day mail lead time.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
-        <div class="b bot">Ready? Tell me to send it, or name a day to mail it later. <span class="v">(Uses 1 of 3 cards.)</span></div>
         <div class="b user">mail it June 20</div>
         <div class="b bot">🗓️ Saving for later…</div>
         <div class="b bot"><span class="subj">🗓️ Saved for <span class="v">Jun 20</span></span>Card to <span class="v">Sarah</span> ships <span class="v">Jun 20</span>.
 We'll text you when it goes.</div>
         <div class="effect">✨ gentle</div>
-        <div class="attach photo"></div>
-        <div class="b bot" style="margin-top:2px">· To <span class="v">Austin, TX</span> ·
-Lands in <span class="v">Sarah</span>'s mailbox ~<span class="v">Jun 27</span></div>
-        <div class="sys">too-soon variant</div>
-        <div class="b bot gap"><span class="v">Jun 5</span> is too soon. Mail takes ~7 days. Tell me to send it now, or pick a later date.</div>
+        <div class="sys">NEW — scheduling a reply to a pen pal</div>
+        <div class="b bot gap"><span class="subj">🗓️ Reply saved for <span class="v">Jun 20</span></span>Your reply to <span class="v">Maya</span> ships <span class="v">Jun 20</span>.
+We'll text you when it goes.</div>
+        <div class="b bot">· To <span class="v">Portland</span> ·
+Lands in <span class="v">Maya</span>'s mailbox ~<span class="v">Jun 27</span></div>
       </div>
     </div>
-    <div class="review">
-      <h4>Review · solid</h4>
+    <div class="review good">
+      <h4>Review · resolved (your "makes no sense" call)</h4>
       <ul>
-        <li><span class="keep">Keep:</span> Natural-language dates + a clear "we'll text you when it goes" promise. The too-soon guard explains the 7-day reason rather than just rejecting.</li>
-        <li><b>Consider:</b> Scheduling is silently unavailable for pen-pal/reply sends; the bot only says so if you try. That's fine, but a birthday-minded user might expect it everywhere — the friend-only limitation is worth a one-line FAQ in the assistant's knowledge.</li>
-        <li><b>Verify:</b> The "we'll text you when it goes" follow-up depends on the scheduled-send cron actually firing (migrations exist; confirm it's deployed &amp; scheduled in prod).</li>
+        <li><span class="ship">✓ Shipped:</span> replies are no longer blocked from scheduling. There was no product reason — <code>doSchedule</code> only knew friend routing. New <code>doScheduleReply</code> reuses the reply routing; the direct RPC already supported a scheduled date, and the existing cron mails it.</li>
+        <li><b>Design note:</b> for a scheduled reply, the loop-close + reverse-pairing happen at schedule time, and I <b>did not</b> add the "a reply is on its way" push (it'd fire weeks early / break if cancelled). Say the word if you'd rather it fire when the card actually ships — that's a small <code>fire-scheduled-postcards</code> addition.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:3181–3303</code> · <code>doSchedule</code> · cron <code>fire-scheduled-postcards</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>doScheduleReply</code> · <code>fire-scheduled-postcards</code></span>
     </div>
   </div>
 </section>
@@ -537,177 +513,188 @@ Lands in <span class="v">Sarah</span>'s mailbox ~<span class="v">Jun 27</span></
 <!-- 11 -->
 <section class="flow" id="f11">
   <h2><span class="num">11</span> Recipient memory</h2>
-  <p class="trigger"><b>Trigger:</b> sender confirms an address for someone they've mailed before. The bot recalls the last note and offers AI help — a small, sticky "it remembers" moment.</p>
+  <p class="trigger"><b>Trigger:</b> sender confirms an address for someone they've mailed before.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
         <div class="b user">yes</div>
-        <div class="b bot">Last time, you wrote <span class="v" title="${firstName}">Sarah</span> (<span class="v" title="${lastDate}">May 12</span>): "<span class="v" title="${preview}">Miss your face — let's get coffee soon.</span>"
+        <div class="b bot">Last time, you wrote <span class="v">Sarah</span> (<span class="v">May 12</span>): "<span class="v">Miss your face — let's get coffee soon.</span>"
 
 Want a few ideas to start? Just say "ideas", or go ahead and write your own.</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · delightful</h4>
+      <h4>Review · keep (unchanged)</h4>
       <ul>
-        <li><span class="keep">Keep:</span> Surfacing the last note is a genuine "this app knows me" beat that greeting cards can't do. Strong retention texture for repeat senders.</li>
-        <li><b>Consider:</b> If the last note was months ago, the recall could feel slightly stale; consider only showing it within, say, 90 days, or adding "back in May" framing for older ones (the date is already shown — minor).</li>
+        <li><span class="keep">Keep:</span> recalling the last note is a real "it remembers me" beat. Per your call, no time-window limit added.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:2001</code> · <code>handleAddressConfirm</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>handleAddressConfirm</code></span>
     </div>
   </div>
 </section>
 
 <!-- 12 -->
 <section class="flow" id="f12">
-  <h2><span class="num">12</span> Buy / top up credits</h2>
-  <p class="trigger"><b>Trigger:</b> sender texts <code>buy</code> / <code>buy 5</code> / <code>buy 25</code> (bare <code>buy</code> = the 10-pack). Returns a Stripe checkout link that expires in 1 hour.</p>
+  <h2><span class="num">12</span> Buy / top up <span class="badge upd">expiry clarified</span></h2>
+  <p class="trigger"><b>Trigger:</b> sender texts <code>buy</code> / <code>buy 5</code> / <code>buy 25</code> (bare <code>buy</code> = 10-pack). Returns a Stripe link.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
         <div class="b user">buy</div>
-        <div class="b bot"><span class="subj">🛒 Top up</span><span class="v" title="${checkout.pack_label}">10 cards · $10</span>
-<span class="v" title="${checkout.url}">checkout.stripe.com/…</span>
+        <div class="b bot"><span class="subj">🛒 Top up</span><span class="v">10 cards · $10</span>
+<span class="v">checkout.stripe.com/…</span>
 
-Expires in 1h. Other sizes: say "buy 5" or "buy 25".</div>
-        <div class="sys">loose "buy more" (no pack)</div>
-        <div class="b bot gap">Top up: 5 cards for $5, 10 for $10, 25 for $25. Just say "buy 10" (or buy 5, buy 25).</div>
+This payment link is good for 1h (your cards never expire). Other sizes: say "buy 5" or "buy 25".</div>
         <div class="sys">checkout down</div>
-        <div class="b bot gap">Checkout's down. Try in a minute, or email hello@mailroomclub.io.</div>
+        <div class="b bot gap">Checkout's down. Try in a minute, or email scottylefkowitz2@gmail.com.</div>
       </div>
     </div>
-    <div class="review">
-      <h4>Review · clear; two flags</h4>
+    <div class="review good">
+      <h4>Review · resolved</h4>
       <ul>
-        <li><span class="keep">Keep:</span> Transparent flat pricing and a single keyword. The fallback hint when someone types "buy more credits" is good defensive design.</li>
-        <li><span class="fix">Flag:</span> Support email here is <code>hello@mailroomclub.io</code>, but links elsewhere use <code>app.themailroom.club</code> / <code>themailroom.club</code>. Pick one brand domain — mixed domains read as phishing and hurt trust at the payment step.</li>
-        <li><b>Verify:</b> Credits only land if the Stripe <b>webhook</b> is registered in prod; today there's only a ~9s soft poll fallback. Make webhook reconciliation real before charging anyone.</li>
+        <li><span class="ship">✓ Shipped:</span> the 1-hour expiry now explicitly applies to the <b>payment link</b>, with "your cards never expire" so no one fears their credits vanish in an hour.</li>
+        <li><span class="ship">✓ Shipped:</span> support email → <b>scottylefkowitz2@gmail.com</b> (you'll fix the brand-domain split separately).</li>
+        <li><b>Still verify:</b> credits only land if the Stripe <b>webhook</b> is registered — it's set in your secrets (<code>STRIPE_WEBHOOK_SECRET</code>), just confirm the endpoint is live.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:1420–1438</code> · <code>parseBuyKeyword</code> · <code>sms-buy-checkout</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>parseBuyKeyword</code></span>
     </div>
   </div>
 </section>
 
 <!-- 13 -->
 <section class="flow" id="f13">
-  <h2><span class="num">13</span> Memories</h2>
-  <p class="trigger"><b>Trigger:</b> sender texts <code>memories</code>. Re-sends the last 3 postcard photos inline. The keyword is "unlocked" (mentioned) after the 3rd card sent.</p>
+  <h2><span class="num">13</span> Memories <span class="badge upd">nudge at 10</span></h2>
+  <p class="trigger"><b>Trigger:</b> sender texts <code>memories</code>. Re-sends the last 3 postcard photos. The keyword is now hinted at the <b>10th</b> card sent.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
         <div class="b user">memories</div>
-        <div class="b bot"><span class="subj">📮 Your postcards</span>Your last <span class="v" title="${cards.length}">3</span>. Text a photo to send a new one.</div>
+        <div class="b bot"><span class="subj">📮 Your postcards</span>Your last <span class="v">3</span>. Text a photo to send a new one.</div>
         <div class="attach photo"></div>
         <div class="attach photo"></div>
-        <div class="attach photo"></div>
-        <div class="sys">no history yet</div>
-        <div class="b bot gap">No history yet. Send a photo. 📮</div>
+        <div class="sys">tail nudge, now at the 10th card</div>
+        <div class="b bot gap">That's ten cards from you. Text "memories" anytime to see them all.</div>
       </div>
     </div>
-    <div class="review">
-      <h4>Review · nice, under-discovered</h4>
+    <div class="review good">
+      <h4>Review · adjusted to your taste</h4>
       <ul>
-        <li><b>Consider:</b> "memories" is only hinted once (after card #3). Many users will never find it. Surface it in the assistant's repertoire and maybe in a periodic tail.</li>
-        <li><span class="keep">Keep:</span> Re-sending the actual photos (not a link) keeps the magic inside the thread, consistent with the celebration philosophy.</li>
+        <li><span class="ship">✓ Shipped:</span> the memories nudge moved from card 3 → <b>card 10</b>, matching your view that it's a super-user feature (and that real "memories" live in the app).</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:1779–1823</code> · <code>sendMemories</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>sendMemories</code> / <code>doMail</code> tail</span>
     </div>
   </div>
 </section>
 
 <!-- 14 -->
 <section class="flow" id="f14">
-  <h2><span class="num">14</span> Off-script — the AI assistant</h2>
-  <p class="trigger"><b>Trigger:</b> any message that looks like a question and isn't actual card content. One short GPT-4o-mini reply in the bot's voice, constrained to never invent features or prices.</p>
+  <h2><span class="num">14</span> Off-script — the AI assistant <span class="badge upd">positioning</span></h2>
+  <p class="trigger"><b>Trigger:</b> any question that isn't card content. One short GPT-4o-mini reply, constrained to never invent features or prices.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
-        <div class="b user">wait is this a real postcard or digital?</div>
-        <div class="b bot">It's a real paper postcard, printed and mailed through USPS. Text me a photo and I'll show you how it works.</div>
-        <div class="b user gap">how much does it cost?</div>
-        <div class="b bot">Your first card is free, then it's about a dollar each. Ready? Text a photo to start.</div>
-        <div class="sys">LLM failure fallback</div>
-        <div class="b bot gap">Text a photo to start a postcard — first one's free.</div>
+        <div class="b user">wait is this real mail or digital?</div>
+        <div class="b bot">It's a real paper postcard we print and mail for you — the seamless way to send a photo by post. Text me a photo and I'll show you.</div>
+        <div class="b user gap">how much?</div>
+        <div class="b bot">Your first card's free, then about a dollar each. Text a photo to start.</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · smart guardrails</h4>
+      <h4>Review · positioning updated</h4>
       <ul>
-        <li><span class="keep">Keep:</span> The system prompt forbids inventing features/prices and always steers back to "text a photo." That's the correct leash for an LLM on the money path.</li>
-        <li><b>Consider:</b> Log the questions that hit the assistant — they're free product research (what cold users don't understand) and a source for FAQ copy.</li>
-        <li><b>Consider:</b> No explicit <code>HELP</code> command exists; "help" mid-address would be read as content. A reserved HELP that always returns a short menu would be a cheap safety net.</li>
+        <li><span class="ship">✓ Shipped:</span> the assistant's self-description now leads with "<b>the seamless way to mail a photo</b> as a real paper postcard" rather than a flat "service that mails postcards."</li>
+        <li><span class="keep">Keep:</span> the guardrails (never invent features/prices; always steer to "text a photo") are intact.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:1483–1502</code> · <code>respondFreeform</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>MAILROOM_ASSISTANT_PROMPT</code> / <code>respondFreeform</code></span>
     </div>
   </div>
 </section>
 
 <!-- 15 -->
 <section class="flow" id="f15">
-  <h2><span class="num">15</span> Global commands</h2>
-  <p class="trigger"><b>Trigger:</b> checked before step routing (but suppressed when you're typing actual card content, so a friend named "Buy" isn't hijacked). The universal escape hatch is cancel/stop/restart.</p>
+  <h2><span class="num">15</span> Global commands <span class="badge upd">warmer cancel</span></h2>
+  <p class="trigger"><b>Trigger:</b> checked before step routing (suppressed while you're typing card content). Cancel/stop/restart is the universal escape hatch.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
         <div class="b user">start over</div>
-        <div class="b bot">Cancelled.</div>
+        <div class="b bot">All cleared — text a photo whenever you're ready.</div>
         <div class="sys">new photo while a card's in progress</div>
         <div class="attach photo" style="align-self:flex-end;border-bottom-right-radius:6px;border-bottom-left-radius:16px;margin-top:9px"></div>
         <div class="b bot gap">You've got a card in progress. Start over with this new photo? Yes, or no to keep going.</div>
-        <div class="b user">no</div>
-        <div class="b bot">Okay, keeping your card in progress. Reply to the last step above to keep going.</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · robust</h4>
+      <h4>Review · resolved</h4>
       <ul>
-        <li><span class="keep">Keep:</span> Guarding keywords behind "are we collecting content right now?" (so names/notes/addresses aren't swallowed by command words) is a subtle, correct decision most bots get wrong.</li>
-        <li><b>Consider:</b> "Cancelled." is a touch terse after someone abandons a card. A warmer "All cleared — text a photo whenever you're ready." matches the rest of the voice (the legacy path actually did this).</li>
-        <li><span class="keep">Keep:</span> The in-progress photo-swap confirm prevents accidental loss of a half-built card. Good.</li>
+        <li><span class="ship">✓ Shipped:</span> bare "Cancelled." → <b>"All cleared — text a photo whenever you're ready."</b> — matches the warm voice elsewhere.</li>
+        <li><span class="keep">Keep:</span> command words are still ignored while you're typing a name/note/address, so a friend named "Buy" isn't hijacked.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:1267–1438</code> · <code>handleInbound</code> · <code>isRestartCommand</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>handleInbound</code></span>
     </div>
   </div>
 </section>
 
 <!-- 16 -->
 <section class="flow" id="f16">
-  <h2><span class="num">16</span> Error &amp; failure catalog</h2>
-  <p class="trigger"><b>Trigger:</b> every failure surface on the send path. Notably, all of them name a concrete recovery action, and Lob/credit failures <b>refund the credit</b> and invite a retry.</p>
+  <h2><span class="num">16</span> Error &amp; failure catalog <span class="badge upd">plain-language Lob</span></h2>
+  <p class="trigger"><b>Trigger:</b> every failure surface. All name a recovery action; money-path failures refund the credit.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
       <div class="thread">
-        <div class="b bot">Out of cards. Text "buy" to top up, then tell me to send it.</div>
-        <div class="b bot gap">Couldn't hand this to the printer (<span class="v" title="${lob.error}">address undeliverable</span>). Your credit is back. Tell me to send it again.</div>
+        <div class="b bot">Couldn't mail this — <span class="v" title="mapped from the raw Lob error">that address came back undeliverable</span>. Your credit's back. Tell me to send it again, or text a new photo to start over.</div>
+        <div class="b bot gap">Out of cards. Text "buy" to top up, then tell me to send it.</div>
         <div class="b bot gap">Couldn't read that photo. Send another?</div>
-        <div class="b bot gap">That photo didn't upload. Send it again?</div>
         <div class="b bot gap">That draft expired. Text a new photo to start over.</div>
-        <div class="b bot gap">Something went wrong on our end. Try again, or say "start over" to reset.</div>
         <div class="b bot gap">Still mailing this card. I'll text you when it's done.</div>
       </div>
     </div>
     <div class="review good">
-      <h4>Review · best-in-class error UX</h4>
+      <h4>Review · resolved</h4>
       <ul>
-        <li><span class="keep">Keep:</span> Every error ends with a verb the user can act on, and money-path failures explicitly say "your credit is back." This is exactly how to keep trust when something breaks.</li>
-        <li><span class="keep">Keep:</span> Anti-double-send ("Still mailing this card…") + atomic step flip prevents the classic duplicate-charge bug.</li>
-        <li><b>Consider:</b> Surfacing the raw Lob error (e.g. "address undeliverable") is good for power users but can be cryptic; map the common ones to plain language ("That address came back undeliverable — double-check it?").</li>
+        <li><span class="ship">✓ Shipped:</span> raw Lob errors ("primary_line is undeliverable", "zip_code must be…") are now mapped to plain language via <code>friendlyLobError()</code> — "that address came back undeliverable", "the ZIP didn't match the address", etc.</li>
+        <li><span class="keep">Keep:</span> every error still names an action and refunds the credit; the anti-double-send guard is intact.</li>
       </ul>
-      <span class="src"><code>loop-inbound/index.ts:2975–3050, 1463–1473, 3457</code></span>
+      <span class="src"><code>loop-inbound/index.ts</code> · <code>friendlyLobError</code></span>
     </div>
   </div>
 </section>
 
 <!-- 17 -->
 <section class="flow" id="f17">
-  <h2><span class="num">17</span> Receiver side — claim page &amp; QR landing (web)</h2>
-  <p class="trigger"><b>Not iMessage</b>, but part of the same loop: what a recipient sees after tapping a claim link (no-address path) or scanning the QR printed on a card. Served by the <code>claim</code> and <code>welcome-mail</code> edge functions; the iOS App Clip renders the same claim form natively.</p>
+  <h2><span class="num">17</span> Unclaimed-link nudge <span class="badge new">new automated flow</span></h2>
+  <p class="trigger"><b>Trigger:</b> a daily <code>pg_cron</code> job (<code>claim-nudge</code>). When a "send-a-link" card is still unclaimed ~2 days after it was created (and not yet expired — links live 7 days), the <b>sender</b> gets one reminder with the link to re-forward. Sent once per link.</p>
+  <div class="cols">
+    <div class="phone">
+      <div class="topbar"><div class="avatar">M</div><div class="who">Mailroom <span>· iMessage</span></div></div>
+      <div class="thread">
+        <div class="sys">2 days after an unclaimed link, no action from the sender</div>
+        <div class="b bot">Quick nudge: the postcard you started is still waiting on an address, so it hasn't shipped yet. The link's good for <span class="v" title="${daysLeft}">5</span> more days — forward it again whenever:
+<span class="v">app.themailroom.club/claim?t=…</span></div>
+      </div>
+    </div>
+    <div class="review good">
+      <h4>Review · built this session</h4>
+      <ul>
+        <li><span class="ship">✓ Shipped:</span> exactly your ask — the sender is no longer left hanging when a recipient never claims. One gentle reminder, with the link, before it expires.</li>
+        <li><b>Mechanics:</b> a <code>nudge_sent_at</code> column guarantees once-per-link; the cron authenticates with <code>CRON_TRIGGER_SECRET</code> (already in your secrets) and sends over LoopMessage.</li>
+        <li><b>To activate:</b> <code>supabase functions deploy claim-nudge</code> + <code>supabase db push</code> (migration <code>2026060400_claim_nudge.sql</code> schedules the daily job).</li>
+      </ul>
+      <span class="src"><code>supabase/functions/claim-nudge/index.ts</code> · <code>migrations/2026060400_claim_nudge.sql</code></span>
+    </div>
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="flow" id="f18">
+  <h2><span class="num">18</span> Receiver side — claim page &amp; QR landing (web)</h2>
+  <p class="trigger"><b>Not iMessage</b>, but part of the loop: what a recipient sees after tapping a forwarded claim link or scanning the QR on a printed card. The iOS App Clip renders the same claim form natively.</p>
   <div class="cols">
     <div class="phone">
       <div class="topbar"><div class="avatar" style="background:linear-gradient(135deg,#2b2622,#6a5)">✉</div><div class="who">app.themailroom.club/claim</div></div>
@@ -720,111 +707,97 @@ Tell us where to send it. Your address stays private to Mailroom. <span class="v
 <span style="display:inline-block;background:var(--red);color:#fff;border-radius:8px;padding:6px 12px;margin-top:6px">Send my postcard →</span>
 
 <span style="color:var(--muted);font-size:11.5px">Mailroom prints &amp; mails real paper postcards via USPS. Your address is used once to ship this card. It's never shared with the sender or used for marketing.</span></div>
-        <div class="sys">QR-scan landing (welcome-mail)</div>
-        <div class="b bot" style="background:#fff;border:1px solid var(--line);max-width:92%"><span class="subj">You got mail</span><b><span class="v">Sarah</span> sent you a postcard</b>
-<span class="v">From Chicago · </span>Mailed via Mailroom.
-
-<span style="display:inline-block;background:var(--ink);color:#fff;border-radius:8px;padding:6px 12px;margin-top:4px">Open in Mailroom</span>  <span style="color:var(--muted)">Don't have the app? Get Mailroom →</span></div>
       </div>
     </div>
-    <div class="review">
-      <h4>Review · trust &amp; the make-or-break link</h4>
+    <div class="review good">
+      <h4>Review · the AASA worry is resolved</h4>
       <ul>
-        <li><span class="keep">Keep:</span> The privacy promise is stated three times on the claim page without nagging. For a "give a stranger's app your address" ask, that repetition is correct.</li>
-        <li><span class="fix">Critical (infra, not copy):</span> Both the App Clip and these Universal Links only fire if the real <code>apple-app-site-association</code> file is deployed at <code>app.themailroom.club/.well-known/</code>. The repo root has only an <code>.example</code> pointing at the wrong domain. <b>If the live AASA isn't deployed, the entire receiver half of the loop breaks.</b> Verify on Apple's CDN.</li>
-        <li><b>Consider:</b> Domain consistency again — claim links use <code>app.themailroom.club</code>; some copy says <code>themailroom.club</code> and the buy email says <code>mailroomclub.io</code>. Unify.</li>
+        <li><span class="ship">✓ Confirmed live:</span> the App Clip + Universal Links work — <code>app.themailroom.club/.well-known/apple-app-site-association</code> returns 200/JSON with the correct app IDs (<code>824QVPJ3B5.com.mailrooms.app</code> + <code>.Clip</code>), and Apple's CDN has it cached. <b>No Vercel Pro needed; nothing to deploy.</b></li>
+        <li><b>Minor:</b> the repo's <code>vercel-staging</code> copy of the AASA is slightly behind the live one (missing <code>/u/*</code>) — keep them in sync if you ever redeploy from the repo.</li>
       </ul>
-      <span class="src"><code>claim/index.ts:328–373</code> · <code>welcome-mail/index.ts:290–307</code> · <code>ios/MailroomClip/ContentView.swift</code></span>
+      <span class="src"><code>claim/index.ts</code> · <code>welcome-mail/index.ts</code> · <code>ios/MailroomClip/ContentView.swift</code></span>
     </div>
   </div>
 </section>
 
 <hr class="soft" />
 
-<!-- REVIEW SUMMARY -->
 <section class="flow" id="review">
-  <h2>Top review notes — across the whole flow</h2>
+  <h2>Review scorecard</h2>
   <div class="grid2">
     <div class="panel" style="margin:0">
-      <h3 style="color:var(--green)">What's genuinely great — protect it</h3>
+      <h3 style="color:var(--green)">Shipped this session</h3>
       <ul style="margin:0;padding-left:18px">
-        <li><b>Instant feedback before slow work</b> (❤️ + "Got it" before upload).</li>
-        <li><b>The stamping celebration</b> — postmark + station + "Off to Sarah" + inline photo/route. Signature moment.</li>
-        <li><b>Honest, recoverable errors</b> that always name the next action and refund credits.</li>
-        <li><b>Reciprocation loop</b> — proactively pinging the original sender ("a reply is on its way") is the retention engine.</li>
-        <li><b>Recipient memory</b> + <b>AI note ideas</b> — texture greeting cards can't match.</li>
-        <li><b>Fail-closed moderation</b> for stranger mail, explained kindly.</li>
+        <li>Welcome CTA + "seamless way to mail a photo"</li>
+        <li>Address auto-complete (ZIP/city) → confirm, no bounce</li>
+        <li>"ideas" hint on the note prompt</li>
+        <li>Reciprocation prompt leads with one action</li>
+        <li>Return address deferred to after the first send</li>
+        <li>Forwardable claim-link blurb</li>
+        <li>Plain-language Lob errors</li>
+        <li>Buy-link expiry clarity; support email</li>
+        <li>Warmer cancel; memories nudge → 10 cards</li>
+        <li>Pen-pal reply scheduling</li>
+        <li>New unclaimed-link nudge cron</li>
       </ul>
     </div>
     <div class="panel" style="margin:0">
-      <h3 style="color:var(--red)">Highest-leverage improvements</h3>
+      <h3 style="color:var(--amber)">Open / your calls</h3>
       <ul style="margin:0;padding-left:18px">
-        <li><b>1. Unify the brand domain.</b> <code>app.themailroom.club</code> vs <code>themailroom.club</code> vs <code>mailroomclub.io</code> appear across claim links, copy, and the support email. Mixed domains kill trust at payment/claim. <span class="fix">Pick one.</span></li>
-        <li><b>2. Deploy the real AASA</b> at <code>app.themailroom.club/.well-known/</code> — without it the App Clip + claim Universal Links silently fail. <span class="fix">Make-or-break.</span></li>
-        <li><b>3. Shorten time-to-first-send.</b> Defer the full <i>sender</i> address (collect city/state now, full address only when a reply is actually needed). It's the longest pole before the magic moment.</li>
-        <li><b>4. Add explicit next-step CTAs &amp; magic words.</b> End the welcome with "Send me a photo to begin"; hint "say <b>send</b>" / "say <b>ideas</b>" at those steps.</li>
-        <li><b>5. Notify on unclaimed links</b> before they expire (sender currently hears nothing).</li>
-        <li><b>6. Defer the "penpal" fork</b> until after a first successful friend send, so first-timers aren't asked to choose something they don't understand.</li>
+        <li><b>Unify the brand domain</b> — <code>app.themailroom.club</code> vs <code>themailroom.club</code> across copy (you're handling).</li>
+        <li><b>Rejected (kept as-is):</b> defer "say send" hint; pen-pal fork on card #1; "If/When they write back"; recipient-memory time window.</li>
+        <li><b>Offered next:</b> fire-time "reply is on its way" push for scheduled replies; in-app native share sheet for the claim link.</li>
+        <li><b>First-card cosmetic:</b> postmark STATION line + pre-send "YOUR CITY" are blank until the return address is saved (side effect of the deferral).</li>
       </ul>
     </div>
   </div>
 </section>
 
-<!-- STATUS -->
 <section class="flow" id="status">
-  <h2>Does the iOS app connect? — yes, mostly</h2>
-  <p class="trigger">The app on this branch is a <b>real product, not a demo</b>. One live Supabase project (<code>nlwnmgwylmmnaemdnzlq</code>) backs everything; the Expo app, the web claim site, and the native App Clip all hit it.</p>
+  <h2>Does the iOS app connect? — yes</h2>
+  <p class="trigger">One live Supabase project backs the Expo app, the web claim site, and the native App Clip. Mostly a real product, not a demo.</p>
   <div class="panel">
-    <div class="row w"><span class="pill w">WIRED</span><div><b>Backend / Auth</b> — Sign in with Apple → Supabase, real profile/friends/postcards fetched on login. <code>supabase.ts</code>, <code>apple-auth.ts</code>.</div></div>
-    <div class="row w"><span class="pill w">WIRED</span><div><b>Send → Lob</b> — <code>rpc("send_postcard")</code>, photo upload, server-side <code>lob-send-postcard</code> handoff with lease + orphan refund.</div></div>
-    <div class="row w"><span class="pill w">WIRED</span><div><b>Payments</b> — Stripe Payment Sheet + Apple Pay; a <b>live <code>pk_live_</code> key</b> is in <code>app.json</code> (move it to EAS secrets).</div></div>
-    <div class="row w"><span class="pill w">WIRED</span><div><b>Claim / App Clip</b> — native SwiftUI form POSTs to the real <code>/claim</code> function; mailbox uses Realtime.</div></div>
-    <div class="row m"><span class="pill m">MISSING</span><div><b>Push notifications</b> — no <code>expo-notifications</code>, no <code>aps-environment</code>. Delivery/claim updates only land if the app is foregrounded (Realtime). Biggest UX hole.</div></div>
-    <div class="row s"><span class="pill s">RISK</span><div><b>Universal Links / AASA</b> — committed root file is an <code>.example</code> on the wrong domain; the real one lives in <code>vercel-staging</code>. Must be deployed at <code>app.themailroom.club/.well-known/</code> or the receiver half breaks.</div></div>
-    <div class="row s"><span class="pill s">RISK</span><div><b>Edge functions deployment</b> — invoked but verify all (<code>lob-send-postcard</code>, <code>create-payment-intent</code>, <code>claim</code>, crons) are deployed &amp; holding their secrets in prod.</div></div>
-    <div class="row m"><span class="pill m">MOCK</span><div><b>Map routes &amp; milestones</b> — permanently hardcoded decorative data; never fetched. Cosmetic only.</div></div>
+    <div class="row w"><span class="pill w">WIRED</span><div><b>Backend / Auth</b> — Sign in with Apple → Supabase; real profile/friends/postcards on login.</div></div>
+    <div class="row w"><span class="pill w">WIRED</span><div><b>Send → Lob</b> — <code>send_postcard</code> RPC, photo upload, server-side Lob handoff with lease + orphan refund.</div></div>
+    <div class="row w"><span class="pill w">WIRED</span><div><b>Payments</b> — Stripe Payment Sheet + Apple Pay (live keys present server-side).</div></div>
+    <div class="row w"><span class="pill w">WIRED</span><div><b>Claim / App Clip / Universal Links</b> — native form POSTs to the real <code>/claim</code>; <b>AASA confirmed live</b> on Apple's CDN.</div></div>
+    <div class="row m"><span class="pill m">MISSING</span><div><b>Push notifications</b> — none (no <code>expo-notifications</code>/<code>aps-environment</code>). Updates only land when the app is foregrounded.</div></div>
+    <div class="row m"><span class="pill m">MOCK</span><div><b>Map routes &amp; milestones</b> — decorative hardcoded data; never fetched.</div></div>
   </div>
 </section>
 
-<!-- WHAT REMAINS -->
 <section class="flow" id="remains">
-  <h2>What remains to finish this out</h2>
-  <p class="trigger">Honest read: this is <b>days, not weeks</b> from a controlled TestFlight send. The remaining work is mostly <b>operational</b> (set secrets, flip test→live, deploy, redeploy AASA), not unwritten code — the three old ship-blockers (iOS-26 Stripe crash, double-send race, credit-refund leak) are already fixed in code. Note: the <code>README.md</code> is badly stale (says "no backend, mocked") — trust the code, not the README.</p>
+  <h2>What remains to ship a real postcard</h2>
+  <p class="trigger">After this session's secret audit, the picture is sharp: it's <b>one toggle + a deploy</b>, not unwritten code. README is stale — trust the code.</p>
   <div class="panel">
-    <h3><span class="p0">P0</span> — blocks one real postcard going out</h3>
+    <h3><span class="p0">P0</span> — the one blocker</h3>
     <ol class="steps">
-      <li>Set prod secrets in Supabase: <code>LOB_API_KEY</code> (live, not <code>test_</code>), <code>STRIPE_SECRET_KEY</code> + <code>STRIPE_WEBHOOK_SECRET</code>, <code>LOOPMESSAGE_API_KEY</code>/<code>SENDER_ID</code>.</li>
-      <li>Unset <code>MAILROOM_TEST_MODE_NO_LOB</code> in prod — while set, <b>no card ever ships</b> (<code>lob-send-postcard/index.ts:898</code>).</li>
-      <li>Register the Stripe <b>webhook</b> (credits don't apply without it) and flip Stripe test→live.</li>
-      <li>Confirm the <code>postcard-renders</code> storage bucket exists; deploy all edge functions.</li>
-      <li>Run <b>one real end-to-end send to yourself</b> through Lob (the last unchecked item in IMPLEMENTATION_LOG).</li>
+      <li><b>Flip the kill switch.</b> <code>MAILROOM_TEST_MODE_NO_LOB</code> is currently <code>"true"</code> (verified — the digest is SHA-256 of "true"), which stubs all mailing. To go live: <code>supabase secrets set MAILROOM_TEST_MODE_NO_LOB=false</code>. <b>To test first without mailing:</b> <code>supabase secrets set LOB_API_KEY_TEST=test_…</code> — runs the full pipeline against Lob's test env (preview PDF, no real mail, no charge).</li>
+      <li>Deploy this session's code: <code>supabase functions deploy loop-inbound claim-nudge</code> + <code>supabase db push</code>.</li>
     </ol>
+    <p style="margin:10px 0 0;color:var(--green);font-size:13px"><b>✓ All other send-critical secrets are present and verified:</b> Lob, LoopMessage (×3), OpenAI, Stripe (×3), all 5 MAILROOM_RETURN_*, CRON_TRIGGER_SECRET, MapKit, Supabase. AASA is live.</p>
   </div>
   <div class="panel">
-    <h3><span class="p1">P1</span> — blocks public / TestFlight launch</h3>
+    <h3><span class="p1">P1</span> — before public / TestFlight</h3>
     <ol class="steps">
-      <li>Deploy the real AASA at <code>app.themailroom.club/.well-known/</code> (Universal Links + App Clip).</li>
+      <li>Turn off the prod skip-verify flags: <code>LOB_WEBHOOK_SKIP_VERIFY</code> and <code>SMS_INBOUND_SKIP_VERIFY</code> are both <code>"true"</code> (webhooks unverified). Set to <code>false</code> (secrets are present to verify).</li>
       <li>Move the live Stripe <code>pk_live_</code> key out of <code>app.json</code> into EAS secrets; unify the brand domain.</li>
-      <li>Stripe webhook-failure reconciliation (today it's a 9s soft poll → "email support").</li>
-      <li>Account-deletion lifecycle (cancel queued Lob cards + Stripe customer) — required for App Review.</li>
-      <li>App Store Connect: Privacy Policy URL, screenshots, App Privacy questionnaire.</li>
-      <li>Pen-pal/void send: surface a visible "matching in progress" state when there's no immediate match.</li>
+      <li>Account-deletion lifecycle (cancel queued Lob cards) — required for App Review.</li>
+      <li>App Store Connect: Privacy Policy URL, screenshots, App Privacy answers.</li>
     </ol>
   </div>
   <div class="panel">
     <h3><span class="p2">P2</span> — polish</h3>
     <ol class="steps">
-      <li>Push notifications (delivery/claim/reply) — currently none.</li>
-      <li>Unclaimed-link expiry nudge to the sender; cancel/delete affordance for orphaned cards (<code>cancel-postcard</code> fn exists — wire UI).</li>
-      <li>Google Maps key empty (<code>app.json</code>) → Map falls back to Apple Maps; set before public.</li>
-      <li>Offline/no-network banner; per-category placeholder copy.</li>
-      <li>Re-enable <code>ENABLE_USER_SCRIPT_SANDBOXING</code> in the iOS project (band-aid still off).</li>
+      <li>Push notifications (delivery/claim/reply).</li>
+      <li>Fire-time "reply is on its way" push for scheduled replies; in-app share sheet for claim links.</li>
+      <li>Google Maps key empty → Map falls back to Apple Maps; set before public.</li>
     </ol>
   </div>
 </section>
 
 <div class="foot">
-  Generated from a verbatim read of branch <code>mvp-v0.3-credits-and-categories</code> · primary source <code>supabase/functions/loop-inbound/index.ts</code>. Example names/cities are illustrative; <span class="v">highlighted</span> spans are template variables. This file is self-contained — open it in any browser.
+  v2 · generated from a verbatim read of branch <code>mvp-v0.3-credits-and-categories</code> after this session's edits · primary source <code>supabase/functions/loop-inbound/index.ts</code>. Example names/cities are illustrative; <span class="v">highlighted</span> spans are template variables. Self-contained — open in any browser.
 </div>
 
 </main>
