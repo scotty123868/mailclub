@@ -760,6 +760,21 @@ async function parseConfirmation(input: string): Promise<ParsedConfirm> {
  return (r && ["yes", "no", "unclear"].includes(r.intent)) ? r as ParsedConfirm : { intent: "unclear" };
 }
 
+// In the "card in progress + a new photo just arrived" confirmation, the
+// choice is START-OVER-with-the-new-photo vs KEEP-the-current-card. Map the
+// advertised NEW / KEEP keywords and natural phrasings ("keep card", "use the
+// new one") before falling back to the yes/no AI parse — so a clear reply is
+// never misread as "unclear" and the user is never trapped re-answering.
+async function parseNewPhotoChoice(input: string): Promise<"new" | "keep" | "unclear"> {
+ const t = input.trim().toLowerCase();
+ if (/\b(keep|current|finish|stay|leave it|same one|old one|original)\b/.test(t)) return "keep";
+ if (/\b(new|start over|startover|fresh|restart|swap|replace|use (it|this|the new)|this (one|photo)|the new)\b/.test(t)) return "new";
+ const ans = await parseConfirmation(input);
+ if (ans.intent === "yes") return "new";
+ if (ans.intent === "no") return "keep";
+ return "unclear";
+}
+
 async function parseSendConfirm(input: string): Promise<ParsedSendConfirm> {
  const t = input.trim().toLowerCase();
  if (/^(y|yes|yep|yeah|yas|ya|sure|ok|okay|k|confirm|confirmed|send|send it|send it now|send away|mail it|mail it now|ship|ship it|do it|go|go for it|👍|✅|🚀|yeah sure|yes please|sounds good|looks good|looks great|go ahead|sure thing|let's go|lets go|let's do it|lets do it|perfect|do it now)$/i.test(t))
@@ -1385,23 +1400,23 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  await advanceState(from, state.step, state.draft_token, {
  ...(state.conversation_data ?? {}), pending_new_photo_url: attachments[0],
  });
- await loopSend({ contact: from, text: "Got the new photo. Start over with it? Yes, or no to keep your current card." });
+ await loopSend({ contact: from, text: "Got the new photo. Reply NEW to start over with it, or KEEP to finish your current card." });
  return;
  }
- const ans = await parseConfirmation(body);
- if (ans.intent === "yes") {
+ const choice = await parseNewPhotoChoice(body);
+ if (choice === "new") {
  // startNewConversation builds a fresh draft from the new photo and
  // replaces conversation_data, which clears the pending flag.
  return await startNewConversation(from, pendingNewPhotoUrl);
  }
- if (ans.intent === "no") {
+ if (choice === "keep") {
  await advanceState(from, state.step, state.draft_token, {
  ...(state.conversation_data ?? {}), pending_new_photo_url: null,
  });
- await loopSend({ contact: from, text: "Okay, keeping your card in progress. Reply to the last step above to keep going." });
+ await loopSend({ contact: from, text: "Okay — keeping your card in progress. Reply to the last step above to keep going." });
  return;
  }
- await loopSend({ contact: from, text: "Want to start over with the new photo? Yes, or no to keep your current card." });
+ await loopSend({ contact: from, text: "Quick one — reply NEW to start over with the new photo, or KEEP to finish the card you already started." });
  return;
  }
 
@@ -1418,7 +1433,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  await advanceState(from, state.step, state.draft_token, {
  ...(state.conversation_data ?? {}), pending_new_photo_url: attachments[0],
  });
- await loopSend({ contact: from, text: "You've got a card in progress. Start over with this new photo? Yes, or no to keep going." });
+ await loopSend({ contact: from, text: "You've got a card in progress. Reply NEW to start over with this photo, or KEEP to finish the one you started." });
  return;
  }
  }
