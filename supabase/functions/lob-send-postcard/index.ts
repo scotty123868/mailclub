@@ -26,6 +26,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const LOB_API = "https://api.lob.com/v1/postcards";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 
 type Body = {
  postcard_id: string;
@@ -987,6 +988,10 @@ serve(async (req: Request) => {
  // to the postcards row AND, when notify is set, texts the finished
  // gallery to the sender as a follow-up a few seconds later. waitUntil
  // keeps the request alive past this response so it isn't cut off.
+ // The Lob postcard is ALREADY created above. This background render
+ // trigger must NEVER throw out of here, or the caller (doMail) treats a
+ // mailed card as failed and refunds + deletes it. Belt and suspenders.
+ try {
  if (frontThumbnailUrl && backThumbnailUrl) {
    const renderReq = fetch(`${SUPABASE_URL}/functions/v1/postcard-render-gifs`, {
      method: "POST",
@@ -1001,6 +1006,9 @@ serve(async (req: Request) => {
      // @ts-ignore
      EdgeRuntime.waitUntil(renderReq);
    }
+ }
+ } catch (e: any) {
+ console.warn("[lob-send-postcard] render trigger threw (send already succeeded)", e?.message ?? e);
  }
 
  // Return immediately after Lob (no render wait). loop-inbound fires the
