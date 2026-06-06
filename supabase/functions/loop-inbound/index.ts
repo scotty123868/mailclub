@@ -1249,7 +1249,7 @@ function pickEffectForNote(note: string): IMessageEffect {
 async function sendNoteIdeas(phone: string, state: any): Promise<void> {
  // Typing indicator while the LLM thinks. 3s is roughly how long the
  // OpenAI call takes, so the "..." dots disappear right as our ideas land.
- await loopTyping(phone, 2.5);
+ await loopTyping(phone, 1.2);
 
  const recipientName = (state.conversation_data?.recipient_name ?? "your friend") as string;
  const recipient = (state.conversation_data?.recipient ?? {}) as { city?: string; state?: string };
@@ -1301,7 +1301,7 @@ async function sendNoteIdeas(phone: string, state: any): Promise<void> {
  subject: "💡 Some ideas",
  text: ideas.map((idea, i) => `${i + 1}. ${idea}`).join("\n\n"),
  });
- await sleep(350);
+ await sleep(170);
  await loopSend({
  contact: phone,
  text: `Pick 1, 2, or 3, or just write your own.`,
@@ -1919,7 +1919,7 @@ async function sendMemories(phone: string): Promise<void> {
  if (signed?.signedUrl) photoUrls.push(signed.signedUrl);
  }
 
- await loopTyping(phone, 1.5);
+ await loopTyping(phone, 0.8);
  await loopSend({
  contact: phone,
  subject: "📮 Your postcards",
@@ -2372,7 +2372,7 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  // beat. then drop the pre-send summary.
  if (truncated.length > 0) {
  await loopSend({ contact: phone, text: echoText });
- await sleep(550);
+ await sleep(260);
  }
  const composition = buildPreSendComposition({
  fromCity: knownCity,
@@ -2404,7 +2404,7 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  const heavy = isHeavyNote(truncated);
  if (truncated.length > 0) {
  await loopSend({ contact: phone, text: echoText });
- await sleep(550);
+ await sleep(260);
  }
  const composition = buildPreSendComposition({
  fromCity: knownCity,
@@ -2428,10 +2428,10 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  await advanceState(phone, "awaiting_sender_location", state.draft_token, { message: truncated });
  if (truncated.length > 0) {
  await loopSend({ contact: phone, text: echoText });
- await sleep(550);
+ await sleep(260);
  } else {
  await loopSend({ contact: phone, text: "Got it. No note, just the photo." });
- await sleep(550);
+ await sleep(260);
  }
  await loopSend({
  contact: phone,
@@ -2819,7 +2819,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  // Act 2: the photo, "· To somewhere ·" (anonymous destination).
  // Act 3: the promise — they'll know when the loop closes.
  await loopSend({ contact: phone, text: "🪶 Matched. Stamping your card..." });
- await loopTyping(phone, 2);
+ await loopTyping(phone, 1);
 
  const postmarkDate = new Date().toLocaleDateString("en-US", {
   month: "short", day: "numeric", year: "numeric",
@@ -2837,7 +2837,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
  if (mailedRes.ok && mailedRes.messageId) {
   await admin.from("postcards").update({ mailed_imessage_id: mailedRes.messageId }).eq("id", postcardId);
  }
- await sleep(700);
+ await sleep(330);
 
  // Act 2: the photo — anonymous destination. Postal-label centering.
  await loopSend({
@@ -2845,7 +2845,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   text: `· To somewhere ·`,
   attachments: [photoUrl],
  });
- await sleep(450);
+ await sleep(220);
 
  // Act 3: the promise — they'll know when the loop closes.
  await loopSend({
@@ -3027,7 +3027,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
  // 4-act reciprocation celebration. Effect: love (closing a loop is
  // intimate). Act 0 stamping beat turns the wait into ritual.
  await loopSend({ contact: phone, text: "💌 Stamping the reply..." });
- await loopTyping(phone, 2);
+ await loopTyping(phone, 1);
 
  // Sender's home city for the FROM-STATION cancellation line.
  const senderProfileForStation = await admin
@@ -3055,7 +3055,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
  } else {
   await admin.from("postcards").update({ from_phone: phone }).eq("id", postcardId);
  }
- await sleep(700);
+ await sleep(330);
 
  // Gallery: [their photo, card flip, native route map]. Same
  // three-part story as a fresh send (see buildCelebrationGallery).
@@ -3065,7 +3065,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   text: routeCaption(pendingReply.sender_city || "them", lob.routeMiles),
   attachments: photoUrl ? [photoUrl] : buildCelebrationGallery(lob, photoUrl),
  });
- await sleep(450);
+ await sleep(220);
 
  await loopSend({
   contact: phone,
@@ -3244,7 +3244,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  // otherwise be dead air. One quiet bubble + typing indicator turn
  // dead air into ritual: "ah, my card is being stamped right now."
  await loopSend({ contact: phone, text: "📮 Stamping..." });
- await loopTyping(phone, 2);
+ await loopTyping(phone, 1);
 
  // Act 1. THE MOMENT (effect picked from note's emotional content)
  // Postmark line is the aesthetic anchor. Reads like a real cancellation
@@ -3279,7 +3279,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  } else {
   await admin.from("postcards").update({ from_phone: phone }).eq("id", postcardId);
  }
- await sleep(700);
+ await sleep(330);
 
  // Act 2. THE GALLERY — the three-part story, inline in the thread,
  // no link tap required:
@@ -3295,7 +3295,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  text: routeCaption(recipLocLabel, lob.routeMiles),
  attachments: photoUrl ? [photoUrl] : buildCelebrationGallery(lob, photoUrl),
  });
- await sleep(450);
+ await sleep(220);
 
  // Act 3. THE PROMISE — put the recipient in the frame. "Lands in
  // Sarah's mailbox Jun 3" beats "Arrives Jun 3" because it makes
@@ -3337,7 +3337,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  const { data: addrProf } = await admin
  .from("profiles").select("home_line1, home_zip").eq("id", userId).maybeSingle();
  if (!addrProf?.home_line1 || !addrProf?.home_zip) {
- await sleep(900);
+ await sleep(400);
  await advanceState(phone, "awaiting_sender_location", null, { post_send: true });
  await loopSend({
  contact: phone,
@@ -3463,7 +3463,7 @@ async function doScheduleReply(phone: string, state: any, schedule: ParsedSendCo
  const senderFirstName = pendingReply.sender_first_name || "your pen pal";
 
  await loopSend({ contact: phone, text: "🗓️ Saving your reply..." });
- await loopTyping(phone, 2);
+ await loopTyping(phone, 1);
  const schedRes = await loopSend({
   contact: phone,
   subject: `🗓️ Reply saved for ${sendDateFmt}`,
@@ -3478,7 +3478,7 @@ async function doScheduleReply(phone: string, state: any, schedule: ParsedSendCo
  const schedPatch: Record<string, unknown> = { from_phone: phone };
  if (schedRes.ok && schedRes.messageId) schedPatch.mailed_imessage_id = schedRes.messageId;
  await admin.from("postcards").update(schedPatch).eq("id", postcardId);
- await sleep(700);
+ await sleep(330);
  await loopSend({
   contact: phone,
   text: `· To ${pendingReply.sender_city || "your pen pal"} ·\nLands in ${senderFirstName}'s mailbox ~${arrivalFmt}`,
@@ -3589,7 +3589,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  // ===================================================================
 
  await loopSend({ contact: phone, text: "🗓️ Saving for later..." });
- await loopTyping(phone, 2);
+ await loopTyping(phone, 1);
 
  // Act 1. THE COMMITMENT — date IS the subject. Body adds the
  // promise that we'll text when it goes. Reframes "scheduled" from
@@ -3608,7 +3608,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  const schedPatch: Record<string, unknown> = { from_phone: phone };
  if (schedRes.ok && schedRes.messageId) schedPatch.mailed_imessage_id = schedRes.messageId;
  await admin.from("postcards").update(schedPatch).eq("id", postcardId);
- await sleep(700);
+ await sleep(330);
 
  // Act 2. THE PROOF — postal-label centering (no console arrow),
  // recipient mailbox framing on arrival side.
@@ -3617,7 +3617,7 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  text: `· To ${recipLocLabel} ·\nLands in ${firstNameSched}'s mailbox ~${arrivalFmt}`,
  attachments: [photoUrl],
  });
- await sleep(450);
+ await sleep(220);
 
  // Act 3. THE PROMISE
  await loopSend({ contact: phone, text: confirmUrl });
