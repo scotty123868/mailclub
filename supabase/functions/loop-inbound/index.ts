@@ -1375,6 +1375,70 @@ async function checkAbuseGuard(from: string, hasPhoto: boolean): Promise<boolean
  return false;
 }
 
+// Post-send cancellation. Lets a sender pull a just-mailed card back out
+// of Lob's print queue within Lob's cancellation window (configurable in
+// the Lob dashboard; Lob recommends ~2h). We target their most recent
+// non-terminal card from the last 12h; Lob returns 422 if it's already in
+// production, in which case we DON'T refund and say so plainly.
+function isCancelCardIntent(body: string): boolean {
+ return /^(cancel|cancel it|cancel that|cancel my card|cancel the card|cancel the postcard|cancel my postcard|cancel last|undo|undo it|undo that|undo the card|take it back|pull it back|stop the card|nvm cancel|never ?mind cancel)$/i.test(body.trim());
+}
+
+async function tryCancelLastCard(phone: string): Promise<boolean> {
+ const { data: prof } = await admin
+ .from("profiles").select("id").eq("phone", phone).maybeSingle();
+ if (!prof?.id) return false;
+ const since = new Date(Date.now() - 12 * 3600 * 1000).toISOString();
+ const { data: pc } = await admin
+ .from("postcards")
+ .select("id, lob_id, to_friend_id")
+ .eq("sender_id", prof.id)
+ .is("cancelled_at", null)
+ .not("status", "in", "(cancelled,delivered,returned,in_transit)")
+ .gte("created_at", since)
+ .order("created_at", { ascending: false })
+ .limit(1).maybeSingle();
+ if (!pc?.id) return false;
+
+ // Warm confirmation: name the recipient when it's a friend send.
+ let who = "that card";
+ if (pc.to_friend_id) {
+ const { data: f } = await admin.from("friends").select("name").eq("id", pc.to_friend_id).maybeSingle();
+ const fn = (f?.name ?? "").split(/\s+/)[0];
+ if (fn) who = `your card to ${fn}`;
+ }
+
+ // If it reached Lob, cancel it there first. Mirror the send path's key
+ // preference so we hit the same Lob env the card was created in.
+ const lobKey = Deno.env.get("LOB_API_KEY_TEST") ?? Deno.env.get("LOB_API_KEY") ?? "";
+ if (pc.lob_id && lobKey) {
+ try {
+ const res = await fetch(`https://api.lob.com/v1/postcards/${pc.lob_id}`, {
+ method: "DELETE",
+ headers: { Authorization: "Basic " + btoa(lobKey + ":") },
+ });
+ if (!res.ok) {
+ // 422 = already in production / past the cancellation window.
+ await loopSend({ contact: phone, text: `Too late to cancel ${who} — it's already at the printer and on its way. Sorry!` });
+ return true;
+ }
+ } catch (_e) {
+ await loopSend({ contact: phone, text: "Couldn't reach the printer to cancel just now. Try again in a moment?" });
+ return true;
+ }
+ }
+
+ // Refund the credit + flip status to 'cancelled' (idempotent RPC).
+ const { error: refundErr } = await admin.rpc("refund_cancelled_postcard", { p_postcard_id: pc.id });
+ if (refundErr) {
+ console.error("[loop-inbound] cancel refund failed", refundErr);
+ await loopSend({ contact: phone, text: `Pulled ${who} from the printer, but I couldn't auto-refund the credit — I'll make it right.` });
+ return true;
+ }
+ await loopSend({ contact: phone, text: `Done — pulled ${who} back before it printed. Your credit's back. 📮` });
+ return true;
+}
+
 async function handleInbound(ctx: InboundCtx): Promise<void> {
  const { from, body, attachments, messageId } = ctx;
  const hasPhoto = !!(attachments && attachments.length > 0);
@@ -1387,6 +1451,13 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  // Fetch state once at the top — used by the photo-restart guard, the
  // loose-BUY gate, and step routing.
  const state = await getConversationState(from);
+
+ // 0b. Post-send "cancel/undo": pull a just-mailed card back out of Lob's
+ // print queue (within Lob's cancellation window). Only when idle — a
+ // mid-draft "cancel" still means "restart this draft" (handled below).
+ if (state.step === "idle" && isCancelCardIntent(body)) {
+  if (await tryCancelLastCard(from)) return;
+ }
 
  // 1. Global: explicit reset is the universal escape hatch. First, so it
  // works even mid-confirmation.
@@ -3324,7 +3395,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  }
  await loopSend({
  contact: phone,
- text: `Lands in ${firstName}'s mailbox ${eta}.\nTap to flip your card and watch it travel:\n${confirmUrl}${tail}`,
+ text: `Lands in ${firstName}'s mailbox ${eta}.\nTap to flip your card and watch it travel:\n${confirmUrl}${tail}\n\nMistake? Reply CANCEL to pull it back.`,
  });
 
  // DEFERRED RETURN ADDRESS. A first-time friend sender skipped the address
