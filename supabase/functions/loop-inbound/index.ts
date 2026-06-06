@@ -767,12 +767,19 @@ async function parseConfirmation(input: string): Promise<ParsedConfirm> {
 // never misread as "unclear" and the user is never trapped re-answering.
 async function parseNewPhotoChoice(input: string): Promise<"new" | "keep" | "unclear"> {
  const t = input.trim().toLowerCase();
- if (/\b(keep|current|finish|stay|leave it|same one|old one|original)\b/.test(t)) return "keep";
- if (/\b(new|start over|startover|fresh|restart|swap|replace|use (it|this|the new)|this (one|photo)|the new)\b/.test(t)) return "new";
- const ans = await parseConfirmation(input);
- if (ans.intent === "yes") return "new";
- if (ans.intent === "no") return "keep";
- return "unclear";
+ // Zero-latency fast-paths for the obvious replies. The user never needs to
+ // know these exist — the prompt asks conversationally and the classifier
+ // below understands everything else ("switch to the food pic", "nah the arch one").
+ if (/\b(keep|current|finish|stay|leave it|same one|old one|original|first (one|photo|pic)|previous)\b/.test(t)) return "keep";
+ if (/\b(new|start over|startover|fresh|restart|swap|replace|switch|use (it|this|the new)|this (one|photo|pic)|the new)\b/.test(t)) return "new";
+ const r = await openaiJson([
+  { role: "system", content:
+   "The user is making a postcard and already has one in progress. They just sent a NEW photo, and we asked whether to use the new one or keep the card they already started. " +
+   'Classify their reply. Return JSON only: { "intent": "new" | "keep" | "unclear" }. ' +
+   '"new" = start over with the new photo. "keep" = keep and finish the card already in progress (ignore the new photo). "unclear" = genuinely cannot tell.' },
+  { role: "user", content: input },
+ ]);
+ return (r && ["new", "keep", "unclear"].includes(r.intent)) ? r.intent as "new" | "keep" | "unclear" : "unclear";
 }
 
 async function parseSendConfirm(input: string): Promise<ParsedSendConfirm> {
@@ -1400,7 +1407,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  await advanceState(from, state.step, state.draft_token, {
  ...(state.conversation_data ?? {}), pending_new_photo_url: attachments[0],
  });
- await loopSend({ contact: from, text: "Got the new photo. Reply NEW to start over with it, or KEEP to finish your current card." });
+ await loopSend({ contact: from, text: "Got that one too. Want to switch to this new photo, or keep going with the card you already started?" });
  return;
  }
  const choice = await parseNewPhotoChoice(body);
@@ -1416,7 +1423,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  await loopSend({ contact: from, text: "Okay — keeping your card in progress. Reply to the last step above to keep going." });
  return;
  }
- await loopSend({ contact: from, text: "Quick one — reply NEW to start over with the new photo, or KEEP to finish the card you already started." });
+ await loopSend({ contact: from, text: "Just so I don't lose your work — should I switch to the new photo, or keep the card you were working on?" });
  return;
  }
 
@@ -1433,7 +1440,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  await advanceState(from, state.step, state.draft_token, {
  ...(state.conversation_data ?? {}), pending_new_photo_url: attachments[0],
  });
- await loopSend({ contact: from, text: "You've got a card in progress. Reply NEW to start over with this photo, or KEEP to finish the one you started." });
+ await loopSend({ contact: from, text: "Looks like you're already in the middle of a card. Want to switch to this new photo, or finish the one you started?" });
  return;
  }
  }
@@ -1695,7 +1702,6 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
    contact: phone,
    subject: "✍️ Write your note",
    text: `What should the card say?\n\nUp to 240 characters, or say "skip" for just the photo.`,
-   contact_file: firstTime,
   });
  } else if (pendingReply) {
   // A pen pal is waiting on a reply — offer to close the loop.
@@ -1724,7 +1730,6 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
    text:
     `${locationLabel} sent you a card ${daysWord}.\n\n` +
     `Want to write ${pendingReply.senderFirstName} back? Just say yes.\n\n(Or give me a friend's name, or say "penpal" to meet a random stranger.)`,
-   contact_file: firstTime,
   });
  } else {
   // Normal: ask who it's for.
@@ -1733,7 +1738,6 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
    await loopSend({
     contact: phone,
     text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with a random stranger.",
-    contact_file: true,
    });
   } else {
    await loopSend({
