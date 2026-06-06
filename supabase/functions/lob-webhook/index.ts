@@ -117,7 +117,7 @@ async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
  * header `t=<ts>,v1=<hex>`. We support both that format and a fallback
  * where the header is a bare hex signature over just the body (older
  * Lob webhooks or some Debugger configs). */
-async function verifySignature(rawBody: string, headerSig: string): Promise<boolean> {
+async function verifySignature(rawBody: string, headerSig: string, timestamp: string): Promise<boolean> {
  // v0.7.0.60: SKIP_VERIFY now checked FIRST, regardless of secret state.
  // The previous gate (`length === 0`) never fired because the array is
  // always initialized with two entries (`?? ""` fallbacks), so setting
@@ -139,6 +139,23 @@ async function verifySignature(rawBody: string, headerSig: string): Promise<bool
  return false;
  }
  if (!headerSig) return false;
+
+ // --- Path C (Lob's CURRENT, Svix-backed scheme): a 64-char hex HMAC in
+ // the Lob-Signature header computed over `${timestamp}.${body}`, with the
+ // unix timestamp delivered in a SEPARATE Lob-Signature-Timestamp header.
+ // This is what Lob sends today; the old code only knew the Stripe-style
+ // t=,v1= shape (Path A) and a body-only HMAC (Path B), so every real
+ // webhook failed with parsed_t=null. Lob may send >1 comma-separated sig
+ // during secret rotation, so check each. ---
+ if (timestamp) {
+ const signedPayload = `${timestamp}.${rawBody}`;
+ for (const secret of validSecrets) {
+ const computed = await hmacSha256Hex(secret, signedPayload);
+ for (const candidate of headerSig.split(",").map((s) => s.trim())) {
+ if (candidate && timingSafeEqual(computed, candidate)) return true;
+ }
+ }
+ }
 
  const { t, v1 } = parseLobSignatureHeader(headerSig);
 
@@ -210,7 +227,13 @@ serve(async (req) => {
  req.headers.get("lob_signature") ??
  "";
 
- const ok = await verifySignature(rawBody, sig);
+ const sigTimestamp =
+ req.headers.get("lob-signature-timestamp") ??
+ req.headers.get("lob-timestamp") ??
+ req.headers.get("x-lob-signature-timestamp") ??
+ "";
+
+ const ok = await verifySignature(rawBody, sig, sigTimestamp);
  if (!ok) {
  // Diagnostics. surface header shape in the response body so we can
  // see what's happening from the Lob Debugger UI without scraping
