@@ -11,14 +11,10 @@ export const CARD_COSTS: Record<CardCategory, number> = {
  custom: 1,
 };
 
-// Starter balance for new accounts. v0.7.0.29: dropped from 3 → 1
-// per founder direction. One free card is enough to validate the
-// product feel (send your first, see it arrive, share the unboxing
-// moment) without giving away enough value that users never convert.
-// The second send becomes a stamp purchase, which is the actual
-// product feedback loop. Three was too generous. half the users
-// never bought a pack.
-export const FREE_CREDITS = 1;
+// Starter balance for new accounts. 2026-06-08: dropped to 0 for launch —
+// no free first card. Selling convenience, not free; the first send routes
+// through a pack purchase (3 for $5).
+export const FREE_CREDITS = 0;
 
 export type CreditPack = {
  id: string;
@@ -30,20 +26,18 @@ export type CreditPack = {
 };
 
 // Three packs, premium positioning ("A magical mail club", not a utility).
-// Repriced 2026-05-27 per founder. Must stay in sync with server-side
-// SERVER_PACKS (create-payment-intent) + PACKS (sms-buy-checkout).
+// LAUNCH PRICING 2026-06-08 (no free first card). Must stay in sync with
+// server-side SERVER_PACKS (create-payment-intent) + PACKS (sms-buy-checkout).
 //
-// 4 cards · $5 · $1.25/card (entry)
-// 10 cards · $10 · $1.00/card ("ten for ten" clean beat)
-// 30 cards · $25 · $0.83/card (HEADLINE. for the regulars)
+// 3 cards · $5 · $1.67/card (entry)
+// 8 cards · $10 · $1.25/card (the middle pick)
+// 25 cards · $25 · $1.00/card (HEADLINE. for the regulars)
 //
-// IDs match the dollar amounts (p5, p10, p25). Retired old p50 and the
-// old $20/25 mapping of p25. The "less than a stamp" framing is gone .
-// Mailroom is a premium community of magic, not the cheapest stamp.
+// IDs match the dollar amounts (p5, p10, p25).
 export const CREDIT_PACKS: CreditPack[] = [
- { id: "p5", credits: 4, priceUsd: 5 },
- { id: "p10", credits: 10, priceUsd: 10 },
- { id: "p25", credits: 30, priceUsd: 25, featured: true },
+ { id: "p5", credits: 3, priceUsd: 5 },
+ { id: "p10", credits: 8, priceUsd: 10 },
+ { id: "p25", credits: 25, priceUsd: 25, featured: true },
 ];
 
 export const CATEGORY_LABELS: Record<CardCategory, string> = {

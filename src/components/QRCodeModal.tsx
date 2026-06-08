@@ -54,7 +54,7 @@ export function QRCodeModal({
  <View style={styles.sheet}>
  <SheetHeader
  title="Your Mail Card"
- subtitle="Show this to a friend. they scan it to send you a free first card."
+ subtitle="Show this to a friend. they scan it to send you a card."
  onClose={onClose}
  closeAccessibilityLabel="Close QR code modal"
  closeTestID="qr-modal-close"

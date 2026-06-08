@@ -41,16 +41,17 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "
 //
 // Repriced as "magical mail club". premium positioning, NOT a utility.
 // Three-pack matrix as of 2026-05-27:
-// p5 · 4 cards · $5 · $1.25/card · entry
-// p10 · 10 cards · $10 · $1.00/card · clean "ten for ten" beat
-// p25 · 30 cards · $25 · $0.83/card · FEATURED, for the regulars
+// LAUNCH PRICING 2026-06-08 (no free first card).
+// p5 · 3 cards · $5 · $1.67/card · entry
+// p10 · 8 cards · $10 · $1.25/card · the middle pick
+// p25 · 25 cards · $25 · $1.00/card · FEATURED, for the regulars
 //
 // Retired: old p25 ($20/25), p50 ($35/50). Clients hitting these get a
 // clean 400 "Unknown pack_id". no silent fallback.
 const SERVER_PACKS: Record<string, { credits: number; amountCents: number; description: string }> = {
- p5: { credits: 4, amountCents: 500, description: "Mailroom · 4 cards" },
- p10: { credits: 10, amountCents: 1000, description: "Mailroom · 10 cards" },
- p25: { credits: 30, amountCents: 2500, description: "Mailroom · 30 cards" },
+ p5: { credits: 3, amountCents: 500, description: "Mailroom · 3 cards" },
+ p10: { credits: 8, amountCents: 1000, description: "Mailroom · 8 cards" },
+ p25: { credits: 25, amountCents: 2500, description: "Mailroom · 25 cards" },
 };
 
 const CORS_HEADERS = {

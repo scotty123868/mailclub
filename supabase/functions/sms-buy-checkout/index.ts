@@ -40,14 +40,15 @@ const stripe = new Stripe(STRIPE_KEY, {
 
 // Mirror SERVER_PACKS in create-payment-intent. Keep in sync.
 // Repriced as a "magical mail club" (premium positioning, not utility):
-// p5 · $5 / 4 cards / $1.25 per card · entry
-// p10 · $10 / 10 cards / $1.00 per card · clean "ten for ten" beat
-// p25 · $25 / 30 cards / $0.83 per card · best per-card, for the regulars
-// Old p50 (50 cards / $35) retired. Old p25 ($20 / 25 cards) replaced.
+// LAUNCH PRICING 2026-06-08 (no free first card). Selling convenience, not a
+// race to the bottom — every card is paid, and the packs clear Lob's cost.
+// p5 · $5 / 3 cards / $1.67 per card · entry
+// p10 · $10 / 8 cards / $1.25 per card · the middle pick
+// p25 · $25 / 25 cards / $1.00 per card · best per-card, for the regulars
 const PACKS: Record<string, { credits: number; amountCents: number; description: string; label: string }> = {
- p5: { credits: 4, amountCents: 500, description: "Mailroom · 4 cards", label: "4 cards ($5)" },
- p10: { credits: 10, amountCents: 1000, description: "Mailroom · 10 cards", label: "10 cards ($10)" },
- p25: { credits: 30, amountCents: 2500, description: "Mailroom · 30 cards", label: "30 cards ($25)" },
+ p5: { credits: 3, amountCents: 500, description: "Mailroom · 3 cards", label: "3 cards ($5)" },
+ p10: { credits: 8, amountCents: 1000, description: "Mailroom · 8 cards", label: "8 cards ($10)" },
+ p25: { credits: 25, amountCents: 2500, description: "Mailroom · 25 cards", label: "25 cards ($25)" },
 };
 
 const SUCCESS_URL = "https://app.themailroom.club/?topup=ok";

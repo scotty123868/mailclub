@@ -299,7 +299,7 @@ export default function WelcomeMailScreen() {
             <View style={styles.signinPrompt}>
               <Text style={styles.signinTitle}>Want to keep it?</Text>
               <Text style={styles.signinBody}>
-                Join Mailroom to add {senderFirst} as a friend and send one back. 3 free stamps to start.
+                Join Mailroom to add {senderFirst} as a friend and send one back. Cards start at 3 for $5.
               </Text>
 
               {Platform.OS === "ios" ? (
