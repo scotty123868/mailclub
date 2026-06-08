@@ -40,8 +40,7 @@ const stripe = new Stripe(STRIPE_KEY, {
 
 // Mirror SERVER_PACKS in create-payment-intent. Keep in sync.
 // Repriced as a "magical mail club" (premium positioning, not utility):
-// LAUNCH PRICING 2026-06-08 (no free first card). Selling convenience, not a
-// race to the bottom — every card is paid, and the packs clear Lob's cost.
+// LAUNCH PRICING 2026-06-08 (free first card kept; packs repriced).
 // p5 · $5 / 3 cards / $1.67 per card · entry
 // p10 · $10 / 8 cards / $1.25 per card · the middle pick
 // p25 · $25 / 25 cards / $1.00 per card · best per-card, for the regulars

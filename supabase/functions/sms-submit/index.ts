@@ -62,8 +62,8 @@ const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID") ?? "";
 const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") ?? "";
 const TWILIO_FROM_NUMBER = Deno.env.get("TWILIO_FROM_NUMBER") ?? "";
 
-// New accounts start at 0 — launch pricing has no free first card.
-const FREE_CREDITS_NEW_USER = 0;
+// First-card-free baseline. Matches the iOS app's WelcomeSheet logic.
+const FREE_CREDITS_NEW_USER = 1;
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 

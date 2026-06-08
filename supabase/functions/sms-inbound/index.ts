@@ -44,9 +44,9 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// New accounts start at 0 — launch pricing has no free first card. SMS and
-// iOS signups share the same zero starting balance.
-const FREE_CREDITS_NEW_USER = 0;
+// First-card-free baseline. matches WelcomeSheet's iOS-app default so SMS
+// signups and iOS signups get the same starting balance.
+const FREE_CREDITS_NEW_USER = 1;
 
 // =============================================================================
 // Twilio helpers
@@ -391,17 +391,23 @@ async function submitToLob(
 // =============================================================================
 
 // Returns the SEND-prompt parenthetical for this user:
-// - 0 credits → " (Out of cards — text buy to add 3 for $5.)"
-// - user with credits → " (Uses 1 of N cards.)"
+// - new user (no profile or zero prior sends) → " (First one's free.)"
+// - repeat user with credits → " (Uses 1 of N cards.)"
 // - repeat user with 0 credits → "" (insufficient_credits
 // will get raised by send_postcard_sms RPC and handled in doMail)
 // One DB round-trip. profile + postcard count via a single PostgREST call.
 async function balanceParenthetical(phone: string): Promise<string> {
  const { data: prof } = await admin
- .from("profiles").select("credits").eq("phone", phone).maybeSingle();
- const credits = prof?.credits ?? 0;
- // No free first card at launch — a 0 balance means buy-to-send.
- if (credits <= 0) return " (Out of cards — text buy to add 3 for $5.)";
+ .from("profiles").select("id, credits").eq("phone", phone).maybeSingle();
+ if (!prof?.id) return " (First one's free.)"; // brand-new phone
+ const { count } = await admin
+ .from("postcards")
+ .select("id", { count: "exact", head: true })
+ .eq("sender_id", prof.id)
+ .in("status", ["sent", "delivered", "in_transit", "scheduled", "queued"]);
+ if ((count ?? 0) === 0) return " (First one's free.)";
+ const credits = prof.credits ?? 0;
+ if (credits <= 0) return ""; // out. doMail will catch + show BUY
  return ` (Uses 1 of ${credits} card${credits === 1 ? "" : "s"}.)`;
 }
 
@@ -588,7 +594,7 @@ async function handleInbound(ctx: InboundContext): Promise<Response> {
  let replyText: string;
  if (!prof) {
  replyText = effectiveCount === 0
- ? "Send a photo to get started. We'll turn it into a real paper postcard. Cards are 3 for $5."
+ ? "Send a photo to get started. We'll turn it into a real paper postcard. First one's free."
  : "Just send any photo. We'll do the rest.";
  } else {
  const credits = prof.credits ?? 0;

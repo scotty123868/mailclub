@@ -37,9 +37,8 @@ const WEBHOOK_AUTH = Deno.env.get("LOOPMESSAGE_WEBHOOK_AUTH") ?? "";
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// New accounts start at 0 — launch pricing has no free first card. The first
-// send routes through BUY (3 cards for $5). Selling convenience, not free.
-const FREE_CREDITS_NEW_USER = 0;
+// Free-credit baseline matches sms-inbound + iOS WelcomeSheet default.
+const FREE_CREDITS_NEW_USER = 1;
 
 // =============================================================================
 // LoopMessage outbound. loopSend()
@@ -941,10 +940,15 @@ async function getSundayDropQueuePosition(dropDate: Date): Promise<number> {
 
 async function balanceParenthetical(phone: string): Promise<string> {
  const { data: prof } = await admin
- .from("profiles").select("credits").eq("phone", phone).maybeSingle();
- const c = prof?.credits ?? 0;
- // No free first card at launch — a 0 balance means buy-to-send.
- if (c <= 0) return " (Out of cards — text buy to add 3 for $5.)";
+ .from("profiles").select("id, credits").eq("phone", phone).maybeSingle();
+ if (!prof?.id) return " (First one's free.)";
+ const { count } = await admin
+ .from("postcards").select("id", { count: "exact", head: true })
+ .eq("sender_id", prof.id)
+ .in("status", ["sent", "delivered", "in_transit", "scheduled", "queued"]);
+ if ((count ?? 0) === 0) return " (First one's free.)";
+ const c = prof.credits ?? 0;
+ if (c <= 0) return "";
  return ` (Uses 1 of ${c} card${c === 1 ? "" : "s"}.)`;
 }
 
@@ -1643,7 +1647,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  // whatever they said instead of a canned line.
  await resetState(from);
  if (body && body.trim()) return await respondFreeform(from, body, "Their session reset. Help them, then point them to text a photo.");
- await loopSend({ contact: from, text: "Text a photo to start a postcard." });
+ await loopSend({ contact: from, text: "Text a photo to start a postcard. First one's free." });
  }
 }
 
@@ -1657,7 +1661,7 @@ const MAILROOM_ASSISTANT_PROMPT =
  "You are the text assistant for Mailroom, the seamless way to mail a photo as a REAL paper postcard. " +
  "How it works: the user texts a PHOTO, writes a short note, and we mail a real postcard. " +
  "They can send to a friend (give an address, or we make a link the friend fills in) or to " +
- "a random pen pal who writes back. Cards come in packs: 3 for $5, 8 for $10, or 25 for $25 (about $1 each). There is no free card. To start or send" +
+ "a random pen pal who writes back. First card is free, then about $1 each. To start or send " +
  "anything, the user texts a photo. " +
  "Reply to the user's message in ONE or TWO short, warm, plain sentences. No emoji, no hype, " +
  "no exclamation pile-ups. If they seem ready to send, end by telling them to text a photo. " +
@@ -1672,7 +1676,7 @@ async function respondFreeform(phone: string, body: string, context: string): Pr
  ]);
  const reply = (typeof r?.reply === "string" && r.reply.trim())
   ? r.reply.trim()
-  : "Text a photo to start a postcard.";
+  : "Text a photo to start a postcard. First one's free.";
  await loopSend({ contact: phone, text: reply });
 }
 
@@ -1691,7 +1695,7 @@ async function handleIdle(from: string, body = ""): Promise<void> {
  await loopSend({
  contact: from,
  subject: "📮 Welcome to Mailroom",
- text: "A magical mail club: the easiest way to mail a postcard.\n\nText me a photo to start — cards are 3 for $5.",
+ text: "A magical mail club: the easiest way to mail a postcard.\n\nYour first card's on us. Send me a photo to begin.",
  });
  return;
  }
@@ -2829,7 +2833,7 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
   await loopSend({
    contact: phone,
    text: oom
-    ? "Out of cards. Text \"buy\" to add cards (3 for $5), then tell me to send it."
+    ? "Out of cards. Text \"buy\" to top up, then tell me to send it."
     : "Couldn't send your card. Try sending again, or text a new photo to start over.",
   });
   return;
@@ -3008,7 +3012,7 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
   await loopSend({
    contact: phone,
    text: oom
-    ? "Out of cards. Text \"buy\" to add cards (3 for $5), then tell me to send it."
+    ? "Out of cards. Text \"buy\" to top up, then tell me to send it."
     : "Couldn't print your reply. Tell me to send it again.",
   });
   return;
@@ -3245,7 +3249,7 @@ async function doMail(phone: string, state: any): Promise<void> {
  await loopSend({
  contact: phone,
  text: oom
- ? "Out of cards. Text \"buy\" to add cards (3 for $5), then tell me to send it."
+ ? "Out of cards. Text \"buy\" to top up, then tell me to send it."
  : "Couldn't print your card. Try sending again, or text a new photo to start over.",
  });
  return;
@@ -3381,9 +3385,9 @@ async function doMail(phone: string, state: any): Promise<void> {
  if (sentCount === 1) {
    // Their first card actually became real. Mark the milestone, and
    // point at the core action (text another photo), not a cold sell.
-   tail = `\n\nThat's your first card on its way. Text another photo anytime to send the next.`;
+   tail = `\n\nThat's your first card, on us. Text another photo anytime to send the next.`;
  } else if (remaining <= 0) {
-   tail = `\n\nLast one. Text "buy" for more (3 for $5).`;
+   tail = `\n\nLast one. Text "buy" for more.`;
  } else if (remaining <= 2) {
    tail = `\n\n${remaining} left. Text "buy" for more.`;
  } else if (sentCount === 10) {

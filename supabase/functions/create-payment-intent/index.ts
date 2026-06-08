@@ -41,7 +41,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "
 //
 // Repriced as "magical mail club". premium positioning, NOT a utility.
 // Three-pack matrix as of 2026-05-27:
-// LAUNCH PRICING 2026-06-08 (no free first card).
+// LAUNCH PRICING 2026-06-08 (free first card kept; packs repriced).
 // p5 · 3 cards · $5 · $1.67/card · entry
 // p10 · 8 cards · $10 · $1.25/card · the middle pick
 // p25 · 25 cards · $25 · $1.00/card · FEATURED, for the regulars

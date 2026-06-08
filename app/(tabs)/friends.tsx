@@ -168,9 +168,9 @@ export default function FriendsScreen() {
             style={styles.emptySendBtn}
             testID="rolodex-empty-send"
             accessibilityRole="button"
-            accessibilityLabel="Send your first card"
+            accessibilityLabel="Send your first card, it's free"
           >
-            <Text style={styles.emptySendBtnText}>Send your first card →</Text>
+            <Text style={styles.emptySendBtnText}>Send your first card, it's free →</Text>
           </Pressable>
         </View>
       ) : visibleFriends.length === 0 ? (
