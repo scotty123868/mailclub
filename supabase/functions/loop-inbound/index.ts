@@ -2404,6 +2404,32 @@ async function goBackToAddressStep(phone: string, state: any): Promise<void> {
  });
 }
 
+// Return to the NOTE step from the final confirm so the sender can rewrite the
+// message. Draft + recipient are kept; the note step re-collects and advances
+// straight back to confirm.
+async function goBackToNoteStep(phone: string, state: any): Promise<void> {
+ const data = state.conversation_data ?? {};
+ await advanceState(phone, "awaiting_message", state.draft_token, { ...data, pending_ideas: null });
+ await loopSend({
+  contact: phone,
+  subject: "✍️ Rewrite your note",
+  text: `Sure — what should the card say instead?\n\nUp to 240 characters, or say "skip" for just the photo.`,
+ });
+}
+
+// At the final confirm step, figure out WHAT the sender wants to change when
+// their message isn't a plain send/cancel/date.
+async function classifyConfirmEdit(message: string): Promise<"note" | "address" | "send" | "other"> {
+ const r = await openaiJson([
+  { role: "system", content:
+   "The user is at the FINAL confirm step before mailing a postcard (they can say send it, name a date to schedule, or cancel). Their message hints they want to change something first. " +
+   'Classify the target as JSON only: { "target": "note" | "address" | "send" | "other" }. ' +
+   '"note" = change the written message/note on the card. "address" = change the recipient or mailing address. "send" = they actually just want to send/confirm now. "other" = none of these / unclear.' },
+  { role: "user", content: message },
+ ]);
+ return (r && ["note", "address", "send", "other"].includes(r.target)) ? r.target : "other";
+}
+
 async function handleMessage(phone: string, body: string, state: any): Promise<void> {
  let message = body.trim();
 
@@ -2714,6 +2740,19 @@ async function handleSendConfirm(phone: string, body: string, state: any): Promi
  // SEND/CANCEL hit a regex fast-path; date phrasing ("June 15") falls
  // to the LLM. Show dots so the parse never feels frozen.
  fireTyping(phone, 6);
+
+ // EDIT / GO-BACK from the final confirm: let the sender fix the note (or the
+ // address) instead of being stuck on send/cancel. Keyword-gated so a plain
+ // "send it" / "cancel" / a date never pays for the AI call.
+ if (looksLikeEditIntent(body)) {
+  const target = await classifyConfirmEdit(body);
+  if (target === "note") return await goBackToNoteStep(phone, state);
+  if (target === "address" && (state.conversation_data?.send_type ?? "friend") === "friend") {
+   return await goBackToAddressStep(phone, state);
+  }
+  // "send"/"other" → fall through to normal send/cancel/schedule parsing.
+ }
+
  const c = await parseSendConfirm(body);
  if (c.intent === "cancel") {
  await resetState(phone);
