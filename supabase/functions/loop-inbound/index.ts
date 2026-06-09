@@ -2362,6 +2362,48 @@ async function startClaimLink(phone: string, state: any): Promise<void> {
  });
 }
 
+// --- Mid-flow "go back" / correction support --------------------------------
+// Cheap keyword pre-filter: does this message even HINT at navigation/editing
+// rather than being content? Keeps normal note entry AI-free (and fast).
+function looksLikeEditIntent(t: string): boolean {
+ return /\b(go back|last step|previous|prev step|back up|step back|edit|change|instead of|wrong (address|name|recipient|number)|i (have|got|know) (their|the|his|her|your) address|don'?t want (a |the )?link|not (a |the )?link|enter (the|their) address|use (the|their) address|do it (myself|directly))\b/i.test(t);
+}
+
+// AI adjudication for the NOTE step: is this the postcard note, or a request to
+// go back / change the recipient/address/send-method? Defaults to "note" when
+// unsure, so we never hijack a real message off the card.
+async function isGoBackIntent(message: string): Promise<boolean> {
+ const r = await openaiJson([
+  { role: "system", content:
+   "The user is at the step where they write the NOTE that will be PRINTED on a postcard. " +
+   "Decide whether their message is the note they want printed, OR a request to go back / change a previous step (the recipient, the mailing address, or switching from a shareable link to entering the address directly). " +
+   'Return JSON only: { "intent": "note" | "go_back" }. Only return "go_back" when it is clearly a navigation/correction request, not something someone would write on a postcard. When unsure, return "note".' },
+  { role: "user", content: message },
+ ]);
+ return r?.intent === "go_back";
+}
+
+// Return to the address step from later in the flow. Voids + refunds an
+// already-minted "send a link" claim card (so no credit is lost and no orphaned
+// unclaimed card lingers), clears claim_mode, keeps the photo draft + recipient
+// name, and re-asks for the address.
+async function goBackToAddressStep(phone: string, state: any): Promise<void> {
+ const data = state.conversation_data ?? {};
+ const claimId = data.claim_postcard_id as string | undefined;
+ if (claimId) {
+  try { await admin.rpc("refund_cancelled_postcard", { p_postcard_id: claimId }); }
+  catch (_e) { /* best-effort void of the unclaimed link card */ }
+ }
+ await advanceState(phone, "awaiting_recipient_address", state.draft_token, {
+  ...data, claim_mode: null, claim_postcard_id: null, pending_ideas: null,
+ });
+ const first = ((data.recipient_name ?? "your friend") as string).split(/\s+/)[0] || "your friend";
+ await loopSend({
+  contact: phone,
+  text: `Sure — back to the address. What's ${first}'s address?\n\nDon't have it? Say "send a link" and they can add it themselves.`,
+ });
+}
+
 async function handleMessage(phone: string, body: string, state: any): Promise<void> {
  let message = body.trim();
 
@@ -2392,6 +2434,15 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  if (message && /^(\?|ideas|idea|help me|suggest|suggestions|what should i say|stuck)\b/i.test(message)) {
  await sendNoteIdeas(phone, state);
  return;
+ }
+
+ // GO-BACK / correction. The note step takes free text, so "actually go back
+ // and let me enter their address" used to print verbatim on the card. Only
+ // when there's a navigation signal do we ask the AI to adjudicate (normal
+ // notes never pay for the call); a confirmed correction routes back to the
+ // address step instead of becoming the note.
+ if (looksLikeEditIntent(message) && await isGoBackIntent(message)) {
+ return await goBackToAddressStep(phone, state);
  }
 
  // A postcard back only holds so much, so we cap the note at 240. If
