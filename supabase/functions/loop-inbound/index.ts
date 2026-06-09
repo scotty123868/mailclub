@@ -1465,7 +1465,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  // 0b. Post-send "cancel/undo": pull a just-mailed card back out of Lob's
  // print queue (within Lob's cancellation window). Only when idle — a
  // mid-draft "cancel" still means "restart this draft" (handled below).
- if (state.step === "idle" && isCancelCardIntent(body)) {
+ if ((state.step === "idle" || state.conversation_data?.post_send === true) && isCancelCardIntent(body)) {
   if (await tryCancelLastCard(from)) return;
  }
 
