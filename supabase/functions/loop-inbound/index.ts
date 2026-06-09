@@ -471,7 +471,84 @@ const US_STATE_ABBRS = new Set(Object.values(US_STATE_ABBR));
 const CONTENT_ENTRY_STEPS = new Set([
  "awaiting_message", "awaiting_recipient_name",
  "awaiting_recipient_address", "awaiting_sender_location",
+ "awaiting_sender_name",
 ]);
+
+// Title-case a person's name without mangling O'Brien / Smith-Jones / initials.
+function titleCaseName(s: string): string {
+ return s.trim().split(/\s+/).map((w) =>
+  w.split(/([-'])/).map((part) =>
+   /[-']/.test(part) || !part
+    ? part
+    : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+  ).join("")
+ ).join(" ");
+}
+
+// Does this read like a person's name (not a street, PO box, or sentence)?
+// 1-4 alpha words, no digits, none of the address/postal keywords.
+function isNameLike(s: string): boolean {
+ const t = (s || "").trim();
+ if (!t || /\d/.test(t)) return false;
+ const words = t.split(/\s+/);
+ if (words.length < 1 || words.length > 4) return false;
+ if (!words.every((w) => /^[A-Za-z][A-Za-z'.\-]*$/.test(w))) return false;
+ const BANNED = new Set([
+  "po","p.o","box","apt","apartment","unit","suite","ste","fl","floor",
+  "rr","hc","rural","route","general","delivery","attn","care","street",
+  "st","ave","avenue","road","rd","blvd","lane","ln","drive","dr","court","ct",
+ ]);
+ if (words.some((w) => BANNED.has(w.toLowerCase().replace(/\.$/, "")))) return false;
+ // Need at least one real word (2+ letters), so "J K" alone doesn't pass.
+ return words.some((w) => w.replace(/[^A-Za-z]/g, "").length >= 2);
+}
+
+// Pull a leading name off an address blob, e.g.
+//   "Jane Smith, 123 Main St, SF CA 94102" -> { name: "Jane Smith", addressText: "123 Main St, SF CA 94102" }
+// Returns name "" and the original input untouched when there's no plausible
+// leading name, so the address parser is never fed a polluted line1.
+function extractNameFromAddressInput(input: string): { name: string; addressText: string } {
+ const text = (input || "").trim();
+ if (!text || /^\d/.test(text)) return { name: "", addressText: input };
+
+ // "Name, <street with a number ...>" — the first comma segment is the name.
+ const ci = text.indexOf(",");
+ if (ci > 0) {
+  const first = text.slice(0, ci).trim();
+  const rest = text.slice(ci + 1).trim();
+  if (isNameLike(first) && /\d/.test(rest)) {
+   return { name: titleCaseName(first), addressText: rest };
+  }
+  return { name: "", addressText: input };
+ }
+
+ // No comma: split at the house number (first token starting with a digit).
+ const m = text.match(/\s(?=\d)/);
+ if (m && typeof m.index === "number" && m.index > 0) {
+  const first = text.slice(0, m.index).trim();
+  const rest = text.slice(m.index).trim();
+  if (isNameLike(first)) return { name: titleCaseName(first), addressText: rest };
+ }
+ return { name: "", addressText: input };
+}
+
+// Normalize a standalone name reply ("i'm Jane Smith", "Jane") to a clean
+// name, or "" if it doesn't look like a name (so the handler can re-ask).
+function cleanSenderName(raw: string): string {
+ let t = (raw || "").trim();
+ if (!t) return "";
+ t = t.replace(
+  /^(?:hi[,!.\s]+)?(?:it'?s|i'?m|this is|my name'?s|my name is|name'?s|name is|the name'?s|name)\s+/i,
+  "",
+ ).trim();
+ t = t.replace(/[!.,]+$/, "").trim();
+ if (!t || t.length > 60) return "";
+ const words = t.split(/\s+/);
+ if (words.length < 1 || words.length > 4) return "";
+ if (!words.every((w) => /^[A-Za-z][A-Za-z'.\-]*$/.test(w))) return "";
+ if (!words.some((w) => w.replace(/[^A-Za-z]/g, "").length >= 2)) return "";
+ return titleCaseName(t);
+}
 
 // Regex/heuristic address parser. NO network. The safety net for when
 // OpenAI is unreachable (dead key, rate limit, outage) so the address
@@ -1644,6 +1721,8 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  return await handleMessage(from, body, state);
  case "awaiting_sender_location":
  return await handleSenderLocation(from, body, state);
+ case "awaiting_sender_name":
+ return await handleSenderName(from, body, state);
  case "awaiting_sender_address_confirm":
  return await handleSenderAddressConfirm(from, body, state);
  case "awaiting_send_confirm":
@@ -2518,13 +2597,14 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  // city/state on file from earlier rounds get re-prompted for the full
  // address on this send. line2 is optional (apt/unit).
  const { data: profile } = await admin
- .from("profiles").select("city, state, home_line1, home_zip").eq("phone", phone).maybeSingle();
+ .from("profiles").select("city, state, home_line1, home_zip, name").eq("phone", phone).maybeSingle();
  const hasFullAddress = !!(
    profile?.home_line1 && profile?.home_zip &&
    profile?.city && profile?.state
  );
  const knownCity = (profile?.city ?? "").trim();
  const knownState = (profile?.state ?? "").trim();
+ const hasName = !!(profile?.name ?? "").trim();
 
  if (hasFullAddress) {
  await advanceState(phone, "awaiting_send_confirm", state.draft_token, { message: truncated });
@@ -2601,7 +2681,9 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  }
  await loopSend({
  contact: phone,
- text: `Last step. What's your full mailing address? We keep it private (only your city shows on the postcard) so your pen pal can mail one back to you.\n\nFormat: street, city, state, ZIP.`,
+ text: hasName
+ ? `Last step. What's your full mailing address? We keep it private (only your city shows on the postcard) so your pen pal can mail one back to you.\n\nFormat: street, city, state, ZIP.`
+ : `Last step: your name + mailing address, so your pen pal can write back. We keep the address private — only your city ever shows on a card.\n\nLike: Jane Smith, 123 Main St, San Francisco CA 94102`,
  });
 }
 
@@ -2611,7 +2693,13 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
  // We need line1 + city + state + zip at minimum. Used for pen pal
  // reciprocation (someone mails back to this exact address). Never
  // appears on the postcard front.
- const parsed = await resolveAddress(phone, body);
+ //
+ // We asked for "name + address" in one line, so peel a leading name off
+ // first (e.g. "Jane Smith, 123 Main St ...") and parse only the address
+ // part — otherwise the name would pollute line1. capturedName is "" when
+ // they gave just the address; we ask for the name separately on confirm.
+ const { name: capturedName, addressText } = extractNameFromAddressInput(body);
+ const parsed = await resolveAddress(phone, addressText);
  if (!parsed || parsed.confidence < 0.7 || !parsed.line1 || !parsed.zip || !parsed.city || !parsed.state) {
  // Be SPECIFIC about what's missing. The common case is a real street
  // + city + state but no ZIP — telling them "just a city" there is
@@ -2636,6 +2724,9 @@ async function handleSenderLocation(phone: string, body: string, state: any): Pr
  line1: parsed.line1, line2: parsed.line2 || "", city: parsed.city,
  state: parsed.state, zip: parsed.zip,
  },
+ // Only stash when we actually found a name, so a re-entry that omits it
+ // (e.g. "no" -> retype just the address) doesn't clobber an earlier one.
+ ...(capturedName ? { sender_name_captured: capturedName } : {}),
  });
  const senderLabel =
  `   ${parsed.line1}${parsed.line2 ? `\n   ${parsed.line2}` : ""}\n` +
@@ -2658,9 +2749,9 @@ async function handleSenderAddressConfirm(phone: string, body: string, state: an
  const c = await parseConfirmation(body);
 
  if (c.intent === "yes") {
- // Commit the private home address, then proceed to the send step.
+ // Commit the private home address.
  const { data: existing } = await admin
- .from("profiles").select("id").eq("phone", phone).maybeSingle();
+ .from("profiles").select("id, name").eq("phone", phone).maybeSingle();
  if (existing?.id) {
  await admin.from("profiles").update({
  home_line1: resolved.line1,
@@ -2671,46 +2762,26 @@ async function handleSenderAddressConfirm(phone: string, body: string, state: an
  }).eq("id", existing.id);
  }
 
- // Deferred capture (friend first-send): the card already mailed, so
- // there's nothing left to send — just confirm the save and reset.
- if (state.conversation_data?.post_send) {
- // Backfill from_city on cards sent before we had the address (the
- // deferred first send) so their route map + "from" label render. The
- // sender's city never prints on the physical card (that's the Mailroom
- // return address), so this fully corrects the display retroactively.
- if (existing?.id) {
- await admin.from("postcards").update({ from_city: resolved.city })
- .eq("sender_id", existing.id).eq("from_city", "");
+ // Name: save the one we peeled off the address line, if any — but never
+ // overwrite a name the profile already has.
+ const existingName = (existing?.name ?? "").trim();
+ const captured = cleanSenderName((state.conversation_data?.sender_name_captured ?? "") as string);
+ if (existing?.id && !existingName && captured) {
+ await admin.from("profiles").update({ name: captured }).eq("id", existing.id);
  }
- await resetState(phone);
+
+ // Still no name on file -> ask for it in one dedicated step. We need it
+ // so pen pals can write back to a real person, not a blank "from".
+ if (existing?.id && !existingName && !captured) {
+ await advanceState(phone, "awaiting_sender_name", state.draft_token, {});
  await loopSend({
  contact: phone,
- text: `Saved. That's your return address. Now friends can write you back. Text a photo anytime to send another. 📮`,
+ text: `Got it. Last thing — what's your name? It goes on the back so friends know who wrote them.`,
  });
  return;
  }
 
- await advanceState(phone, "awaiting_send_confirm", state.draft_token, {
- sender_city: resolved.city, sender_state: resolved.state,
- });
- const sendType = (state.conversation_data?.send_type ?? "friend") as string;
- const recip = (state.conversation_data?.recipient ?? {}) as { city?: string; state?: string };
- const note = (state.conversation_data?.message ?? "") as string;
- const balanceTag = await balanceParenthetical(phone);
- const heavy = isHeavyNote(note);
- const composition = buildPreSendComposition({
- fromCity: resolved.city,
- sendType,
- recipientName: state.conversation_data?.recipient_name,
- recipientCity: recip.city,
- note,
- });
- await loopSend({
- contact: phone,
- text: heavy
- ? `${composition}\n\nThis one feels meaningful. Tell me to send it whenever you're ready.${balanceTag}`
- : `${composition}\n\nReady? Tell me to send it, or name a day to mail it later.${balanceTag}`,
- });
+ await proceedAfterSenderSaved(phone, state, resolved);
  return;
  }
 
@@ -2722,13 +2793,15 @@ async function handleSenderAddressConfirm(phone: string, body: string, state: an
 
  // Unclear — they may have typed a corrected address instead of Y/N.
  // Re-resolve it; if it's a complete address, re-confirm the new one.
- const reparsed = await resolveAddress(phone, body);
+ const { name: reName, addressText: reAddr } = extractNameFromAddressInput(body);
+ const reparsed = await resolveAddress(phone, reAddr);
  if (reparsed && reparsed.line1 && reparsed.zip && reparsed.city && reparsed.state) {
  await advanceState(phone, "awaiting_sender_address_confirm", state.draft_token, {
  sender_resolved: {
  line1: reparsed.line1, line2: reparsed.line2 || "", city: reparsed.city,
  state: reparsed.state, zip: reparsed.zip,
  },
+ ...(reName ? { sender_name_captured: reName } : {}),
  });
  const reLabel =
  `   ${reparsed.line1}${reparsed.line2 ? `\n   ${reparsed.line2}` : ""}\n` +
@@ -2740,6 +2813,91 @@ async function handleSenderAddressConfirm(phone: string, body: string, state: an
  return;
  }
  await loopSend({ contact: phone, text: "That look right? Or just send your full mailing address." });
+}
+
+// Standalone name step: we had the address but not the name, so we asked for
+// it on its own. Save it, then continue exactly where the address-confirm
+// would have (deferred reset, or on to the send confirm).
+async function handleSenderName(phone: string, body: string, state: any): Promise<void> {
+ fireTyping(phone, 4);
+ const name = cleanSenderName(body);
+ if (!name) {
+  await loopSend({
+   contact: phone,
+   text: `Just your name is perfect — first and last. (e.g. "Jane Smith")`,
+  });
+  return;
+ }
+ const { data: existing } = await admin
+  .from("profiles").select("id").eq("phone", phone).maybeSingle();
+ if (existing?.id) {
+  await admin.from("profiles").update({ name }).eq("id", existing.id);
+ }
+
+ const resolved = state.conversation_data?.sender_resolved as
+  { line1: string; line2: string; city: string; state: string; zip: string } | undefined;
+ if (!resolved) {
+  // Shouldn't happen (we only reach here after the address is saved), but
+  // never loop: thank them and reset cleanly.
+  await resetState(phone);
+  await loopSend({
+   contact: phone,
+   text: `Thanks, ${name.split(/\s+/)[0]}. You're all set — text a photo anytime to send a card. 📮`,
+  });
+  return;
+ }
+ await proceedAfterSenderSaved(phone, state, resolved);
+}
+
+// After the sender's return address (and name) are committed, continue the
+// flow. Two cases: the deferred first-send (post_send) just confirms + resets,
+// because the card already mailed; the up-front case proceeds to the send
+// confirmation. Shared by the address-confirm and the standalone name step.
+async function proceedAfterSenderSaved(
+ phone: string,
+ state: any,
+ resolved: { line1: string; line2: string; city: string; state: string; zip: string },
+): Promise<void> {
+ if (state.conversation_data?.post_send) {
+  // Backfill from_city on cards sent before we had the address (the deferred
+  // first send) so their route map + "from" label render. The sender's city
+  // never prints on the physical card (that's the Mailroom return address),
+  // so this fully corrects the display retroactively.
+  const { data: existing } = await admin
+   .from("profiles").select("id").eq("phone", phone).maybeSingle();
+  if (existing?.id) {
+   await admin.from("postcards").update({ from_city: resolved.city })
+    .eq("sender_id", existing.id).eq("from_city", "");
+  }
+  await resetState(phone);
+  await loopSend({
+   contact: phone,
+   text: `Saved. That's your return address. Now friends can write you back. Text a photo anytime to send another. 📮`,
+  });
+  return;
+ }
+
+ await advanceState(phone, "awaiting_send_confirm", state.draft_token, {
+  sender_city: resolved.city, sender_state: resolved.state,
+ });
+ const sendType = (state.conversation_data?.send_type ?? "friend") as string;
+ const recip = (state.conversation_data?.recipient ?? {}) as { city?: string; state?: string };
+ const note = (state.conversation_data?.message ?? "") as string;
+ const balanceTag = await balanceParenthetical(phone);
+ const heavy = isHeavyNote(note);
+ const composition = buildPreSendComposition({
+  fromCity: resolved.city,
+  sendType,
+  recipientName: state.conversation_data?.recipient_name,
+  recipientCity: recip.city,
+  note,
+ });
+ await loopSend({
+  contact: phone,
+  text: heavy
+   ? `${composition}\n\nThis one feels meaningful. Tell me to send it whenever you're ready.${balanceTag}`
+   : `${composition}\n\nReady? Tell me to send it, or name a day to mail it later.${balanceTag}`,
+ });
 }
 
 async function handleSendConfirm(phone: string, body: string, state: any): Promise<void> {
@@ -3522,13 +3680,16 @@ async function doMail(phone: string, state: any): Promise<void> {
  // handleSenderAddressConfirm sees it and just saves + resets instead of
  // routing back into a send.
  const { data: addrProf } = await admin
- .from("profiles").select("home_line1, home_zip").eq("id", userId).maybeSingle();
+ .from("profiles").select("home_line1, home_zip, name").eq("id", userId).maybeSingle();
  if (!addrProf?.home_line1 || !addrProf?.home_zip) {
  await sleep(400);
  await advanceState(phone, "awaiting_sender_location", null, { post_send: true });
+ const hasName = !!(addrProf?.name ?? "").trim();
  await loopSend({
  contact: phone,
- text: `One more thing: what's your full mailing address? We keep it private (only your city shows on a card) so friends can mail one back to you.\n\nFormat: street, city, state, ZIP.`,
+ text: hasName
+ ? `One more thing: what's your full mailing address? We keep it private (only your city shows on a card) so friends can mail one back to you.\n\nFormat: street, city, state, ZIP.`
+ : `One more thing: your name + mailing address, so friends can write you back. We keep the address private — only your city ever shows on a card.\n\nLike: Jane Smith, 123 Main St, San Francisco CA 94102`,
  });
  }
 }
