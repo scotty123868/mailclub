@@ -948,8 +948,9 @@ async function balanceParenthetical(phone: string): Promise<string> {
  if (!prof?.id) return " (First one's free.)";
  const { count } = await admin
  .from("postcards").select("id", { count: "exact", head: true })
- .eq("sender_id", prof.id)
- .in("status", ["sent", "delivered", "in_transit", "scheduled", "queued"]);
+ .eq("sender_id", prof.id);
+ // ANY prior card (including cancelled) means they're not a first-timer, so
+ // don't dangle "first one's free" at the confirm step once they've sent.
  if ((count ?? 0) === 0) return " (First one's free.)";
  const c = prof.credits ?? 0;
  if (c <= 0) return "";
