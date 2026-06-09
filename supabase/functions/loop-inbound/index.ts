@@ -2985,7 +2985,11 @@ async function doMailStranger(phone: string, state: any): Promise<void> {
 
  // c-bridge wraps /c/<token> with per-token OG meta tags for the link's
  // rich preview. Real browsers get a meta-refresh to /c/<token>.
- const confirmUrl = `https://nlwnmgwylmmnaemdnzlq.supabase.co/functions/v1/c-bridge?token=${draftToken}`;
+ // Point the user-tapped tracking link at the WEBSITE (renders text/html +
+ // can open the app). The supabase.co/functions domain force-serves text/plain
+ // + a sandbox CSP, so tapping a c-bridge URL showed raw source and blocked the
+ // redirect. The /c/ page handles its own OG meta.
+ const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
 
  // CELEBRATION — pen pal mode. The recipient is anonymous and stays that
  // way: photo-only reveal, NO route map (it would leak their city). Mails
@@ -3199,7 +3203,11 @@ async function doMailReplyToPenPal(phone: string, state: any): Promise<void> {
  // c-bridge wraps /c/<token> with per-token OG meta tags so iMessage's
  // preview shows THIS recipient + THIS photo + THIS ETA instead of the
  // generic landing card. Real browsers get a meta-refresh to /c/<token>.
- const confirmUrl = `https://nlwnmgwylmmnaemdnzlq.supabase.co/functions/v1/c-bridge?token=${draftToken}`;
+ // Point the user-tapped tracking link at the WEBSITE (renders text/html +
+ // can open the app). The supabase.co/functions domain force-serves text/plain
+ // + a sandbox CSP, so tapping a c-bridge URL showed raw source and blocked the
+ // redirect. The /c/ page handles its own OG meta.
+ const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
  const senderFirstName = pendingReply.sender_first_name;
 
  // 4-act reciprocation celebration. Effect: love (closing a loop is
@@ -3389,7 +3397,11 @@ async function doMail(phone: string, state: any): Promise<void> {
  // c-bridge wraps /c/<token> with per-token OG meta tags so iMessage's
  // preview shows THIS recipient + THIS photo + THIS ETA instead of the
  // generic landing card. Real browsers get a meta-refresh to /c/<token>.
- const confirmUrl = `https://nlwnmgwylmmnaemdnzlq.supabase.co/functions/v1/c-bridge?token=${draftToken}`;
+ // Point the user-tapped tracking link at the WEBSITE (renders text/html +
+ // can open the app). The supabase.co/functions domain force-serves text/plain
+ // + a sandbox CSP, so tapping a c-bridge URL showed raw source and blocked the
+ // redirect. The /c/ page handles its own OG meta.
+ const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
  const recipLocLabel = [recipient.city, recipient.state].filter(Boolean).join(", ") || "their address";
 
  const { data: balRow } = await admin
@@ -3493,10 +3505,6 @@ async function doMail(phone: string, state: any): Promise<void> {
    // Their first card actually became real. Mark the milestone, and
    // point at the core action (text another photo), not a cold sell.
    tail = `\n\nThat's your first card, on us. Text another photo anytime to send the next.`;
- } else if (remaining <= 0) {
-   tail = `\n\nLast one. Text "buy" for more.`;
- } else if (remaining <= 2) {
-   tail = `\n\n${remaining} left. Text "buy" for more.`;
  } else if (sentCount === 10) {
    tail = `\n\nThat's ten cards from you. Text "memories" anytime to see them all.`;
  }
@@ -3756,7 +3764,11 @@ async function doSchedule(phone: string, state: any, schedule: ParsedSendConfirm
  // c-bridge wraps /c/<token> with per-token OG meta tags so iMessage's
  // preview shows THIS recipient + THIS photo + THIS ETA instead of the
  // generic landing card. Real browsers get a meta-refresh to /c/<token>.
- const confirmUrl = `https://nlwnmgwylmmnaemdnzlq.supabase.co/functions/v1/c-bridge?token=${draftToken}`;
+ // Point the user-tapped tracking link at the WEBSITE (renders text/html +
+ // can open the app). The supabase.co/functions domain force-serves text/plain
+ // + a sandbox CSP, so tapping a c-bridge URL showed raw source and blocked the
+ // redirect. The /c/ page handles its own OG meta.
+ const confirmUrl = `https://app.themailroom.club/c/${draftToken}`;
  const recipLocLabel = [recipient.city, recipient.state].filter(Boolean).join(", ") || "their address";
 
  // ===================================================================
