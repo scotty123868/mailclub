@@ -82,6 +82,10 @@ async function loopSend(opts: LoopSendOptions): Promise<{ ok: boolean; messageId
  });
  const data = await res.json().catch(() => ({}));
  if (!res.ok || data?.success === false) {
+ // Surface outbound failures instead of swallowing them. The classic one is
+ // a SANDBOX force-redirect ("...remove this contact from the sandbox list"),
+ // which otherwise fails silently and looks like "the bot ignored me".
+ console.warn("[loop-inbound] loopSend FAILED", { contact: opts.contact, status: res.status, error: data?.message ?? data?.error ?? `HTTP ${res.status}` });
  return { ok: false, error: data?.message ?? `HTTP ${res.status}` };
  }
  return { ok: true, messageId: data?.message_id };
