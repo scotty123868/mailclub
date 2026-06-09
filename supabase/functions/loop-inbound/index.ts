@@ -2467,8 +2467,13 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  // when there's a navigation signal do we ask the AI to adjudicate (normal
  // notes never pay for the call); a confirmed correction routes back to the
  // address step instead of becoming the note.
- if (looksLikeEditIntent(message) && await isGoBackIntent(message)) {
- return await goBackToAddressStep(phone, state);
+ if (looksLikeEditIntent(message)) {
+  // Strong, unambiguous nav phrases skip the AI entirely (robust even if
+  // OpenAI is slow/down). Softer signals fall to AI adjudication.
+  const strongGoBack = /\b(go back|last step|previous step|prev step|step back|back up|go back (a |one )?step)\b/i.test(message);
+  if (strongGoBack || await isGoBackIntent(message)) {
+   return await goBackToAddressStep(phone, state);
+  }
  }
 
  // A postcard back only holds so much, so we cap the note at 240. If
