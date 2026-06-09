@@ -1447,14 +1447,20 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  const { from, body, attachments, messageId } = ctx;
  const hasPhoto = !!(attachments && attachments.length > 0);
 
- // Spam guard: silence a number that fires many non-photo messages without
- // ever starting a card. A real photo resets the streak (genuine users are
- // never affected). Caps OpenAI/Lob/media spend.
- if (await checkAbuseGuard(from, hasPhoto)) return;
+ // Run the spam-guard check + state fetch CONCURRENTLY (independent reads)
+ // instead of sequentially — shaves a DB round-trip off every message. The
+ // guard silences a number that fires many non-photo messages without ever
+ // starting a card; a real photo resets the streak so genuine users are
+ // never affected.
+ const [blocked, state] = await Promise.all([
+  checkAbuseGuard(from, hasPhoto),
+  getConversationState(from),
+ ]);
+ if (blocked) return;
 
- // Fetch state once at the top — used by the photo-restart guard, the
- // loose-BUY gate, and step routing.
- const state = await getConversationState(from);
+ // Instant feedback: fire the typing indicator NOW so the user sees "..."
+ // while we parse + reply, instead of a few seconds of dead air.
+ fireTyping(from, 8);
 
  // 0b. Post-send "cancel/undo": pull a just-mailed card back out of Lob's
  // print queue (within Lob's cancellation window). Only when idle — a
@@ -1731,7 +1737,11 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
  // heavy lifting happens behind the typing dots.
  fireTyping(phone, 25);
 
- // Two cheap lookups, parallelized: first-time status (drives the ack
+ // Ack INSTANTLY — before any DB lookups — so "📮 Got it" lands in ~1s.
+ // The lookups below only shape the NEXT question, not this ack.
+ await loopSend({ contact: phone, text: "📮 Got it." });
+
+ // Two cheap lookups, parallelized: first-time status (drives the next-step
  // copy + vCard) and any stashed REPLY-code reply context. REPLY CODE
  // continuation: if this phone is mid-flow from a recent REPLY <code>
  // text (QR scan), they already told us who to write back to — the
@@ -1747,9 +1757,6 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
   findUnreciprocatedPairing(phone),
  ]);
  const carryReply = (priorStateRes.data?.conversation_data?.pending_reply ?? null) as any;
-
- // Ack immediately, before the slow photo upload.
- await loopSend({ contact: phone, text: "📮 Got it." });
 
  // Create the draft NOW with a pending photo, so we can advance state and
  // ask the next question RIGHT AWAY. The photo download (10-15s for a big
@@ -1813,6 +1820,7 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
    await loopSend({
     contact: phone,
     text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with a random stranger.",
+    contact_file: true, // attach the Mailroom vCard, once, on a new contact's first card
    });
   } else {
    await loopSend({
