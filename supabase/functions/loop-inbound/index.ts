@@ -1328,7 +1328,7 @@ function pickEffectForNote(note: string): IMessageEffect {
 // by number (1/2/3) or write their own. Suggestions are stashed in
 // conversation_data.pending_ideas so the number-pick works on next reply.
 
-async function sendNoteIdeas(phone: string, state: any): Promise<void> {
+async function sendNoteIdeas(phone: string, state: any, context = ""): Promise<void> {
  // Typing indicator while the LLM thinks. 3s is roughly how long the
  // OpenAI call takes, so the "..." dots disappear right as our ideas land.
  await loopTyping(phone, 1.2);
@@ -1353,8 +1353,9 @@ async function sendNoteIdeas(phone: string, state: any): Promise<void> {
  `Write 3 short postcard notes (under 140 chars each) to ${recipientName}` +
  `${recipLoc ? ` in ${recipLoc}` : ""}.` +
  `${senderLoc ? ` From a sender in ${senderLoc}.` : ""}` +
- ` Today is ${today}.\n\n` +
- `Vary the tone across the three: one nostalgic/warm, one playful, one thoughtful/sincere. ` +
+ ` Today is ${today}.` +
+ `${context ? `\n\nThe sender described this card in their own words: "${context}". Make all three notes clearly reflect that — the occasion, detail, relationship, or feeling they named. This is the most important input.` : ""}` +
+ `\n\nVary the tone across the three: one nostalgic/warm, one playful, one thoughtful/sincere. ` +
  `Each should be specific (mention a moment, feeling, or detail), not generic.\n\n` +
  `Return JSON: { "ideas": ["...", "...", "..."] }`,
  },
@@ -2523,6 +2524,19 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  if (pendingIdeas[idx]) message = pendingIdeas[idx];
  }
 
+ // IDEAS, step 2: the user is answering our "tell me about it" prompt, so
+ // generate suggestions FROM their words (much better than generic). Runs
+ // before the skip/empty checks so "skip" here means "skip the context,
+ // just riff" — NOT "mail with no note". A re-asked "ideas" also riffs.
+ if (state.conversation_data?.awaiting_idea_context === true && !(pendingIdeas && pickMatch)) {
+ const reAsk = /^(\?|ideas?|help me|suggest|suggestions|what should i say|stuck)\b/i.test(message);
+ const waveOff = /^(skip|whatever|you pick|any|idk|i don'?t know|just pick|surprise me|dunno)$/i.test(message);
+ const ctx = (reAsk || waveOff || message.length === 0) ? "" : message;
+ const cleared = { ...(state.conversation_data ?? {}), awaiting_idea_context: null };
+ await advanceState(phone, "awaiting_message", state.draft_token, cleared);
+ return await sendNoteIdeas(phone, { ...state, conversation_data: cleared }, ctx);
+ }
+
  if (message.length === 0) {
  await loopSend({ contact: phone, text: "What should the card say?" });
  return;
@@ -2534,11 +2548,18 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  message = "";
  }
 
- // "?" / "ideas" / "help me" → AI-generated suggestions based on the
- // recipient + sender context. Stays in awaiting_message state so the
- // user can either pick one (by number) or write their own.
+ // "?" / "ideas" / "help me" → don't fire generic suggestions. Ask for a
+ // little context first (occasion, vibe, what they want them to feel) so the
+ // ideas are about THIS card. The next reply is captured by the step-2 block
+ // above and fed to sendNoteIdeas.
  if (message && /^(\?|ideas|idea|help me|suggest|suggestions|what should i say|stuck)\b/i.test(message)) {
- await sendNoteIdeas(phone, state);
+ await advanceState(phone, "awaiting_message", state.draft_token, {
+ ...(state.conversation_data ?? {}), awaiting_idea_context: true,
+ });
+ await loopSend({
+ contact: phone,
+ text: "Happy to help. Tell me a little about the moment, the occasion, an inside joke, or what you want them to feel. A few words is plenty (or say \"skip\" and I'll just riff).",
+ });
  return;
  }
 
