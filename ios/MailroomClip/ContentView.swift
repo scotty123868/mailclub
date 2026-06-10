@@ -205,7 +205,7 @@ struct ContentView: View {
                     }
                 }
 
-                Text("Mailroom turns the people you love into real paper postcards. First card's free, then about $1 each. Their address stays private.")
+                Text("Mailroom turns the people you love into real paper postcards. First card's free, then 3 for $5. Their address stays private.")
                     .font(.system(size: 14, design: .serif))
                     .italic()
                     .foregroundColor(mutedInk)
