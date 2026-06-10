@@ -2524,11 +2524,19 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  if (pendingIdeas[idx]) message = pendingIdeas[idx];
  }
 
+ // GLOBAL "back" failsafe at the note step: a bare "back" / "go back" always
+ // returns to the address step, whatever sub-state we're in. No need to
+ // advertise it — it just works.
+ const wantsBack = /^(back|go back|previous|undo|wait,? go back)\.?$/i.test(message);
+
  // IDEAS, step 2: the user is answering our "tell me about it" prompt, so
  // generate suggestions FROM their words (much better than generic). Runs
  // before the skip/empty checks so "skip" here means "skip the context,
- // just riff" — NOT "mail with no note". A re-asked "ideas" also riffs.
+ // just riff" — NOT "mail with no note". But a nav command ("back"/"cancel")
+ // is NOT context: clear the flag and let it fall through to the handlers.
  if (state.conversation_data?.awaiting_idea_context === true && !(pendingIdeas && pickMatch)) {
+ const isNav = wantsBack || looksLikeEditIntent(message) || /^(cancel|never ?mind|nvm|stop)\.?$/i.test(message);
+ if (!isNav) {
  const reAsk = /^(\?|ideas?|help me|suggest|suggestions|what should i say|stuck)\b/i.test(message);
  const waveOff = /^(skip|whatever|you pick|any|idk|i don'?t know|just pick|surprise me|dunno)$/i.test(message);
  const ctx = (reAsk || waveOff || message.length === 0) ? "" : message;
@@ -2536,15 +2544,24 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  await advanceState(phone, "awaiting_message", state.draft_token, cleared);
  return await sendNoteIdeas(phone, { ...state, conversation_data: cleared }, ctx);
  }
+ // nav command: drop the idea-context flag and fall through to back/cancel
+ await advanceState(phone, "awaiting_message", state.draft_token, { ...(state.conversation_data ?? {}), awaiting_idea_context: null });
+ }
+
+ if (wantsBack) {
+ return await goBackToAddressStep(phone, state);
+ }
 
  if (message.length === 0) {
  await loopSend({ contact: phone, text: "What should the card say?" });
  return;
  }
 
- // SKIP path. user wants to mail just the photo, no note. Strict
- // single-word match so "skip class today" isn't misread.
- if (/^(skip|no note|none|nope|no thanks)$/i.test(message)) {
+ // SKIP / BLANK path. The user wants the photo with no note. Tolerant of
+ // natural phrasing ("just leave it blank please", "no message", "blank")
+ // AND trailing politeness, but still anchored to the whole message so a
+ // real note ("leave the porch light on") is never misread as skip.
+ if (/^(?:(?:just|please|pls|can you|could you)\s+)*(?:skip|none|nothing|no note|no message|no words|nope|no thanks|blank|(?:leave|keep)\s+(?:it|the card|this|the note)?\s*(?:blank|empty)|(?:just )?(?:the )?photo(?: only)?)(?:\s+(?:it|blank|empty|please|thanks|thx))*[.!?]*$/i.test(message)) {
  message = "";
  }
 
