@@ -517,9 +517,12 @@ serve(async (req: Request) => {
  if (!body.postcard_id) {
  return json({ ok: false, error: "postcard_id required" }, 400);
  }
- if (!useInlineHtml && (!body.front_url || !body.back_url)) {
+ // back_url is no longer required: the BACK is always rendered server-side
+ // from buildBackHtml (one canonical design for app + text + claim). The app
+ // still sends a front_url (the photo) for non-html sends.
+ if (!useInlineHtml && !body.front_url) {
  return json(
- { ok: false, error: "front_url + back_url required unless render_mode=html" },
+ { ok: false, error: "front_url required unless render_mode=html" },
  400,
  );
  }
@@ -750,21 +753,14 @@ serve(async (req: Request) => {
  // is how send-link cards reach Lob. the claim function can call this
  // function with just postcard_id + render_mode="html" once the
  // recipient address has been claimed.
- let frontPayload = body.front_url;
- let backPayload = body.back_url;
- if (useInlineHtml) {
- // Sign the photo URL. The postcard-photos bucket is private; we
- // give Lob a 7-day signed URL which is plenty for them to fetch +
- // render it on their side. They store their own copy after.
+ // Sign the photo (private buckets → 7-day signed URL for Lob to fetch +
+ // render). SMS cards live in sms-photos, app cards in postcard-photos.
  let photoUrl = "";
  if ((postcard as any).photo_path) {
  const path = (postcard as any).photo_path as string;
  if (path.startsWith("http")) {
  photoUrl = path;
  } else {
- // Sign at send time from a durable path (never a stored signed URL, which
- // would expire on scheduled / far-out sends). SMS cards live in sms-photos,
- // app cards in postcard-photos — try sms-photos first, then fall back.
  for (const bucket of ["sms-photos", "postcard-photos"]) {
  const { data: signed } = await supabase.storage
  .from(bucket)
@@ -773,11 +769,9 @@ serve(async (req: Request) => {
  }
  }
  }
- // Mint a reciprocation claim + ensure it has a short_code. The QR
- // now encodes an sms: URL so the recipient's phone opens iMessage
- // directly with the body prefilled, instead of a Safari detour
- // through a /welcome-mail/ page. The printed text below the QR
- // tells them to text "REPLY <CODE>" to our number.
+
+ // Mint a reciprocation claim + ensure it has a short_code, for the QR + the
+ // printed "text reply <CODE>" hook on the back.
  let reciprocationUrl = "";
  let shortCode = "";
  try {
@@ -786,16 +780,12 @@ serve(async (req: Request) => {
  });
  if (tokenData && typeof tokenData === "object" && (tokenData as any).token) {
  const claimToken = (tokenData as any).token as string;
- // Ensure a short_code exists for this claim. The 2026052420
- // migration generates one for any claim that's missing it.
  const { data: shortRow } = await supabase
  .from("postcard_claims")
  .select("short_code")
  .eq("claim_token", claimToken)
  .maybeSingle();
  shortCode = (shortRow as any)?.short_code ?? "";
- // Belt + suspenders: if the row is somehow missing a short_code,
- // generate one on the fly.
  if (!shortCode) {
  const { data: gen } = await supabase.rpc("generate_reciprocation_short_code");
  shortCode = (gen as string) ?? "";
@@ -807,18 +797,21 @@ serve(async (req: Request) => {
  }
  }
  }
- // sms: URL with prefilled body. iOS routes to Messages thread.
  if (shortCode) {
  const botNumber = Deno.env.get("MAILROOM_PUBLIC_SMS_NUMBER") ?? "+14156836457";
  reciprocationUrl = `sms:${botNumber}&body=${encodeURIComponent(`reply ${shortCode}`)}`;
  }
  } catch (err) {
- // eslint-disable-next-line no-console
  console.warn("[lob-send-postcard] reciprocation token mint failed:", err);
  // Continue without QR. postcard still ships, just no reply hook.
  }
- frontPayload = buildFrontHtml(photoUrl);
- backPayload = buildBackHtml({
+
+ // BACK: ALWAYS the canonical server template, so every card — app, text, or
+ // claim — has an identical, correct back. App sends used to upload their OWN
+ // back PNG, which had diverged (oversized QR, the long welcome URL instead of
+ // the short reply code, a clipped stamp, the wrong postmark state). One source
+ // of truth now: buildBackHtml from the postcard row.
+ const backPayload = buildBackHtml({
  message: (postcard as any).message ?? "",
  senderName: sender?.name ?? undefined,
  senderCity: sender?.city ?? undefined,
@@ -826,7 +819,10 @@ serve(async (req: Request) => {
  reciprocationUrl: reciprocationUrl || undefined,
  reciprocationShortCode: shortCode || undefined,
  });
- }
+
+ // FRONT: the app's uploaded photo PNG when it sent one (render_mode != html);
+ // otherwise the server photo render. The front is just the photo either way.
+ const frontPayload = (!useInlineHtml && body.front_url) ? body.front_url : buildFrontHtml(photoUrl);
 
  const params = new URLSearchParams({
  description: `Mailroom postcard ${postcard.id}`,
