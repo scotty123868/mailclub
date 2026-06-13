@@ -1606,7 +1606,7 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  }
  // Instant ❤️ tapback, then build the new card.
  if (messageId) await loopReact(from, messageId, "love");
- return await startNewConversation(from, attachments[0]);
+ return await startNewConversation(from, attachments[0], body);
  }
 
  // 2b. Global: REPLY <code> — the QR-on-postcard deep link target.
@@ -1809,7 +1809,81 @@ async function handleIdle(from: string, body = ""): Promise<void> {
  });
 }
 
-async function startNewConversation(phone: string, mediaUrl: string): Promise<void> {
+type ParsedSendInstruction = { name?: string; line1?: string; line2?: string; city?: string; state?: string; zip?: string; message?: string };
+
+// MAGICAL ONE-SHOT PARSE. When a photo arrives with a caption like "send to
+// Scotty, 861 N Humboldt St Apt B, Denver CO 80218, message: miss you", pull
+// out the recipient name / address / message in one gpt-4o-mini call. Lenient:
+// returns whatever it can from messy text. Returns null when the caption is NOT
+// a request to mail a card (a greeting, a question, junk).
+async function parseSendInstruction(caption: string): Promise<ParsedSendInstruction | null> {
+ const t = caption.trim();
+ if (t.length < 8) return null;
+ const r = await openaiJson([
+  { role: "system", content:
+   "You read ONE text message from someone mailing a physical postcard, and extract any of these fields that are present: recipient name, street line1, apt/unit line2, city, US state (2-letter), 5-digit zip, and the message/note to PRINT on the card. The text may be messy, typo'd, or only have some fields. Do NOT invent fields. The 'message' is the words to write on the card (often after 'message', 'saying', 'note', 'with', or in quotes). If the text is NOT a request to mail a card to someone (a greeting, a question, blank), return {\"intent\": false}. " +
+   'Return JSON only: { "intent": true|false, "name": string|null, "line1": string|null, "line2": string|null, "city": string|null, "state": string|null, "zip": string|null, "message": string|null }' },
+  { role: "user", content: t },
+ ]);
+ if (!r || r.intent === false) return null;
+ const s = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+ const out: ParsedSendInstruction = { name: s(r.name), line1: s(r.line1), line2: s(r.line2), city: s(r.city), state: s(r.state), zip: s(r.zip), message: s(r.message) };
+ return out.name ? out : null;
+}
+
+// Apply a parsed one-shot send: pre-fill everything we got, then route to the
+// FIRST thing still needed. Have it all -> one "send it?" preview. Address but
+// no message -> confirm the address, then the normal note step. No address ->
+// the address step (reusing a saved one for this name when we have it). The
+// parsed message rides along in conversation_data so the note step is skipped.
+async function applyParsedSend(phone: string, token: string, parsed: ParsedSendInstruction): Promise<void> {
+ const name = (parsed.name ?? "").trim();
+ const firstName = name.split(/\s+/)[0] || name;
+
+ // Resolve a parsed address (ZIP backfill + plausibility); else reuse a saved
+ // address for this name.
+ let recipient: { line1: string; line2: string; city: string; state: string; zip: string } | null = null;
+ if (parsed.line1 || parsed.zip || parsed.city) {
+  const addrText = [parsed.line1, parsed.line2, [parsed.city, parsed.state].filter(Boolean).join(" "), parsed.zip].filter(Boolean).join(", ");
+  const r = await resolveAddress(phone, addrText);
+  if (r && r.line1 && r.city && r.state && r.zip && r.plausible !== false) {
+   recipient = { line1: r.line1, line2: r.line2 || "", city: r.city, state: r.state, zip: r.zip };
+  }
+ }
+ if (!recipient) {
+  const saved = await findSavedFriendAddress(phone, name);
+  if (saved) recipient = { line1: saved.line1, line2: saved.line2, city: saved.city, state: saved.state, zip: saved.zip };
+ }
+
+ const rawMsg = (parsed.message ?? "").trim();
+ const message = rawMsg.length > 240 ? rawMsg.slice(0, 240) : rawMsg;
+ const hasMessage = rawMsg.length > 0;
+
+ if (recipient && hasMessage) {
+  // Everything in one text -> a single preview, then send.
+  await advanceState(phone, "awaiting_send_confirm", token, { send_type: "friend", recipient_name: name, recipient, message });
+  const l2 = recipient.line2 ? `\n   ${recipient.line2}` : "";
+  await loopSend({
+   contact: phone,
+   subject: "📮 Here's your postcard",
+   text: `   ${firstName}\n   ${recipient.line1}${l2}\n   ${recipient.city}, ${recipient.state} ${recipient.zip}\n\n   "${message}"\n\nSend it? Or tell me what to fix.`,
+  });
+  return;
+ }
+ if (recipient) {
+  // Name + address, no message yet -> confirm the address, then the note step.
+  await advanceState(phone, "awaiting_address_confirm", token, { send_type: "friend", recipient_name: name, recipient });
+  const l2 = recipient.line2 ? `\n   ${recipient.line2}` : "";
+  await loopSend({ contact: phone, text: `Mailing to:\n   ${firstName}\n   ${recipient.line1}${l2}\n   ${recipient.city}, ${recipient.state} ${recipient.zip}\n\nLook right?` });
+  return;
+ }
+ // No usable address -> the address step; keep the parsed message stashed so
+ // the note step is skipped once the address lands.
+ await advanceState(phone, "awaiting_recipient_address", token, { send_type: "friend", recipient_name: name, ...(hasMessage ? { message } : {}) });
+ await loopSend({ contact: phone, text: `Got it — to ${firstName}. What's their address?\n\nDon't have it? Say "send a link" and they can add it themselves.` });
+}
+
+async function startNewConversation(phone: string, mediaUrl: string, caption = ""): Promise<void> {
  // INSTANT FEEDBACK. The photo download from LoopMessage's CDN + EXIF
  // strip + re-upload to storage takes 10-15s for a large HEIC. Without
  // this the thread sits dead-silent the whole time. Fire a typing
@@ -1895,19 +1969,32 @@ async function startNewConversation(phone: string, mediaUrl: string): Promise<vo
     `Want to write ${pendingReply.senderFirstName} back? Just say yes.\n\n(Or give me a friend's name, or say "penpal" to meet a random stranger.)`,
   });
  } else {
-  // Normal: ask who it's for.
-  await advanceState(phone, "awaiting_send_type", token, {});
-  if (firstTime) {
-   await loopSend({
-    contact: phone,
-    text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with a random stranger.",
-    contact_file: true, // attach the Mailroom vCard, once, on a new contact's first card
-   });
+  // MAGICAL ONE-SHOT: if the photo arrived with a caption that names a
+  // recipient (and maybe an address + message), parse it and pre-fill the
+  // whole card so they confirm in one shot. Anything missing drops back into
+  // the normal step-by-step flow. Gated so a captionless photo or a "hi" is
+  // unaffected (parser pre-filter + it returns null for non-instructions).
+  const cap = caption.trim();
+  const couldBeInstruction = cap.length >= 8 &&
+   (/\b(send|mail|to|for|message|note|say|saying|address|tell)\b/i.test(cap) || /\d/.test(cap));
+  const parsed = couldBeInstruction ? await parseSendInstruction(cap) : null;
+  if (parsed && parsed.name) {
+   await applyParsedSend(phone, token, parsed);
   } else {
-   await loopSend({
-    contact: phone,
-    text: "Who's this one for?\n\nTell me a name, or say \"penpal\" to meet a random stranger.",
-   });
+   // Normal: ask who it's for.
+   await advanceState(phone, "awaiting_send_type", token, {});
+   if (firstTime) {
+    await loopSend({
+     contact: phone,
+     text: "Who's this card for?\n\nTell me a name, or say \"penpal\" to be matched with a random stranger.",
+     contact_file: true, // attach the Mailroom vCard, once, on a new contact's first card
+    });
+   } else {
+    await loopSend({
+     contact: phone,
+     text: "Who's this one for?\n\nTell me a name, or say \"penpal\" to meet a random stranger.",
+    });
+   }
   }
  }
 
@@ -2250,6 +2337,12 @@ async function handleAddressConfirm(phone: string, body: string, state: any): Pr
  }
  const c = await parseConfirmation(t);
  if (c.intent === "yes") {
+ // One-shot: if the message already came in with the address (parsed from the
+ // caption), skip the note step and reuse the note-completion routing.
+ const prefilledMsg = state.conversation_data?.message;
+ if (typeof prefilledMsg === "string" && prefilledMsg.length > 0) {
+ return await handleMessage(phone, prefilledMsg, state);
+ }
  await advanceState(phone, "awaiting_message", state.draft_token, {});
 
  // RECIPIENT MEMORY. "we've been here before" surprise. Pure delight,
