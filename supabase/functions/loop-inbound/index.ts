@@ -1409,7 +1409,24 @@ function isHeavyNote(note: string): boolean {
 // =============================================================================
 
 function isRestartCommand(body: string): boolean {
- return /^(cancel|stop|restart|reset|start over|nevermind|never mind)$/i.test(body.trim());
+ const t = body.trim();
+ // Exact-match (anchored, so a NOTE that merely contains the word isn't
+ // hijacked). Covers cancel/stop plus every "start a new card" phrasing —
+ // which a user reasonably expects to wipe the draft and ask for a new photo.
+ if (/^(cancel|stop|restart|reset|start over|nevermind|never mind|redo|scrap (it|this|that))$/i.test(t)) return true;
+ if (/^(start|make|do|create|begin)\s+(a\s+|another\s+)?(new\s+)?(card|postcard|one)$/i.test(t)) return true;
+ if (/^(new\s+(card|postcard)|another\s+(card|postcard|one)|start\s+fresh|fresh\s+(card|start))$/i.test(t)) return true;
+ return false;
+}
+
+// Reads as an instruction or navigation, not a person's name — used to stop
+// "go back", "switch photo", "new card", etc. from being captured as a
+// recipient name. (Hard restarts are caught upstream by isRestartCommand.)
+// Word boundaries keep real names safe (Newman, Stark, Cardin won't trip it).
+function looksLikeNavOrCommand(text: string): boolean {
+ const t = text.trim().toLowerCase();
+ if (/^(back|skip|switch|finish|done|next|undo|redo|wait|huh|idk|i don'?t know)$/i.test(t)) return true;
+ return /\b(go back|switch (the )?(photo|card|picture)|new card|new postcard|another card|start over|start a new|change (the|my) (photo|card|picture))\b/i.test(t);
 }
 
 interface InboundCtx {
@@ -1587,24 +1604,16 @@ async function handleInbound(ctx: InboundCtx): Promise<void> {
  return;
  }
 
- // 2. Global: a new photo. If there's a card in progress that ALREADY has
- // a photo, a new one would wipe that work — so ask first instead of
- // silently discarding. If idle, or in a state waiting FOR a photo (the
- // REPLY-code reply flow has an empty draft), just start normally.
+ // 2. Global: a new photo always starts a fresh card. We used to stop here
+ // and ask "switch to this photo, or finish the one you started?" — but that
+ // was friction nobody wanted, and worse, the "switch" path threw the caption
+ // away, so "Send this to Scotty at <address>" lost all its info. A photo IS
+ // the "start a card" gesture: just move forward with the newest one and run
+ // its caption through the one-shot parser. resetState (inside
+ // startNewConversation) clears any half-finished draft cleanly, and the
+ // REPLY-code reply context (if any) is carried over there.
  if (attachments.length >= 1) {
- if (state.step !== "idle" && state.draft_token) {
- const { data: draftRow } = await admin
- .from("sms_postcard_drafts").select("photo_path").eq("token", state.draft_token).maybeSingle();
- if (draftRow?.photo_path) {
- if (messageId) await loopReact(from, messageId, "love");
- await advanceState(from, state.step, state.draft_token, {
- ...(state.conversation_data ?? {}), pending_new_photo_url: attachments[0],
- });
- await loopSend({ contact: from, text: "Looks like you're already in the middle of a card. Want to switch to this new photo, or finish the one you started?" });
- return;
- }
- }
- // Instant ❤️ tapback, then build the new card.
+ // Instant ❤️ tapback, then build the new card from this photo + caption.
  if (messageId) await loopReact(from, messageId, "love");
  return await startNewConversation(from, attachments[0], body);
  }
@@ -2082,6 +2091,14 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  return;
  }
 
+ // Don't capture a command or navigation phrase as a name ("go back",
+ // "switch photo", "new card"). Re-ask instead. Hard resets ("start a new
+ // card", "cancel") are already caught upstream by isRestartCommand.
+ if (looksLikeNavOrCommand(raw)) {
+ await loopSend({ contact: phone, text: "Who's this card for? Tell me a name, or say \"penpal\" to meet a random stranger.\n\n(Or text a fresh photo to start over.)" });
+ return;
+ }
+
  // Looks like a name. friend-mode shortcut. Skip the "who's it for?"
  // prompt and go straight to the address ask. Names are 1-80 chars,
  // contain at least one letter, no digits or weird symbols.
@@ -2218,6 +2235,12 @@ async function handleRecipientName(phone: string, body: string, state: any): Pro
  const name = body.trim();
  if (name.length < 1 || name.length > 80) {
  await loopSend({ contact: phone, text: "That doesn't look like a name. Who's the card for?" });
+ return;
+ }
+ // A command/navigation phrase isn't a name. Re-ask. (Hard resets are caught
+ // upstream by isRestartCommand.)
+ if (looksLikeNavOrCommand(name)) {
+ await loopSend({ contact: phone, text: "Who's the card for? Tell me their name.\n\n(Or text a fresh photo to start over.)" });
  return;
  }
  // Rolodex reuse: skip the address ask if this friend is already saved
