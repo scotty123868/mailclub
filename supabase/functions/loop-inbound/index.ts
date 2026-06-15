@@ -1849,47 +1849,68 @@ async function applyParsedSend(phone: string, token: string, parsed: ParsedSendI
  const name = (parsed.name ?? "").trim();
  const firstName = name.split(/\s+/)[0] || name;
 
- // Resolve a parsed address (ZIP backfill + plausibility); else reuse a saved
- // address for this name.
+ // Resolve, complete, and USPS-correct the parsed address. resolveAddress
+ // already backfills a missing ZIP (via Lob) and AI-completes a missing city,
+ // and Lob silently corrects a slightly-wrong city/ZIP, so an imperfect
+ // address usually still lands clean. We only fall through to "ask" when
+ // there's genuinely not enough to mail, and then we name what's still needed.
  let recipient: { line1: string; line2: string; city: string; state: string; zip: string } | null = null;
- if (parsed.line1 || parsed.zip || parsed.city) {
+ let addrIssue = ""; // specific phrase for what's wrong/missing (surfaced only if unresolved)
+ if (parsed.line1 || parsed.zip || parsed.city || parsed.state) {
   const addrText = [parsed.line1, parsed.line2, [parsed.city, parsed.state].filter(Boolean).join(" "), parsed.zip].filter(Boolean).join(", ");
   const r = await resolveAddress(phone, addrText);
   if (r && r.line1 && r.city && r.state && r.zip && r.plausible !== false) {
    recipient = { line1: r.line1, line2: r.line2 || "", city: r.city, state: r.state, zip: r.zip };
+  } else if (r && (r.concerns ?? "").trim()) {
+   addrIssue = (r.concerns ?? "").trim(); // e.g. "Naples is in FL, not CA"
+  } else if (r) {
+   const missing = [!r.line1 && "street", !r.city && "city", !r.state && "state", !r.zip && "ZIP"].filter(Boolean).join(", ");
+   addrIssue = missing ? `I still need the ${missing}` : "that address didn't check out";
+  } else {
+   addrIssue = "I couldn't read that address";
   }
  }
+ // A saved address for this name beats a half-parsed one.
  if (!recipient) {
   const saved = await findSavedFriendAddress(phone, name);
-  if (saved) recipient = { line1: saved.line1, line2: saved.line2, city: saved.city, state: saved.state, zip: saved.zip };
+  if (saved) { recipient = { line1: saved.line1, line2: saved.line2, city: saved.city, state: saved.state, zip: saved.zip }; addrIssue = ""; }
  }
 
  const rawMsg = (parsed.message ?? "").trim();
  const message = rawMsg.length > 240 ? rawMsg.slice(0, 240) : rawMsg;
- const hasMessage = rawMsg.length > 0;
+ const hasMessage = message.length > 0;
 
- if (recipient && hasMessage) {
-  // Everything in one text -> a single preview, then send.
-  await advanceState(phone, "awaiting_send_confirm", token, { send_type: "friend", recipient_name: name, recipient, message });
+ if (recipient) {
+  // Mailable address in hand -> land on the SINGLE confirm, with OR without a
+  // note. Friend sends defer the sender's return address to post-send (same as
+  // the normal flow), so this can mail as-is. No note? Say so plainly and let
+  // them add one inline (typing a note here adds it; "send it" mails the photo
+  // alone). One screen, send or tweak.
+  await advanceState(phone, "awaiting_send_confirm", token, {
+   send_type: "friend", recipient_name: name, recipient,
+   ...(hasMessage ? { message } : {}),
+  });
   const l2 = recipient.line2 ? `\n   ${recipient.line2}` : "";
+  const addrBlock = `   ${firstName}\n   ${recipient.line1}${l2}\n   ${recipient.city}, ${recipient.state} ${recipient.zip}`;
+  const noteBlock = hasMessage
+   ? `\n\n   "${message}"`
+   : `\n\n   (No note yet, so it mails with just the photo. Type a message to add one.)`;
   await loopSend({
    contact: phone,
    subject: "📮 Here's your postcard",
-   text: `   ${firstName}\n   ${recipient.line1}${l2}\n   ${recipient.city}, ${recipient.state} ${recipient.zip}\n\n   "${message}"\n\nSend it? Or tell me what to fix.`,
+   text: `${addrBlock}${noteBlock}\n\nSend it? Or tell me what to fix.`,
   });
   return;
  }
- if (recipient) {
-  // Name + address, no message yet -> confirm the address, then the note step.
-  await advanceState(phone, "awaiting_address_confirm", token, { send_type: "friend", recipient_name: name, recipient });
-  const l2 = recipient.line2 ? `\n   ${recipient.line2}` : "";
-  await loopSend({ contact: phone, text: `Mailing to:\n   ${firstName}\n   ${recipient.line1}${l2}\n   ${recipient.city}, ${recipient.state} ${recipient.zip}\n\nLook right?` });
-  return;
- }
- // No usable address -> the address step; keep the parsed message stashed so
- // the note step is skipped once the address lands.
- await advanceState(phone, "awaiting_recipient_address", token, { send_type: "friend", recipient_name: name, ...(hasMessage ? { message } : {}) });
- await loopSend({ contact: phone, text: `Got it — to ${firstName}. What's their address?\n\nDon't have it? Say "send a link" and they can add it themselves.` });
+
+ // No mailable address yet -> the address step, naming exactly what's missing
+ // or wrong so they only add that. Keep the parsed message stashed so the note
+ // step is skipped once the address lands.
+ await advanceState(phone, "awaiting_recipient_address", token, {
+  send_type: "friend", recipient_name: name, ...(hasMessage ? { message } : {}),
+ });
+ const issueLead = addrIssue ? `${addrIssue}${/[.!?]$/.test(addrIssue) ? "" : "."} ` : "";
+ await loopSend({ contact: phone, text: `Got it, to ${firstName}. ${issueLead}What's ${firstName}'s address?\n\nDon't have it? Say "send a link" and they can add it themselves.` });
 }
 
 async function startNewConversation(phone: string, mediaUrl: string, caption = ""): Promise<void> {
@@ -2627,6 +2648,13 @@ async function classifyConfirmEdit(message: string): Promise<"note" | "address" 
  return (r && ["note", "address", "send", "other"].includes(r.target)) ? r.target : "other";
 }
 
+// "skip / no note / just the photo" in natural phrasing. Anchored to the whole
+// message so a real note ("leave the porch light on") is never misread as skip.
+// Shared by the note step and the photo-only send-confirm.
+function isSkipNote(text: string): boolean {
+ return /^(?:(?:just|please|pls|can you|could you)\s+)*(?:skip|none|nothing|no note|no message|no words|nope|no thanks|blank|(?:leave|keep)\s+(?:it|the card|this|the note)?\s*(?:blank|empty)|(?:just )?(?:the )?photo(?: only)?)(?:\s+(?:it|blank|empty|please|thanks|thx))*[.!?]*$/i.test(text.trim());
+}
+
 async function handleMessage(phone: string, body: string, state: any): Promise<void> {
  let message = body.trim();
 
@@ -2677,7 +2705,7 @@ async function handleMessage(phone: string, body: string, state: any): Promise<v
  // natural phrasing ("just leave it blank please", "no message", "blank")
  // AND trailing politeness, but still anchored to the whole message so a
  // real note ("leave the porch light on") is never misread as skip.
- if (/^(?:(?:just|please|pls|can you|could you)\s+)*(?:skip|none|nothing|no note|no message|no words|nope|no thanks|blank|(?:leave|keep)\s+(?:it|the card|this|the note)?\s*(?:blank|empty)|(?:just )?(?:the )?photo(?: only)?)(?:\s+(?:it|blank|empty|please|thanks|thx))*[.!?]*$/i.test(message)) {
+ if (isSkipNote(message)) {
  message = "";
  }
 
@@ -3069,6 +3097,40 @@ async function handleSendConfirm(phone: string, body: string, state: any): Promi
    return await goBackToAddressStep(phone, state);
   }
   // "send"/"other" → fall through to normal send/cancel/schedule parsing.
+ }
+
+ // PHOTO-ONLY confirm → add a typed note inline. When the card has no note yet
+ // (the one-shot landed here with just a photo), anything that isn't a
+ // send/cancel/schedule/edit is almost certainly the message they want
+ // printed. Capture it and re-show the preview, so they never have to say "add
+ // a note" first. (A "skip"/"no message" phrase isn't captured; they can just
+ // say "send it" to mail the photo alone. Once a note exists, prose here stays
+ // a re-prompt and they edit via "change the note".)
+ {
+  const data = state.conversation_data ?? {};
+  const sendType = (data.send_type ?? "friend") as string;
+  const recip = (data.recipient ?? null) as { line1?: string; line2?: string; city?: string; state?: string; zip?: string } | null;
+  const existing = data.message;
+  const noNoteYet = !(typeof existing === "string" && existing.trim().length > 0);
+  if (noNoteYet && sendType === "friend" && recip?.line1 && !looksLikeEditIntent(body)) {
+   const t = body.trim();
+   if (t.length > 0 && !isSkipNote(t)) {
+    const pc = await parseSendConfirm(body);
+    const isCmd = pc.intent === "send_now" || pc.intent === "cancel" || (pc.intent === "schedule" && !!pc.arrival_iso);
+    if (!isCmd) {
+     const note = t.length > 240 ? t.slice(0, 240) : t;
+     await advanceState(phone, "awaiting_send_confirm", state.draft_token, { message: note });
+     const fn = ((data.recipient_name ?? "your friend") as string).split(/\s+/)[0] || "your friend";
+     const l2 = recip.line2 ? `\n   ${recip.line2}` : "";
+     await loopSend({
+      contact: phone,
+      subject: "📮 Here's your postcard",
+      text: `   ${fn}\n   ${recip.line1}${l2}\n   ${recip.city}, ${recip.state} ${recip.zip}\n\n   "${note}"\n\n${t.length > 240 ? "(Trimmed to 240 characters.) " : ""}Send it? Or tell me what to fix.`,
+     });
+     return;
+    }
+   }
+  }
  }
 
  const c = await parseSendConfirm(body);
