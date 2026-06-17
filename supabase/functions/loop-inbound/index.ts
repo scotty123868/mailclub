@@ -1830,13 +1830,16 @@ async function parseSendInstruction(caption: string): Promise<ParsedSendInstruct
  if (t.length < 8) return null;
  const r = await openaiJson([
   { role: "system", content:
-   "You read ONE text message from someone mailing a physical postcard, and extract any of these fields that are present: recipient name, street line1, apt/unit line2, city, US state (2-letter), 5-digit zip, and the message/note to PRINT on the card. The text may be messy, typo'd, or only have some fields. Do NOT invent fields. The 'message' is the words to write on the card (often after 'message', 'saying', 'note', 'with', or in quotes). If the text is NOT a request to mail a card to someone (a greeting, a question, blank), return {\"intent\": false}. " +
+   "You read ONE text message from someone mailing a physical postcard, and extract any of these fields that are present: recipient name, street line1, apt/unit line2, city, US state (2-letter), 5-digit zip, and the message/note to PRINT on the card. The text may be messy, typo'd, or only have some fields. Do NOT invent fields. The 'message' is the words to write on the card (often after 'message', 'saying', 'note', 'with', or in quotes). If the sender explicitly says there is NO message (e.g. \"no message\", \"no note\", \"leave it blank\", \"nothing\", \"just the photo\"), set message to null — never put words like \"no message\" into the message field. If the text is NOT a request to mail a card to someone (a greeting, a question, blank), return {\"intent\": false}. " +
    'Return JSON only: { "intent": true|false, "name": string|null, "line1": string|null, "line2": string|null, "city": string|null, "state": string|null, "zip": string|null, "message": string|null }' },
   { role: "user", content: t },
  ]);
  if (!r || r.intent === false) return null;
  const s = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
  const out: ParsedSendInstruction = { name: s(r.name), line1: s(r.line1), line2: s(r.line2), city: s(r.city), state: s(r.state), zip: s(r.zip), message: s(r.message) };
+ // Belt-and-suspenders: never let "no message" / "skip" / "blank" survive as a
+ // literal printed note if the model echoed it into the message field.
+ if (out.message && isSkipNote(out.message)) out.message = undefined;
  return out.name ? out : null;
 }
 

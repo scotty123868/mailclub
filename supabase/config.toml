@@ -1,0 +1,69 @@
+# Supabase project config.
+#
+# The ONLY thing pinned here is verify_jwt = false for the public / webhook
+# Edge Functions. Those are called by EXTERNAL services (LoopMessage, Lob,
+# Stripe) or by browsers (claim page, mapkit token) that cannot present a
+# Supabase JWT. If the gateway JWT check is on, every one of those requests is
+# rejected with 401 BEFORE the function runs — which is exactly what silently
+# happened to loop-inbound when it was redeployed with a plain
+# `supabase functions deploy` (no --no-verify-jwt). Pinning it here makes a
+# plain deploy safe: the CLI reads these blocks and keeps the gateway open.
+#
+# Each of these functions still does its OWN auth in code (shared-secret header,
+# signature check, or single-use token), so "verify_jwt = false" only moves the
+# auth from the platform gateway into the function, it does not make them open.
+project_id = "mailclub"
+
+[functions.loop-inbound]
+verify_jwt = false
+
+[functions.lob-webhook]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.claim]
+verify_jwt = false
+
+[functions.claim-nudge]
+verify_jwt = false
+
+[functions.fire-scheduled-postcards]
+verify_jwt = false
+
+[functions.mapkit-token]
+verify_jwt = false
+
+[functions.reciprocation-photo]
+verify_jwt = false
+
+[functions.recent-routes]
+verify_jwt = false
+
+[functions.sms-inbound]
+verify_jwt = false
+
+[functions.sms-draft-resolve]
+verify_jwt = false
+
+[functions.lob-send-postcard]
+verify_jwt = false
+
+[functions.postcard-confirmation]
+verify_jwt = false
+
+[functions.sms-submit]
+verify_jwt = false
+
+[functions.sms-otp-request]
+verify_jwt = false
+
+[functions.sms-otp-verify]
+verify_jwt = false
+
+[functions.sms-buy-checkout]
+verify_jwt = false
+
+[functions.welcome-mail]
+verify_jwt = false
