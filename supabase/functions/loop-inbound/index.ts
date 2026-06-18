@@ -1089,17 +1089,27 @@ async function findSavedFriendAddress(
  if (!prof?.id) return null;
  const { data: rows } = await admin
  .from("friends")
- .select("id, name, address_line1, address_line2, address_city, address_state, address_zip")
+ .select("id, name, address_line1, address_line2, address_city, address_state, address_zip, cards_sent, created_at")
  .eq("owner_id", prof.id)
  .ilike("name", `${typed}%`)
  .not("address_line1", "is", null)
  .not("address_zip", "is", null)
- .limit(3);
+ .limit(10);
  const withAddr = (rows ?? []).filter(
  (r: any) => r.address_line1 && r.address_zip && r.address_city && r.address_state,
  );
- if (withAddr.length !== 1) return null; // 0 or ambiguous → ask normally
- const f: any = withAddr[0];
+ if (withAddr.length === 0) return null;
+ // Prefer an EXACT (case-insensitive) name match. This is what lets "Scotty"
+ // resolve even when an old, polluted row ("Scotty with a message …") also
+ // prefix-matches "Scotty%". Without an exact match, 2+ different prefix names
+ // are genuinely ambiguous, so we ask rather than risk the wrong person.
+ const lower = typed.toLowerCase();
+ const exact = withAddr.filter((r: any) => String(r.name ?? "").trim().toLowerCase() === lower);
+ if (exact.length === 0 && withAddr.length > 1) return null;
+ const f: any = (exact.length > 0 ? exact : withAddr).sort((a: any, b: any) =>
+ (b.cards_sent ?? 0) - (a.cards_sent ?? 0) ||
+ String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
+ )[0];
  return {
  id: f.id, name: f.name,
  line1: f.address_line1, line2: f.address_line2 ?? "",
@@ -1803,6 +1813,25 @@ async function handleIdle(from: string, body = ""): Promise<void> {
  // Existing user, no active draft: route ANY non-empty text through the
  // assistant (commands like buy/memories were already handled upstream).
  if (text) {
+ // INSTRUCTION-BEFORE-PHOTO. "send a card to Scotty", "send to mom at 12 Oak
+ // St with love" — texted BEFORE the photo. Remember who it's for (+ any
+ // address/message), then ask for the photo. When the photo lands,
+ // startNewConversation consumes this pending_instruction and applies it as a
+ // one-shot — so a split "instruction, then photo" works like one message.
+ // (A question like "how much?" skips this and hits the assistant below.)
+ if (text.length >= 8 && !looksLikeQuestion(text) && /\b(send|mail|card|postcard|to|for)\b/i.test(text)) {
+  const parsed = await parseSendInstruction(text);
+  if (parsed && parsed.name) {
+   await admin.from("sms_conversation_state").upsert({
+    phone: from, step: "idle", draft_token: null,
+    conversation_data: { pending_instruction: parsed },
+    updated_at: new Date().toISOString(),
+   }, { onConflict: "phone" });
+   const fn = parsed.name.split(/\s+/)[0];
+   await loopSend({ contact: from, text: `Got it — a card for ${fn}. Send me the photo you want on it.` });
+   return;
+  }
+ }
  const ctx = credits > 0
   ? `They have ${credits} card${credits === 1 ? "" : "s"} ready. To start, they text a photo.`
   : "They are out of cards; to send more they text the word buy to top up.";
@@ -1945,6 +1974,9 @@ async function startNewConversation(phone: string, mediaUrl: string, caption = "
   findUnreciprocatedPairing(phone),
  ]);
  const carryReply = (priorStateRes.data?.conversation_data?.pending_reply ?? null) as any;
+ // Instruction the user texted BEFORE this photo (stashed by handleIdle).
+ // Applied below when the photo itself arrives without a caption instruction.
+ const carryInstruction = (priorStateRes.data?.conversation_data?.pending_instruction ?? null) as ParsedSendInstruction | null;
 
  // Create the draft NOW with a pending photo, so we can advance state and
  // ask the next question RIGHT AWAY. The photo download (10-15s for a big
@@ -2010,7 +2042,10 @@ async function startNewConversation(phone: string, mediaUrl: string, caption = "
   const cap = caption.trim();
   const couldBeInstruction = cap.length >= 8 &&
    (/\b(send|mail|to|for|message|note|say|saying|address|tell)\b/i.test(cap) || /\d/.test(cap));
-  const parsed = couldBeInstruction ? await parseSendInstruction(cap) : null;
+  let parsed = couldBeInstruction ? await parseSendInstruction(cap) : null;
+  // No caption instruction on the photo? Use one the user texted just BEFORE
+  // it ("send to Scotty" then the photo) — a split message, same result.
+  if ((!parsed || !parsed.name) && carryInstruction?.name) parsed = carryInstruction;
   if (parsed && parsed.name) {
    await applyParsedSend(phone, token, parsed);
   } else {
@@ -2121,6 +2156,17 @@ async function handleSendType(phone: string, body: string, state: any): Promise<
  if (looksLikeNavOrCommand(raw)) {
  await loopSend({ contact: phone, text: "Who's this card for? Tell me a name, or say \"penpal\" to meet a random stranger.\n\n(Or text a fresh photo to start over.)" });
  return;
+ }
+
+ // A FULL instruction typed here (photo came first, then "send to Scotty with
+ // the message love you"). Parse out the clean NAME (+ address/message) instead
+ // of saving the whole sentence as the recipient's name — which used to pollute
+ // the rolodex with friends literally named "Scotty with a message …". Gated to
+ // multi-word phrases with instruction words, so a plain "Scotty" or "Aunt Sue"
+ // still takes the fast name path below.
+ if (raw.length >= 12 && /\b(send|mail|card|postcard|the message|with the|note|address)\b/i.test(raw)) {
+ const inst = await parseSendInstruction(raw);
+ if (inst && inst.name) return await applyParsedSend(phone, state.draft_token, inst);
  }
 
  // Looks like a name. friend-mode shortcut. Skip the "who's it for?"
@@ -2300,6 +2346,29 @@ async function handleRecipientAddress(phone: string, body: string, state: any): 
  const lower = body.trim().toLowerCase();
  if (/\b(send (a |the )?link|don'?t (have|know)|do not (have|know)|not sure|they'?ll (add|fill)|no address|link them|let them add)\b/.test(lower)) {
  return await startClaimLink(phone, state);
+ }
+
+ // "it's in my contacts" / "you have it" / "sent before" → reuse the SAVED
+ // address for this recipient instead of demanding a retype. Gated on a clear
+ // "you already have it" signal with no digits, so a real street address still
+ // flows to the parser below.
+ const refersSaved = !/\d/.test(lower) && /\b(in (my|your) (contacts?|phone)|address book|you (already )?have (it|the address|his|her|their)|have (it|the address) (saved|already|on file)|it'?s (saved|on file)|already saved|on file|use (the |my )?(saved|same|last|one on file)|same as (last|before)|sent (to \w+ |him |her |them |one |it )?before|check (my|your) (contacts?|address book))\b/.test(lower);
+ if (refersSaved) {
+ const nm = String(state.conversation_data?.recipient_name ?? "").trim();
+ const saved = nm ? await findSavedFriendAddress(phone, nm) : null;
+ if (saved) {
+  await advanceState(phone, "awaiting_address_confirm", state.draft_token, {
+   recipient_name: saved.name,
+   recipient: { line1: saved.line1, line2: saved.line2, city: saved.city, state: saved.state, zip: saved.zip },
+  });
+  const f = saved.name.split(/\s+/)[0];
+  const l2 = saved.line2 ? `\n   ${saved.line2}` : "";
+  await loopSend({ contact: phone, text: `Found ${f} in my book:\n   ${f}\n   ${saved.line1}${l2}\n   ${saved.city}, ${saved.state} ${saved.zip}\n\nSend here?` });
+  return;
+ }
+ const fn = nm ? nm.split(/\s+/)[0] : "them";
+ await loopSend({ contact: phone, text: `I don't have a saved address for ${fn} yet. What's the full address? (street, city, state, ZIP)` });
+ return;
  }
 
  // Fast path: a clean address confirms instantly (no LLM). Only
